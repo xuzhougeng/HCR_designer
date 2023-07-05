@@ -36,6 +36,8 @@ python probe_generator.py --input seq.txt --probe-size 50 --initiator-type B1 --
 
 脚本会生成一个包含满足条件的探针列表的输出文件（probes.txt）。你可以查看该文件来获取生成的探针信息。
 
+> 目前代码中BLAST的地址如果不在PATH中，需要手动设置HCR_prober_generator.py 中的 cmd = ""
+
 ## Flask应用
 
 如果需要运行网页端，需要额外安装一个flask

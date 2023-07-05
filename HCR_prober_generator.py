@@ -41,6 +41,7 @@ def blastn(seq, blastn_db, blastn_evalue=1e-1, blastn_word_size=7, blastn_num_th
         tmp_fasta = f.name
     
     cline = bn(
+            #cmd = "/opt/biosoft/ncbi-blast-2.10.1+/bin/blastn",
             query= tmp_fasta,
             subject= blastn_db,
             outfmt=6,
@@ -483,7 +484,6 @@ def main(name, seq, probe_size,initiator_type, polyN, min_gc, max_gc, output, bl
             print("函数没写好, 暂时就不过滤了")
     
     print('当前探针数目：', len(probers))
-
 
 
     export(prefix = name, probers=probers, initiator_type = initiator_type , output= output )
