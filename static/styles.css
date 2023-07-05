@@ -1,0 +1,88 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+form {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+textarea,
+input,
+select {
+    width: 95%;
+    margin-bottom: 20px;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+#submitBtn {
+    /* 添加按钮背景颜色 */
+    background-color: #4CAF50;
+    /* 添加按钮文字颜色 */
+    color: white;
+    /* 添加按钮边框样式 */
+    border: none;
+    /* 添加按钮内边距 */
+    padding: 10px 20px;
+    /* 添加按钮鼠标悬停效果 */
+    transition: background-color 0.3s ease;
+  }
+  
+  #submitBtn:hover {
+    /* 添加按钮鼠标悬停时的背景颜色 */
+    background-color: #45a049;
+  }
+  
+
+
+
+table {
+    width: 80%;
+    margin-top: 20px;
+    border-collapse: collapse;
+}
+
+table,
+th,
+td {
+    border: 1px solid #ddd;
+    padding: 10px;
+}
+
+th {
+    background-color: #007BFF;
+    color: #fff;
+}
+
+.disabled-btn {
+    background-color: #ddd;
+    color: #777;
+    cursor: not-allowed;
+}
+
+#loader {
+    position: fixed;
+    width: 100%;
+    top: 20px; 
+    left: 50%;  
+    transform: translateX(-50%);  
+}

@@ -14,21 +14,23 @@ def index():
         polyN = int(request.form['polyN'])
         min_gc = float(request.form['min_gc'])
         max_gc = float(request.form['max_gc'])
-        
-        
+
+
         blast = request.form['blast'] == "y"
         blastdb = None
         if blast:
-            blastdb = request.form['blastdb']
-            if blastdb == 'Arabidopsis':
-                balstdb = 'db/Arabidopsis'
+            #blastdb = request.form['blastdb']
+            #print(blastdb)
+            #if blastdb == 'Arabidopsis':
+            blastdb = 'db/Athaliana.fa';
 
         output = 'output.csv'
-        
+
         main(name,seq, probe_size, initiator_type, polyN, min_gc, max_gc, output, blastdb)
         return send_file(output, as_attachment=True)
-    
+
     return render_template('index.html')
 
 if __name__ == '__main__':
+    #app.run(host="0.0.0.0", port="9999")
     app.run(debug=True)
