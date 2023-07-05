@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Probe Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        textarea, input, select {
+            width: 100%;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        input[type="submit"] {
+            cursor: pointer;
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        th {
+            background-color: #007BFF;
+            color: #fff;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var initiatorSelect = document.getElementById('initiator');
+            var tableRows = document.querySelectorAll('table tr');
+
+            initiatorSelect.addEventListener('change', function() {
+                var selectedInitiator = initiatorSelect.value;
+                tableRows.forEach(function(row) {
+                    // 当selectedInitiator 为ALL时，先显示所有行，然后跳过本次循环
+                    if (selectedInitiator === '') {
+                        row.style.display = 'table-row';
+                        return;
+                    }
+                    else if (row.cells[0].textContent === selectedInitiator) {
+                        row.style.display = 'table-row';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <form action="/" method="post">
+            <label for="seq">Sequence:</label><br>
+            <textarea id="seq" name="seq" rows="4" cols="50" required></textarea><br>
+            <label for="probe_size">Probe Size:</label><br>
+            <input type="number" id="probe_size" name="probe_size" value="50"><br>
+            <label for="polyN">Poly N:</label><br>
+            <input type="number" id="polyN" name="polyN" value="2"><br>
+            <label for="min_gc">Min GC:</label><br>
+            <input type="number" id="min_gc" name="min_gc" step="0.01" value="0.3"><br>
+            <label for="max_gc">Max GC:</label><br>
+            <input type="number" id="max_gc" name="max_gc" step="0.01" value="0.5"><br>
+            <label for="initiator">Initiator:</label><br>
+            <select id="initiator" name="initiator">
+                <option value=""></option>
+                <option value="B1">B1</option>
+                <option value="B2">B2</option>
+                <option value="B3">B3</option>
+                <option value="B4">B4</option>
+                <option value="B5">B5</option>
+                <option value="B7">B7</option>
+                <option value="B9">B9</option>
+                <option value="B10">B10</option>
+                <option value="B11">B11</option>
+                <option value="B13">B13</option>
+                <option value="B14">B14</option>
+                <option value="B15">B15</option>
+                <option value="B17">B17</option>
+            </select>
+            <input type="submit" value="Submit">
+        </form>
+        <table>
+            <tr>
+              <th>Initiator</th>
+              <th>upspc</th>
+              <th>dnspc</th>
+              <th>up</th>
+              <th>dn</th>
+            </tr>
+            <tr>
+              <td>B1</td>
+              <td>aa</td>
+              <td>ta</td>
+              <td>GAGGAGGGCAGCAAACGG</td>
+              <td>GAAGAGTCTTCCTTTACG</td>
+            </tr>
+            <tr>
+              <td>B2</td>
+              <td>aa</td>
+              <td>aa</td>
+              <td>CCTCGTAAATCCTCATCA</td>
+              <td>ATCATCCAGTAAACCGCC</td>
+            </tr>
+            <tr>
+              <td>B3</td>
+              <td>tt</td>
+              <td>tt</td>
+              <td>GTCCCTGCCTCTATATCT</td>
+              <td>CCACTCAACTTTAACCCG</td>
+            </tr>
+            <tr>
+              <td>B4</td>
+              <td>aa</td>
+              <td>at</td>
+              <td>CCTCAACCTACCTCCAAC</td>
+              <td>TCTCACCATATTCGCTTC</td>
+            </tr>
+            <tr>
+              <td>B5</td>
+              <td>aa</td>
+              <td>aa</td>
+              <td>CTCACTCCCAATCTCTAT</td>
+              <td>CTACCCTACAAATCCAAT</td>
+            </tr>
+            <tr>
+              <td>B7</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>CTTCAACCTCCACCTACC</td>
+              <td>TCCAATCCCTACCCTCAC</td>
+            </tr>
+            <tr>
+              <td>B9</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>CACGTATCTACTCCACTC</td>
+              <td>TCAGCACACTCCCAACCC</td>
+            </tr>
+            <tr>
+              <td>B10</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>CCTCAAGATACTCCTCTA</td>
+              <td>CCTACTCGACTACCCTAG</td>
+            </tr>
+            <tr>
+              <td>B11</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>CGCTTAGATATCACTCCT</td>
+              <td>ACGTCGACCACACTCATC</td>
+            </tr>
+            <tr>
+              <td>B13</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>AGGTAACGCCTTCCTGCT</td>
+              <td>TTATGCTCAACATACAAC</td>
+            </tr>
+            <tr>
+              <td>B14</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>AATGTCAATAGCGAGCGA</td>
+              <td>CCCTATATTTCTGCACAG</td>
+            </tr>
+            <tr>
+              <td>B15</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>CAGATTAACACACCACAA</td>
+              <td>GGTATCTCGAACACTCTC</td>
+            </tr>
+            <tr>
+              <td>B17</td>
+              <td>ww</td>
+              <td>ww</td>
+              <td>CGATTGTTTGTTGTGGAC</td>
+              <td>GCATGCTAATCGGATGAG</td>
+            </tr>
+          </table>
+    </div>
+</body>
+</html>
