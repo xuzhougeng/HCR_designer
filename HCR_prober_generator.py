@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import io
 import tempfile
+from multiprocessing import Pool
 
 
 
@@ -12,7 +13,7 @@ HCR_ODD_PROBE_SIZE = 25
 HCR_EVEN_PROBE_SIZE = 25
 
 
-def blastn(seq, blastn_db, blastn_evalue=1e-5, blastn_word_size=7, blastn_num_threads=4):
+def blastn(seq, blastn_db, blastn_evalue=1e-1, blastn_word_size=7, blastn_num_threads=4):
     """
     :param seq: 欲blast的序列
     :param blastn_db: blastn数据库
@@ -51,37 +52,20 @@ def blastn(seq, blastn_db, blastn_evalue=1e-5, blastn_word_size=7, blastn_num_th
         )  # this uses biopython's blastn formatting function and creates a commandline compatible command
     (
         stdout,
-        stderr,
+        _,
     ) = (
         cline()
     )  # cline() calls the string as a command and passes it to the command line, outputting the blast results to one variable and errors to the other
-    
-    ## From results of blast creating a numpy array (and Pandas database)
-    dt = [
-        (np.unicode_, 8),
-        (np.unicode_, 40),
-        (np.int32),
-        (np.int32),
-        (np.int32),
-        (np.int32),
-        (np.int32),
-        (np.int32),
-        (np.int32),
-        (np.int32),
-        (np.float64),
-        (np.float64),
-    ]
 
-    blastresult = np.genfromtxt(
-        io.StringIO(stdout), delimiter="\t", dtype=dt
-    )  # 
-    blastresult = pd.DataFrame(blastresult)
-    blastresult.columns = [
-        "qseqid","sseqid","pident","length","mismatch","gapopen","qstart","qend","sstart","send","evalue","bitscore"]
-    
-    # 增加qlen, plen
-    blastresult["qlen"] = np.abs(blastresult["qend"] - blastresult["qstart"] ) + 1
-    blastresult["plen"] = np.abs(blastresult["send"] - blastresult["sstart"] ) + 1
+    ## From results of blast creating a numpy array (and Pandas database)
+    try:
+        blastresult = pd.read_csv(io.StringIO(stdout), delimiter="\t", header=None)
+        blastresult.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
+        # 增加qlen, plen
+        blastresult["qlen"] = np.abs(blastresult["qend"] - blastresult["qstart"] ) + 1
+        blastresult["plen"] = np.abs(blastresult["send"] - blastresult["sstart"] ) + 1
+    except pd.errors.EmptyDataError:
+        blastresult = pd.DataFrame(columns=["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore","qlen","plen" ])
     
     return blastresult
 
@@ -179,14 +163,13 @@ def generate_all_probers(seq, probe_size):
 
     return probers
 
-def generate_old_even_probers(seq, gap=0):
+def generate_odd_even_probers(seq, gap=0):
     old_probe = seq[:HCR_ODD_PROBE_SIZE]
     even_probe = seq[HCR_ODD_PROBE_SIZE + gap: HCR_ODD_PROBE_SIZE + gap + HCR_EVEN_PROBE_SIZE]
     #print(seq)
     #print(old_probe, even_probe)
     
     return old_probe, even_probe
-
 
 def filter_probe_by_polyN(probers, polyN=5) -> List[str]:
     """根据多聚体N过滤探针
@@ -202,7 +185,7 @@ def filter_probe_by_polyN(probers, polyN=5) -> List[str]:
     # 过滤探针字典
     for pos, prober in probers.items():
         prober = str(prober).upper()
-        old_probe, even_probe = generate_old_even_probers(prober)
+        old_probe, even_probe = generate_odd_even_probers(prober)
         
         # 当前探针中多聚体N的长度大于polyN时，则跳过
         if polyA in old_probe or polyT in old_probe or polyC in old_probe or polyG in old_probe:
@@ -214,7 +197,6 @@ def filter_probe_by_polyN(probers, polyN=5) -> List[str]:
 
     return filtered_probers
 
-
 def filter_probe_by_gc(probers, gc_min=0.4, gc_max=0.5) -> List[str]:
     """根据GC含量过滤探针
     :param probers: 探针列表
@@ -224,7 +206,7 @@ def filter_probe_by_gc(probers, gc_min=0.4, gc_max=0.5) -> List[str]:
     filtered_probers = {}
     for pos, prober in probers.items():
         prober = str(prober).upper()
-        old_probe, even_probe = generate_old_even_probers(prober)
+        old_probe, even_probe = generate_odd_even_probers(prober)
         
         # 当GC含量小于gc_min或者大于gc_max时，则跳过
         if (old_probe.count('G') + old_probe.count('C')) / len(old_probe) < gc_min or (old_probe.count('G') + old_probe.count('C')) / len(old_probe) > gc_max:
@@ -236,15 +218,20 @@ def filter_probe_by_gc(probers, gc_min=0.4, gc_max=0.5) -> List[str]:
 
     return filtered_probers
 
-
-def export(probers, initiator_type, output="out.csv"):
+def export(prefix, probers, initiator_type, output="out.csv"):
     # 获取initiator
     upspc, dnspc, up, dn = get_initiator_sequence(initiator_type)
     
     probers_pos = []
     probers_list = []
+    P1_name_list = []
     P1_list = []
+    P2_name_list = []
     P2_list = []
+
+    middle = initiator_type.replace("B", "I")
+    
+    count = 1 
 
     for pos, prober in probers.items():
         probers_pos.append(int(pos)+1)
@@ -253,9 +240,20 @@ def export(probers, initiator_type, output="out.csv"):
         P1 = Seq(prober[0:HCR_ODD_PROBE_SIZE]).reverse_complement()
         P2 = Seq(prober[-HCR_ODD_PROBE_SIZE:]).reverse_complement()
 
+        P1_name_list.append(
+            f"{prefix}-{middle}-{count}"
+        )
+        count += 1
+
         P1_list.append(
             up + upspc + str(P1)
         )
+
+        P2_name_list.append(
+            f"{prefix}-{middle}-{count}"
+        )
+        count += 1
+
         P2_list.append(
             str(P2) + dnspc + dn
         )
@@ -264,41 +262,70 @@ def export(probers, initiator_type, output="out.csv"):
         {
             "probe_pos": probers_pos,
             "prober_seq": probers_list,
+            "P1_name": P1_name_list,
             "P1": P1_list,
+            "P2_name": P2_name_list,
             "P2": P2_list
         }
     )
     prober_df.to_csv(output, index=False)
 
+def filter_blastn_result(blastn:pd.DataFrame, seq_chr:str, seq_start:int, seq_end:int):
+    """ 删除blastn 在seq_chr:seq_start-seq_end区间的结果
+    :param blastn: blastn结果
+    :param seq_chr: 原序列在基因组的染色体编号
+    :param seq_start: 原序列在基因组的起始位置
+    :param seq_end: 原序列在基因组的终止位置
+    """
 
-def filter_prober_by_blastn(probers: Dict, prober_blast_table, seq_chr=None, seq_start=None, seq_end=None) -> Dict[int,str]:
+    if blastn.empty:
+        return blastn
+
+    # 反选在区间的比对结果
+    blastn = blastn[ ~ (blastn['sseqid'] == seq_chr) & (blastn['sstart'] >= seq_start) & (blastn['send'] <= seq_end) ]
+
+    return blastn
+
+
+def worker(args):
+    pos, prober, blastdb, seq_chr, seq_start, seq_end = args
+    odd_probe, even_probe = generate_odd_even_probers(prober)
+
+    odd_probe_blastn = blastn(odd_probe, blastdb)
+    even_probe_blastn = blastn(even_probe, blastdb)
+
+    odd_probe_blastn = filter_blastn_result(odd_probe_blastn, seq_chr, seq_start, seq_end)
+    even_probe_blastn = filter_blastn_result(even_probe_blastn, seq_chr, seq_start, seq_end)
+
+    if odd_probe_blastn.empty and even_probe_blastn.empty:
+        return (pos, prober)
+    else:
+        print(f"odd_probe_blastn: {odd_probe_blastn}")
+        print(f"even_probe_blastn: {even_probe_blastn}")
+        return ()
+    
+def filter_prober_by_blastn(probers: Dict, blastdb:str, seq_chr=None, seq_start=None, seq_end=None) -> Dict[int,str]:
     """基于BLASTN结果过滤探针
     为了验证探针的特异性, 我们需要先排除探针在目标基因组的原始区间上(seq_chr:seq_start-seq_end)的比对结果, 然后再检查该探针是否在其他区间存在比对结果
 
     :param probers: 探针字典 如{0:'aaaaaaa', }
-    :param prober_blast_table: 探针在目标基因组中的BLASTN结果
+    :param blastdb: BLASTN数据库
     :param seq_chr: 原序列在基因组的染色体编号
     :param seq_start: 原序列在基因组的起始位置
     :param seq_end: 原序列在基因组的结束位置
     """
-    
-    # 排除探针在目标基因组的原始区间上的比对结果
-    prober_blast_table_filtered = prober_blast_table[~((prober_blast_table['sseqid'] == seq_chr) & 
-                                                      (prober_blast_table['sstart'].between(seq_start, seq_end)) &
-                                                      (prober_blast_table['send'].between(seq_start, seq_end)))]
-    
-    
-    # 确定特异性探针
-    specific_probers = {}
-    for prober_id in probers:
-        if prober_id not in prober_blast_table_filtered['qseqid'].values:
-            specific_probers[prober_id] = probers[prober_id]
-        else:
-            # 获取所在行
-            pass
 
+
+
+    pool = Pool(processes=10) # Creates a pool of process, controls worksers, 10 workers in this case
+    # The second argument is a list of arguments for 'worker'
+    results = pool.map(worker, [(pos, prober, blastdb, seq_chr, seq_start, seq_end) for pos, prober in probers.items()])  
+    pool.close()  # Close pool
+    pool.join()  # Wait for all workers to finish
+    filtered_probers = {pos: prober for result in results if len(result) == 2 for pos, prober in [result]}
     
-    return specific_probers
+    return filtered_probers
+
 
 def select_maxium_probers(probers, min_gap = 2, method = "quick") -> List[str]:
     """基于probers的位置选择探针
@@ -332,7 +359,6 @@ def select_maxium_probers(probers, min_gap = 2, method = "quick") -> List[str]:
             filtered_probers[pos] = prober
     
     return filtered_probers
-
 
 def greedy(position_list):
     """Using greedy algorithm to select the maximum number of non-overlapping probers
@@ -400,6 +426,7 @@ def parse_args():
     """
     import argparse
     parser = argparse.ArgumentParser(description='Generate all probers')
+    parser.add_argument('-n', '--name', type=str, help='name of the sequence')
     parser.add_argument('-l', '--length', type=int, default=50, help='prober length')
     # initiator_type
     parser.add_argument('-t', '--initiator_type', type=str, default='B1', help='initiator type')
@@ -417,7 +444,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def main(seq, probe_size,initiator_type, polyN, min_gc, max_gc, output, blastdb = None):
+def main(name, seq, probe_size,initiator_type, polyN, min_gc, max_gc, output, blastdb = None):
     """主函数
     """
 
@@ -433,11 +460,15 @@ def main(seq, probe_size,initiator_type, polyN, min_gc, max_gc, output, blastdb 
     probers = filter_probe_by_gc(probers, gc_min= min_gc , gc_max= max_gc)
     print('当前探针数目：', len(probers))
 
+    # 筛选互不重叠的探针
+    probers = select_maxium_probers(probers, min_gap=2, method= 'quick')
+    print('当前探针数目：', len(probers))
+
     # 基于BLASTN的结果进行过滤
     # TODO: BLAST考虑的是设计探针的基因， 如果比对的是其他基因组，代码应该不一样
     if blastdb:
+        
         seq_blast_table = blastn(str(seq), blastdb)
-
         # 筛选seq_balst_table: 100% identity, 且qlen == slen, 长度大于探针
         filtered_seq_blast_table = seq_blast_table[(seq_blast_table['pident'] == 100) & (seq_blast_table['qlen'] == seq_blast_table['plen'] ) & (seq_blast_table['qlen'] >  probe_size)]
         if filtered_seq_blast_table['sseqid'].nunique() == 1:
@@ -446,22 +477,20 @@ def main(seq, probe_size,initiator_type, polyN, min_gc, max_gc, output, blastdb 
             seq_start = min(filtered_seq_blast_table['sstart'].min(), filtered_seq_blast_table['send'].min())
             seq_end = max(filtered_seq_blast_table['sstart'].max(), filtered_seq_blast_table['send'].max())
             
-            # 过滤探针
-            prober_blast_result = blastn(probers, blastdb)
-            filter_prober_by_blastn(probers, prober_blast_result, seq_chr, seq_start, seq_end)
+            # 过滤探针对
+            filter_prober_by_blastn(probers, blastdb, seq_chr, seq_start, seq_end)
         else:
             print("函数没写好, 暂时就不过滤了")
-
-    # 筛选互不重叠的探针
-    probers = select_maxium_probers(probers, min_gap=2, method= 'quick')
+    
     print('当前探针数目：', len(probers))
 
-    export(probers=probers, initiator_type = initiator_type , output= output )
 
 
+    export(prefix = name, probers=probers, initiator_type = initiator_type , output= output )
 
 if __name__ == '__main__':
     args = parse_args()
+    name = args.name
     seq = Seq(open(args.input).read().strip())
     probe_size = args.length # min 50
     initiator_type = args.initiator_type
@@ -470,4 +499,4 @@ if __name__ == '__main__':
     min_gc = args.min_gc
     max_gc = args.max_gc
     output = args.output
-    main(seq, probe_size, initiator_type, polyN, min_gc, max_gc, output, blastdb )
+    main(name, seq, probe_size, initiator_type, polyN, min_gc, max_gc, output, blastdb )
