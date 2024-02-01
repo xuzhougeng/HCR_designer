@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Probe Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Inline styles - replace with your own styles.css content */
+        .AF488 {
+            background-color: #8EDD65;
+        }
+
+        /* Greenish color */
+        .Cy3 {
+            background-color: #FFD700;
+        }
+
+        /* Yellow color */
+        .TexasRed {
+            background-color: #FF4136;
+        }
+
+        /* Red color */
+        .Cy5 {
+            background-color: #DD4B39;
+        }
+
+        /* Reddish color */
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Your existing JavaScript code remains unchanged
+
+            // Event listener for the tab buttons
+            document.querySelectorAll('.tab button').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    var tabName = this.getAttribute('data-tab');
+                    openTab(e, tabName);
+                });
+            });
+
+            // Function to open a tab
+            function openTab(evt, tabName) {
+                var i, tabcontent, tablinks;
+                tabcontent = document.getElementsByClassName('tabcontent');
+                for (i = 0; i < tabcontent.length; i++) {
+                    tabcontent[i].style.display = 'none';
+                }
+                tablinks = document.getElementsByClassName('tablinks');
+                for (i = 0; i < tablinks.length; i++) {
+                    tablinks[i].classList.remove('active');
+                }
+                document.getElementById(tabName).style.display = 'block';
+                evt.currentTarget.classList.add('active');
+            }
+
+            // Open the first tab by default
+            document.querySelector('.tab button').click();
+        });
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <form action="/splint" method="post">
+
+            <!-- Other fields remain unchanged -->
+            <label for="name">Name:</label><br>
+            <input type="text" id="name" name="name" required><br>
+
+            <div class="tab">
+                <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
+                <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
+            </div>
+
+            <div id="GeneID" class="tabcontent">
+                <label for="geneID">Gene ID:</label>
+                <input type="text" id="geneID" name="geneID">
+                <!-- Radio buttons for cDNA and CDS options -->
+            
+                <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>    
+                <label for="cdna">cDNA</label>
+                <input type="radio" id="cds" name="sequenceType" value="cds">
+                <label for="cds">CDS</label><br>       
+            </div>
+
+            <div id="Sequence" class="tabcontent">
+                <label for="seq">Sequence:</label>
+                <textarea id="seq" name="seq" rows="4" cols="50"></textarea>
+            </div>
+
+            <label for="polyN">Poly N:</label><br>
+            <input type="number" id="polyN" name="polyN" value="5"><br>
+
+            <div class="flex-container">
+                <div>
+                    <label for="min_gc">Min GC:</label><br>
+                    <input type="number" id="min_gc" name="min_gc" step="0.01" value="0.3">
+                </div>
+                <div>
+                    <label for="max_gc">Max GC:</label><br>
+                    <input type="number" id="max_gc" name="max_gc" step="0.01" value="0.7">
+                </div>
+            </div>
+
+            <div class="flex-container">
+                <div>
+                    <label for="min_tm">Min TM:</label><br>
+                    <input type="number" id="min_tm" name="min_tm" step="0.5" value="45"><br>
+                </div>
+                <div>
+                    <label for="max_tm">Max TM:</label><br>
+                    <input type="number" id="max_tm" name="max_tm" step="0.5" value="55"><br>
+                </div>
+            </div>
+
+
+            <label for="fluor">Fluor probe:</label><br>
+            <select id="fluor" name="fluor">
+                <option value="AF488">AF488-5'</option>
+                <option value="Cy3">Cy3-5'</option>
+                <option value="Texas">Texas Red-5</option>
+                <option value="Cy5">Cy5-5'</option>
+                <option value=""></option>
+            </select>
+
+
+            <button id="submitBtn" type="submit">Submit</button>
+            <img id="loader" src="{{ url_for('static', filename='loader.gif') }}" style="display: none;">
+
+        </form>
+        <table>
+            <tr>
+                <th>Fluor probe-1</th>
+                <td class="AF488">AF488-5'</td>
+                <td>TCGCGCTTGGTATAATCGCT</td>
+            </tr>
+            <tr>
+                <th>Fluor probe-2</th>
+                <td class="Cy3">Cy3-5'</td>
+                <td>AGTAGCCGTGACTATCGACT</td>
+            </tr>
+            <tr>
+                <th>Fluor probe-3</th>
+                <td class="TexasRed">Texas Red-5'</td>
+                <td>TGCTCTATTTAGTGGAGCC</td>
+            </tr>
+            <tr>
+                <th>Fluor probe-4</th>
+                <td class="Cy5">Cy5-5'</td>
+                <td>CCTCAATGCTGCTGCTGTACTAC</td>
+            </tr>
+        </table>
+    </div>
+</body>
+
+</html>
