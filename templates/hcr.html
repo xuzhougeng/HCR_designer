@@ -47,7 +47,7 @@
                 this.innerHTML = "Loading..."; // 显示加载状态
                 document.getElementById('loader').style.display = "inline"; // 显示 loader.gif
 
-                fetch('/', {
+                fetch('/hcr', {
                     method: 'POST',
                     body: new FormData(document.querySelector('form'))
                 }).then(response => response.blob())
@@ -99,7 +99,7 @@
 
 <body>
     <div class="container">
-        <form action="/" method="post">
+        <form action="/hcr" method="post">
 
             <label for="name">Name:</label><br>
             <input type="text" id="name" name="name" required><br>

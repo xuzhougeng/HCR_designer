@@ -44,7 +44,7 @@ FASTA_FILE_PATH = {
 }
 
 GENE_ALIAS_PATH = {
-    "TAIR10" : "resources/Athaliana.gene.alias.tsv"
+    "TAIR10" : "resources/gene_aliases_20220930.txt.gz"
 }
 
 cds_dict = load_fasta(FASTA_FILE_PATH['TAIR10_cds'])
@@ -210,5 +210,5 @@ def snail():
     return render_template('snail.html')
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port="6789")
+    app.run(host="0.0.0.0", port="9999")
     #app.run(debug=True)
