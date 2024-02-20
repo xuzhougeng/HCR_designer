@@ -4,6 +4,7 @@ from scripts.hcr import create_primer as create_hcr_primer
 from scripts.snail import create_primer as create_snail_primer
 from Bio import SeqIO
 import gzip
+import pandas as pd
 app = Flask(__name__)
 
 # This dictionary will store your sequences
@@ -117,8 +118,9 @@ def splint():
         if gene_id in gene_alias:
             gene_id = gene_alias[gene_id]
 
-        probe_size = int(request.form['probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 17
-        
+        min_probe_size = int(request.form['min_probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 17
+        max_probe_size = int(request.form['max_probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 17
+
         polyN = int(request.form['polyN'])
         min_gc = float(request.form['min_gc'])
         max_gc = float(request.form['max_gc'])
@@ -151,7 +153,13 @@ def splint():
 
         output = 'output.csv'
 
-        probe_df =  create_splint_primer(seq, name, probe_size, polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+        probe_df_dict = {}
+        for probe_size in range(min_probe_size, max_probe_size + 1):
+
+            key_name = f'p_{probe_size}'
+            probe_df_dict[key_name] =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+
+        probe_df = pd.concat(probe_df_dict, axis=1)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
     
@@ -169,7 +177,8 @@ def snail():
         if gene_id in gene_alias:
             gene_id = gene_alias[gene_id]
 
-        probe_size = int(request.form['probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 20
+        min_probe_size = int(request.form['min_probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 17
+        max_probe_size = int(request.form['max_probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 17
 
         polyN = int(request.form['polyN'])
         min_gc = float(request.form['min_gc'])
@@ -203,12 +212,18 @@ def snail():
 
         output = 'output.csv'
 
-        probe_df =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+        probe_df_dict = {}
+        for probe_size in range(min_probe_size, max_probe_size + 1):
+
+            key_name = f'p_{probe_size}'
+            probe_df_dict[key_name] =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+
+        probe_df = pd.concat(probe_df_dict, axis=1)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
     
     return render_template('snail.html')
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port="9999")
+    app.run(host="0.0.0.0", port="6789")
     #app.run(debug=True)

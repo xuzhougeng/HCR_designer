@@ -90,8 +90,18 @@
                 <textarea id="seq" name="seq" rows="4" cols="50"></textarea>
             </div>
 
-            <label for="probe_size">Probe size:</label><br>
-            <input type="number" id="probe_size" name="probe_size" value="17"><br>
+            <div class="flex-container">
+                <div>
+                    <label for="min_probe_size">Min Probe Size:</label><br>
+                    <input type="number" id="min_probe_size" name="min_probe_size" step="1" value="15">
+                </div>
+                <div>
+                    <label for="max_probe_size">Max Probe Size:</label><br>
+                    <input type="number" id="max_probe_size" name="max_probe_size" step="1" value="19">
+                </div>
+            </div>
+
+
 
             <label for="polyN">Poly N:</label><br>
             <input type="number" id="polyN" name="polyN" value="5"><br>
