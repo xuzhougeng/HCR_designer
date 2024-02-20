@@ -13,7 +13,7 @@ fluor_probe = {
 }
 
 # 17 bp +  2nt gap + 17 bp 
-def create_primer(seq, prefix, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488"):
+def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488"):
     """设计splint的探针序列
     输入数据为 cds或者cdna的序列
     输出数据为splint的探针序列
@@ -25,7 +25,7 @@ def create_primer(seq, prefix, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_t
 
     """
     # prober_size = left + right for SPLINT is 34
-    probes = create_probes(seq, probe_size=34, inner_gap=0,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm)
+    probes = create_probes(seq, probe_size= probe_size * 2, inner_gap=0,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm)
 
     color_seq = fluor_probe[fulor]
 
@@ -43,14 +43,15 @@ def create_primer(seq, prefix, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_t
 
     count = 0 
 
+
     for pos,seq in probes.items():
         count += 1
         probes_pos.append( int(pos) + 1)
         probes_list.append(seq)
         
         probe = Seq(seq) 
-        probe_5p = probe[:17].reverse_complement() 
-        probe_3p = probe[17:].reverse_complement()
+        probe_5p = probe[:probe_size].reverse_complement() 
+        probe_3p = probe[-probe_size:].reverse_complement()
         
         primer_5p_tm = mt.Tm_NN(probe_5p)
         primer_3p_tm = mt.Tm_NN(probe_3p)

@@ -24,6 +24,18 @@ def load_fasta(file_path):
         
     return sequences
 
+def load_alias(file_path):
+    gene_alias = {}
+    with gzip.open(file_path, 'r') as f:
+        for line in f:
+            line = line.decode('latin-1').strip()
+            parts = line.strip().split("\t")
+            locus_name = parts[0]
+            symbol = parts[1]
+            symbol = symbol.upper()
+            gene_alias[symbol] = locus_name.upper()
+    return gene_alias
+
 
 # shortest isoform will be used for probe design
 FASTA_FILE_PATH = {
@@ -31,9 +43,13 @@ FASTA_FILE_PATH = {
     "TAIR10_cds" : "resources/Athaliana.cds.fasta.gz"
 }
 
+GENE_ALIAS_PATH = {
+    "TAIR10" : "resources/Athaliana.gene.alias.tsv"
+}
+
 cds_dict = load_fasta(FASTA_FILE_PATH['TAIR10_cds'])
 cdna_dict = load_fasta(FASTA_FILE_PATH['TAIR10_cdna'])
-
+gene_alias = load_alias(GENE_ALIAS_PATH['TAIR10'])
 
 @app.route('/', methods=['GET'])
 def index():
@@ -46,8 +62,12 @@ def hcr():
     if request.method == 'POST':
         name = request.form['name']
         seq = request.form['seq']
-        gene_id = request.form['geneID']
-        probe_size = int(request.form['probe_size'])
+        gene_id = request.form['geneID'].upper()
+
+        if gene_id in gene_alias:
+            gene_id = gene_alias[gene_id]
+
+        probe_size = int(request.form['probe_size']) # single probe size, total probe size will be probe_size * 2
         initiator_type = str(request.form['initiator'])
         polyN = int(request.form['polyN'])
         min_gc = float(request.form['min_gc'])
@@ -76,11 +96,10 @@ def hcr():
             #blastdb = request.form['blastdb']
             #print(blastdb)
             #if blastdb == 'Arabidopsis':
-            blastdb = 'db/Athaliana.fa';
+            blastdb = 'db/Athaliana.fa'
 
         output = 'output.csv'
-
-        probe_df = create_hcr_primer(seq, name, probe_size, polyN, min_gc, max_gc, min_tm, max_tm, initiator_type)
+        probe_df = create_hcr_primer(seq, name, probe_size * 2, polyN, min_gc, max_gc, min_tm, max_tm, initiator_type)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
 
@@ -93,7 +112,13 @@ def splint():
         print(request.form)
         name = request.form['name']
         seq = request.form['seq']
-        gene_id = request.form['geneID']
+        gene_id = request.form['geneID'].upper()
+
+        if gene_id in gene_alias:
+            gene_id = gene_alias[gene_id]
+
+        probe_size = int(request.form['probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 17
+        
         polyN = int(request.form['polyN'])
         min_gc = float(request.form['min_gc'])
         max_gc = float(request.form['max_gc'])
@@ -126,7 +151,7 @@ def splint():
 
         output = 'output.csv'
 
-        probe_df =  create_splint_primer(seq, name, polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+        probe_df =  create_splint_primer(seq, name, probe_size, polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
     
@@ -139,7 +164,13 @@ def snail():
         print(request.form)
         name = request.form['name']
         seq = request.form['seq']
-        gene_id = request.form['geneID']
+        gene_id = request.form['geneID'].upper()
+
+        if gene_id in gene_alias:
+            gene_id = gene_alias[gene_id]
+
+        probe_size = int(request.form['probe_size']) # single probe size, total probe size will be probe_size * 2 defaul 20
+
         polyN = int(request.form['polyN'])
         min_gc = float(request.form['min_gc'])
         max_gc = float(request.form['max_gc'])
@@ -172,12 +203,12 @@ def snail():
 
         output = 'output.csv'
 
-        probe_df =  create_snail_primer(seq, name, polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+        probe_df =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
     
     return render_template('snail.html')
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port="9999")
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port="6789")
+    #app.run(debug=True)
