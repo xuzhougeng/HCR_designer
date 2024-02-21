@@ -157,9 +157,9 @@ def splint():
         for probe_size in range(min_probe_size, max_probe_size + 1):
 
             key_name = f'p_{probe_size}'
-            probe_df_dict[key_name] =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+            probe_df_dict[key_name] =  create_splint_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
 
-        probe_df = pd.concat(probe_df_dict, axis=1)
+        probe_df = pd.concat(probe_df_dict, axis=0)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
     
@@ -218,7 +218,7 @@ def snail():
             key_name = f'p_{probe_size}'
             probe_df_dict[key_name] =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
 
-        probe_df = pd.concat(probe_df_dict, axis=1)
+        probe_df = pd.concat(probe_df_dict, axis=0)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
     
