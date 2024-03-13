@@ -9,13 +9,21 @@ from Bio.SeqUtils import MeltingTemp as mt
 
 fluor_probe = {
     "AF488": "TCGCGCTTGGTATAATCGCT",
-    "Cy3": "TCGCGCTTGGTATAATCGCT",
+    "Cy3": "AGTAGCCGTGACTATCGACT",
     "Texas": "TGCGTCTATTTAGTGGAGCC",
     "Cy5": "CCTCAATGCTGCTGCTGTACTAC"    
 }
 
+fluor_probe_name = {
+    "AF488": "P1",
+    "Cy3": "P2",
+    "Texas": "P3",
+    "Cy5": "P4"
+}
+
+
 # 20 bp +  2nt gap + 20 bp 
-def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=55, max_tm=65, fulor: str = "AF488"):
+def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=55, max_tm=65, fulor: str = "AF488", k:int = 8):
     """设计splint的探针序列
     输入数据为 cds或者cdna的序列
     输出数据为splint的探针序列
@@ -27,10 +35,10 @@ def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, 
 
     """
     # prober_size = left + 2(gap) + right =  42
-    probes = create_probes(seq, probe_size= probe_size * 2 + 2, inner_gap=2,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm)
+    probes = create_probes(seq, probe_size= probe_size * 2 + 2, inner_gap=2,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm, k=k)
 
     color_oligo = fluor_probe[fulor]
-
+    probe_name_suffix = fluor_probe_name[fulor]
     oligo_5p_start = "ACATTA"
     oligo_5p_end = "AAGATA"
     
@@ -66,8 +74,8 @@ def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, 
         P1_list.append(primer_5p)
         P2_list.append(primer_3p)
 
-        P1_name_list.append(f"{prefix}-{count}-5p1")
-        P2_name_list.append(f"{prefix}-{count}-3p1")
+        P1_name_list.append(f"{prefix}-{count}-5{probe_name_suffix}")
+        P2_name_list.append(f"{prefix}-{count}-3{probe_name_suffix}")
 
         P1_tm_list.append( primer_5p_tm )
         P2_tm_list.append( primer_3p_tm )

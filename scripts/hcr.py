@@ -92,11 +92,11 @@ def get_initiator_sequence(ampl):
 def create_primer(seq, prefix, probe_size=50, polyN=5, 
                   min_gc=0.3, max_gc=0.7, 
                   min_tm=45, max_tm=55, 
-                  initiator_type: str = "B1"):
+                  initiator_type: str = "B1", k:int = 8):
     
     inner_gap = probe_size - HCR_EVEN_PROBE_SIZE - HCR_ODD_PROBE_SIZE
     
-    probes = create_probes(seq, probe_size, inner_gap=inner_gap, polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm)
+    probes = create_probes(seq, probe_size, inner_gap=inner_gap, polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm,k=k)
     
     # 获取initiator
     upspc, dnspc, up, dn = get_initiator_sequence(initiator_type)

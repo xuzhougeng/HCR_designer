@@ -76,6 +76,8 @@ def hcr():
         min_tm = float(request.form['min_tm'])
         max_tm = float(request.form['max_tm'])
 
+        kmer = int(request.form['kmer'])
+
 
         if len(gene_id) > 0:
             sequence_type = request.form['sequenceType']
@@ -100,7 +102,7 @@ def hcr():
             blastdb = 'db/Athaliana.fa'
 
         output = 'output.csv'
-        probe_df = create_hcr_primer(seq, name, probe_size * 2, polyN, min_gc, max_gc, min_tm, max_tm, initiator_type)
+        probe_df = create_hcr_primer(seq, name, probe_size * 2, polyN, min_gc, max_gc, min_tm, max_tm, initiator_type, kmer)
         probe_df.to_csv(output)
         return send_file(output, as_attachment=True)
 
@@ -126,6 +128,8 @@ def splint():
         max_gc = float(request.form['max_gc'])
         min_tm = float(request.form['min_tm'])
         max_tm = float(request.form['max_tm'])
+
+        kmer = int(request.form['kmer'])
 
         fluor_type = request.form['fluor']
         
@@ -157,7 +161,7 @@ def splint():
         for probe_size in range(min_probe_size, max_probe_size + 1):
 
             key_name = f'p_{probe_size}'
-            probe_df_dict[key_name] =  create_splint_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+            probe_df_dict[key_name] =  create_splint_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type, kmer)
 
         probe_df = pd.concat(probe_df_dict, axis=0)
         probe_df.to_csv(output)
@@ -186,6 +190,8 @@ def snail():
         min_tm = float(request.form['min_tm'])
         max_tm = float(request.form['max_tm'])
 
+        kmer = int(request.form['kmer'])
+
         fluor_type = request.form['fluor']
         
         if len(gene_id) > 0:
@@ -216,7 +222,7 @@ def snail():
         for probe_size in range(min_probe_size, max_probe_size + 1):
 
             key_name = f'p_{probe_size}'
-            probe_df_dict[key_name] =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type)
+            probe_df_dict[key_name] =  create_snail_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type, kmer)
 
         probe_df = pd.concat(probe_df_dict, axis=0)
         probe_df.to_csv(output)

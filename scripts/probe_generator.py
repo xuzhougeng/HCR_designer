@@ -1,19 +1,11 @@
 from typing import List, Dict
-import numpy as np
-import pandas as pd
-import io
-import tempfile
-from multiprocessing import Pool
 
-from Bio.Blast.Applications import NcbiblastnCommandline as bn
 from Bio.SeqUtils import MeltingTemp as mt
-
 import logging
+from collections import Counter
 
 # Configure the logging to display INFO messages
 logging.basicConfig(level=logging.INFO)
-
-
 
 
 def clean_sequence(sequence):
@@ -28,63 +20,6 @@ def clean_sequence(sequence):
     cleaned_sequence = ''.join([nucleotide for nucleotide in sequence if nucleotide in valid_nucleotides])
 
     return cleaned_sequence
-
-def blastn(seq, blastn_db, blastn_evalue=1e-1, blastn_word_size=7, blastn_num_threads=4):
-    """
-    :param seq: 欲blast的序列
-    :param blastn_db: blastn数据库
-    :param blastn_evalue: evalue
-    :param blastn_word_size: word_size
-    :param blastn_num_threads: 线程数
-    """
-
-    tmp_fasta = ""
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-        # 如果seq是字符串
-        if isinstance(seq, str):
-            f.write('>{}\n{}\n'.format("seq", seq))
-        # 如果seq是list
-        elif isinstance(seq, list):
-            for i, s in enumerate(seq):
-                f.write('>{}\n{}\n'.format(i, s))
-        # 如果seq是字典
-        elif isinstance(seq, dict):
-            for k, v in seq.items():
-                f.write('>{}\n{}\n'.format(k, v))
-        else:
-            raise TypeError("seq must be str, list or dict")
-        
-        tmp_fasta = f.name
-    
-    cline = bn(
-            #cmd = "/opt/biosoft/ncbi-blast-2.10.1+/bin/blastn",
-            query= tmp_fasta,
-            subject= blastn_db,
-            outfmt=6,
-            task="blastn-short",
-            evalue=blastn_evalue,
-            word_size=blastn_word_size,
-            num_threads=blastn_num_threads,
-
-        )  # this uses biopython's blastn formatting function and creates a commandline compatible command
-    (
-        stdout,
-        _,
-    ) = (
-        cline()
-    )  # cline() calls the string as a command and passes it to the command line, outputting the blast results to one variable and errors to the other
-
-    ## From results of blast creating a numpy array (and Pandas database)
-    try:
-        blastresult = pd.read_csv(io.StringIO(stdout), delimiter="\t", header=None)
-        blastresult.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
-        # 增加qlen, plen
-        blastresult["qlen"] = np.abs(blastresult["qend"] - blastresult["qstart"] ) + 1
-        blastresult["plen"] = np.abs(blastresult["send"] - blastresult["sstart"] ) + 1
-    except pd.errors.EmptyDataError:
-        blastresult = pd.DataFrame(columns=["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore","qlen","plen" ])
-    
-    return blastresult
 
 def generate_all_probes(seq, probe_size):
     """生成所有的探针
@@ -169,60 +104,43 @@ def filter_probe_py_tm(probes, min_tm=45, max_tm=55, gap=0, odd_probe_size=25, e
 
     return filtered_probes
 
-
-
-def filter_blastn_result(blastn:pd.DataFrame, seq_chr:str, seq_start:int, seq_end:int):
-    """ 删除blastn 在seq_chr:seq_start-seq_end区间的结果
-    :param blastn: blastn结果
-    :param seq_chr: 原序列在基因组的染色体编号
-    :param seq_start: 原序列在基因组的起始位置
-    :param seq_end: 原序列在基因组的终止位置
-    """
-
-    if blastn.empty:
-        return blastn
-
-    # 反选在区间的比对结果
-    blastn = blastn[ ~ (blastn['sseqid'] == seq_chr) & (blastn['sstart'] >= seq_start) & (blastn['send'] <= seq_end) ]
-
-    return blastn
-
-def worker(args):
-    pos, probe, blastdb, seq_chr, seq_start, seq_end = args
-    odd_probe, even_probe = generate_odd_even_probes(probe)
-
-    odd_probe_blastn = blastn(odd_probe, blastdb)
-    even_probe_blastn = blastn(even_probe, blastdb)
-
-    odd_probe_blastn = filter_blastn_result(odd_probe_blastn, seq_chr, seq_start, seq_end)
-    even_probe_blastn = filter_blastn_result(even_probe_blastn, seq_chr, seq_start, seq_end)
-
-    if odd_probe_blastn.empty and even_probe_blastn.empty:
-        return (pos, probe)
-    else:
-        print(f"odd_probe_blastn: {odd_probe_blastn}")
-        print(f"even_probe_blastn: {even_probe_blastn}")
-        return ()
+def filter_probe_by_kmer(probes, seq, k=10):
     
-def filter_probe_by_blastn(probes: Dict, blastdb:str, seq_chr=None, seq_start=None, seq_end=None) -> Dict[int,str]:
-    """基于BLASTN结果过滤探针
-    为了验证探针的特异性, 我们需要先排除探针在目标基因组的原始区间上(seq_chr:seq_start-seq_end)的比对结果, 然后再检查该探针是否在其他区间存在比对结果
+    def reverse_complement(seq):
+        """计算序列的反向互补序列"""
+        complement = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+        return ''.join([complement[base] for base in reversed(seq)])
+    
+    # 生成目标序列及其反向互补序列的k-mer集合
+    seq_rc = reverse_complement(seq)
 
-    :param probes: 探针字典 如{0:'aaaaaaa', }
-    :param blastdb: BLASTN数据库
-    :param seq_chr: 原序列在基因组的染色体编号
-    :param seq_start: 原序列在基因组的起始位置
-    :param seq_end: 原序列在基因组的结束位置
-    """
+    seq_k_mer_counts = Counter([seq[i:i+k] for i in range(len(seq) - k + 1)])
+    seq_rc_k_mer_counts = Counter([seq_rc[i:i+k] for i in range(len(seq_rc) - k + 1)])
 
-    pool = Pool(processes=10) # Creates a pool of process, controls worksers, 10 workers in this case
-    # The second argument is a list of arguments for 'worker'
-    results = pool.map(worker, [(pos, probe, blastdb, seq_chr, seq_start, seq_end) for pos, probe in probes.items()])  
-    pool.close()  # Close pool
-    pool.join()  # Wait for all workers to finish
-    filtered_probes = {pos: probe for result in results if len(result) == 2 for pos, probe in [result]}
+    # 过滤出现次数大于1的k-mer及其次数
+    seq_k_mer_counts_filtered = {k_mer: count for k_mer, count in seq_k_mer_counts.items() if count > 1}
+    seq_rc_k_mer_counts_filtered = {k_mer: count for k_mer, count in seq_rc_k_mer_counts.items() if count > 1}
+
+    # merge seq
+    black_list = set(list(seq_k_mer_counts_filtered.keys()) + list(seq_rc_k_mer_counts_filtered.keys()))
+
+    # 初始化过滤后的探针字典
+    filtered_probes = {}
+    
+    # 遍历探针集
+    for pos, probe in probes.items():
+        probe = str(probe).upper()
+        
+        # 生成探针的k-mer集合
+        probe_k_mers = {probe[i:i+k] for i in range(len(probe) - k + 1)}
+        
+        # 如果探针的k-mer集合与黑名单没有交集，则保留该探针
+        if not probe_k_mers.intersection(black_list):
+            filtered_probes[pos] = probe
     
     return filtered_probes
+
+
 
 def select_maxium_probes(probes, min_gap = 2, method = "quick") -> Dict[str,str]:
     """基于probes的位置选择探针
@@ -324,7 +242,7 @@ def dp(position_list):
 def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2, 
                   polyN:int = 5, 
                   min_gc:float=0.3, max_gc:float=0.7, 
-                  min_tm:int=45, max_tm:int=55, blastdb = None):
+                  min_tm:int=45, max_tm:int=55, k:int = 8, blastdb = None):
     """主函数
     seq: 输入序列, 可以是cDNA序列, 也可以是cds序列, 但是不能包含非ATGC字符
 
@@ -347,24 +265,28 @@ def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2,
 
     # 基于多聚体N过滤探针
     probes = filter_probe_by_polyN(probes, polyN, inner_gap, odd_probe_size, even_probe_size)
-    logging.info('当前探针数目：%d', len(probes))
+    logging.info('多聚体N过滤, 当前探针数目：%d', len(probes))
 
     # 基于GC含量过滤探针
     probes = filter_probe_by_gc(probes,  min_gc , max_gc, inner_gap, odd_probe_size, even_probe_size)
-    logging.info('当前探针数目：%d', len(probes))
+    logging.info('GC含量过滤, 当前探针数目：%d', len(probes))
 
     #  基于Tm值过滤探针
     probes = filter_probe_py_tm(probes,  min_tm, max_tm, inner_gap, odd_probe_size, even_probe_size)
-    logging.info('当前探针数目：%d', len(probes))
+    logging.info('Tm值过滤, 当前探针数目：%d', len(probes))
+
+    # 过滤低复杂度的探针
+    probes = filter_probe_by_kmer(probes, seq, k=k)
+    logging.info('低复杂度, 当前探针数目：%d', len(probes))
 
     # 筛选互不重叠的探针
     probes = select_maxium_probes(probes, min_gap=min_gap, method= 'quick')
-    logging.info('当前探针数目：%d', len(probes))
+    logging.info('互不重叠, 当前探针数目：%d', len(probes))
 
     # 基于BLASTN的结果进行过滤
     # TODO: BLAST考虑的是设计探针的基因， 如果比对的是其他基因组，代码应该不一样
     if blastdb:
-        
+        from .filter import blastn, filter_probe_by_blastn
         seq_blast_table = blastn(str(seq), blastdb)
         # 筛选seq_balst_table: 100% identity, 且qlen == slen, 长度大于探针
         filtered_seq_blast_table = seq_blast_table[(seq_blast_table['pident'] == 100) & (seq_blast_table['qlen'] == seq_blast_table['plen'] ) & (seq_blast_table['qlen'] >  probe_size)]
