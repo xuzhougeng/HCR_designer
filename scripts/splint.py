@@ -7,10 +7,18 @@ filler_seq = "TCTCGTTTTCTGAACTTAGC"
 
 fluor_probe = {
     "AF488": "TCGCGCTTGGTATAATCGCT",
-    "Cy3": "TCGCGCTTGGTATAATCGCT",
+    "Cy3": "AGTAGCCGTGACTATCGACT",
     "Texas": "TGCGTCTATTTAGTGGAGCC",
     "Cy5": "CCTCAATGCTGCTGCTGTACTAC"    
 }
+
+fluor_probe_name = {
+    "AF488": "P1",
+    "Cy3": "P2",
+    "Texas": "P3",
+    "Cy5": "P4"
+}
+
 
 # 17 bp +  2nt gap + 17 bp 
 def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488"):
@@ -28,6 +36,7 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
     probes = create_probes(seq, probe_size= probe_size * 2, inner_gap=0,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm)
 
     color_seq = fluor_probe[fulor]
+    probe_name_suffix = fluor_probe_name[fulor]
 
     oligo_5p = "CGGTATCAAG"
     oligo_3p = "CTGTTTAAGA"
@@ -62,12 +71,13 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
         P1_list.append(primer_5p)
         P2_list.append(primer_3p)
 
-        P1_name_list.append(f"{prefix}-{count}-5p1")
-        P2_name_list.append(f"{prefix}-{count}-3p1")
+        P1_name_list.append(f"{prefix}-{count}-5{probe_name_suffix}")
+        P2_name_list.append(f"{prefix}-{count}-3{probe_name_suffix}")
 
         P1_tm_list.append( primer_5p_tm )
         P2_tm_list.append( primer_3p_tm )
-
+    
+    
 
     probe_df = pd.DataFrame({
         "probe_pos" : probes_pos,
