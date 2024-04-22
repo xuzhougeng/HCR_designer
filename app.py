@@ -13,7 +13,7 @@ from flask import Flask, request, render_template, send_file, jsonify
 from scripts.splint import create_primer as create_splint_primer
 from scripts.hcr import create_primer as create_hcr_primer
 from scripts.snail import create_primer as create_snail_primer
-from scripts.utils import load_alias, load_fasta, generate_unique_filenames, create_unique_zip
+from scripts.utils import load_alias, load_fasta, generate_unique_id, create_unique_zip
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -41,6 +41,7 @@ GENE_ALIAS_PATH = {
 cds_dict = load_fasta(FASTA_FILE_PATH['TAIR10_cds'])
 cdna_dict = load_fasta(FASTA_FILE_PATH['TAIR10_cdna'])
 gene_alias = load_alias(GENE_ALIAS_PATH['TAIR10'])
+
 
 @app.route('/', methods=['GET'])
 def index():
@@ -95,7 +96,7 @@ def splint():
         # print the form
         print(request.form)
         name = request.form['name']
-        seq = request.form['seq']
+        seq = request.form['seq'].upper()
         gene_id = request.form['geneID'].upper()
 
         if gene_id in gene_alias:
@@ -156,36 +157,32 @@ def splint():
             background = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)  # Path to the selected existing file
 
         probe_df_dict = {}
-        p1_blast_df_dict = {}
-        p2_blast_df_dict = {}
+        blast_df_dict = {}
 
         for probe_size in range(min_probe_size, max_probe_size + 1):
 
             key_name = f'p_{probe_size}'
             res = create_splint_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type, kmer, background)
             probe_df_dict[key_name] = res[0]
-            p1_blast_df_dict[key_name] = res[1]
-            p2_blast_df_dict[key_name] = res[2]
+            blast_df_dict[key_name] = res[1]
 
 
         probe_df = pd.concat(probe_df_dict, axis=0)
-        p1_blast_df = pd.concat(p1_blast_df_dict, axis=0)
-        p2_blast_df = pd.concat(p2_blast_df_dict, axis=0)
+        blast_df = pd.concat(blast_df_dict, axis=0)
 
         # Generate unique filenames for this instance of data processing
-        output_csv, p1_blast_csv, p2_blast_csv = generate_unique_filenames()
+        unique_id = generate_unique_id()
+        output_csv = f"output_{unique_id}.csv"
+        blast_csv = f"blast_{unique_id}.csv"
 
         # Saving dataframes to unique csv files
         probe_df.to_csv(output_csv)
-        p1_blast_df.to_csv(p1_blast_csv)
-        p2_blast_df.to_csv(p2_blast_csv)
-
+        blast_df.to_csv(blast_csv)
         # List of files to be zipped
-        files = [output_csv, p1_blast_csv, p2_blast_csv]
+        files = [output_csv, blast_csv]
         
         zip_path = create_unique_zip(files, "results")
         return send_file(zip_path, as_attachment=True) 
-
     
     return render_template('splint.html')
 
@@ -251,5 +248,5 @@ def snail():
     return render_template('snail.html')
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port="9999")
+    app.run(host="0.0.0.0", port="6789")
     #app.run(debug=True)

@@ -3,7 +3,7 @@ import pandas  as pd
 from Bio.SeqUtils import MeltingTemp as mt
 
 from .probe_generator import create_probes
-from .utils import create_blastn_db,blastn
+from .utils import create_blastn_db,blastn,distance_stat
 
 filler_seq = "TCTCGTTTTCTGAACTTAGC"
 
@@ -20,7 +20,6 @@ fluor_probe_name = {
     "Texas": "P3",
     "Cy5": "P4"
 }
-
 
 # 17 bp +  2nt gap + 17 bp 
 def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488", kmer:int = 8, background=None):
@@ -55,8 +54,10 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
     count = 0
 
     # BLAST result of P1 and P2
-    P1_blast_list = []
-    P2_blast_list = []
+    blast_list = []
+    # BLAST result stat, dist = 0, 1, 2, 3, 4
+    blast_stat = []
+
 
     if background is not None:
         dbname = create_blastn_db(background)
@@ -85,8 +86,11 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
         P2_name_list.append(P2_name)
 
         if background is not None and dbname:
-            P1_blast_list.append(blastn(P1_name, probe_5p, background))
-            P2_blast_list.append(blastn(P2_name, probe_3p, background))
+            probe_name = f"{prefix}-{count}"
+            blast_res = blastn(probe_name, str(probe), background)
+            blast_res['qlen'] = len(probe)
+            blast_list.append(blast_res)
+            blast_stat.append(distance_stat(blast_res))
 
         P1_tm_list.append( primer_5p_tm )
         P2_tm_list.append( primer_3p_tm )
@@ -100,18 +104,16 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
         "P2_name": P2_name_list,
         "P2": P2_list,
         "P2_Tm": P2_tm_list,
+        "blast_stat": blast_stat,
         }
     )
 
-    P1_blast_df = None
-    P2_blast_df = None
+    blast_df = None
     
-    if len(P1_blast_list) > 0:
-        P1_blast_df = pd.concat(P1_blast_list)
-    if len(P2_blast_list) > 0:
-        P2_blast_df = pd.concat(P2_blast_list)
+    if len(blast_list) > 0:
+        blast_df = pd.concat(blast_list)
     
-    return probe_df, P1_blast_df, P2_blast_df
+    return probe_df, blast_df
     
 
 

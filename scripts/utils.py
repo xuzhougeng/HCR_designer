@@ -32,13 +32,9 @@ def load_alias(file_path):
             gene_alias[symbol] = locus_name.upper()
     return gene_alias
 
-def generate_unique_filenames():
+def generate_unique_id():
     unique_id = uuid.uuid4().hex
-    output_filename = f"output_{unique_id}.csv"
-    p1_blast_filename = f"p1_blast_{unique_id}.csv"
-    p2_blast_filename = f"p2_blast_{unique_id}.csv"
-    return output_filename, p1_blast_filename, p2_blast_filename
-
+    return unique_id
 
 def create_unique_zip(files, base_dir='results'):
     unique_id = uuid.uuid4().hex
@@ -80,7 +76,7 @@ def create_blastn_db(fasta_file):
     
     return db_name
 
-def blastn(seq_id, seq, blastn_db, blastn_evalue=10, blastn_word_size=7):
+def blastn(seq_id, seq, blastn_db, blastn_evalue=10, blastn_word_size=7,blastn_num_threads=4):
     """
     :param seq: 欲blast的序列
     :param blastn_db: blastn数据库
@@ -100,10 +96,10 @@ def blastn(seq_id, seq, blastn_db, blastn_evalue=10, blastn_word_size=7):
             query= seq_file,
             db= blastn_db,
             outfmt=6,
-            task="blastn-short",
+            task="blastn", # blastn-short
             evalue=blastn_evalue,
             word_size=blastn_word_size,
-            #num_threads=blastn_num_threads,
+            num_threads=blastn_num_threads,
 
         )  # this uses biopython's blastn formatting function and creates a commandline compatible command
     (
@@ -124,3 +120,21 @@ def blastn(seq_id, seq, blastn_db, blastn_evalue=10, blastn_word_size=7):
         blastresult = pd.DataFrame(columns=["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore","qlen","plen" ])
     
     return blastresult
+
+
+# 用于计算距离的函数
+def calculate_distance(row):
+
+    return (row['mismatch'] + row['gapopen'] + row['qlen'] - row['length']) 
+
+def distance_stat(df, max_dist=4):
+    """
+    :param df: blastn结果的dataframe
+    :param max_dist: 最大距离
+    """
+    # 计算距离
+    df['dist'] = df.apply(calculate_distance, axis=1)
+    # 统计dist < max_dist的数量
+    dist_stat = df['dist'].value_counts().sort_index()
+    # 返回 ",".join(dist_stat)
+    return ",".join([str(dist_stat.get(i, 0)) for i in range(max_dist+1)])
