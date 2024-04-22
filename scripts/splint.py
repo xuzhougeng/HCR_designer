@@ -1,7 +1,9 @@
-from .probe_generator import create_probes
 from Bio.Seq import Seq
 import pandas  as pd
 from Bio.SeqUtils import MeltingTemp as mt
+
+from .probe_generator import create_probes
+from .utils import create_blastn_db,blastn
 
 filler_seq = "TCTCGTTTTCTGAACTTAGC"
 
@@ -21,24 +23,19 @@ fluor_probe_name = {
 
 
 # 17 bp +  2nt gap + 17 bp 
-def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488", k:int = 8):
+def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488", kmer:int = 8, background=None):
     """设计splint的探针序列
 
-    :param k: the k of kmer
-   
-    
-    
     输入数据为 cds或者cdna的序列
     输出数据为splint的探针序列
 
     第一步: 基于csd序列设计探针 ( 分开的单一探针的Tm值, SplintPLP在50度左右 > 45 < 55)
     第二步: 获取探针
     第三步: 对探针反省互补
-
-
     """
+
     # prober_size = left + right for SPLINT is 34
-    probes = create_probes(seq, probe_size= probe_size * 2, inner_gap=0,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm, k=k)
+    probes = create_probes(seq, probe_size= probe_size * 2, inner_gap=0,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm, k=kmer)
 
     color_seq = fluor_probe[fulor]
     probe_name_suffix = fluor_probe_name[fulor]
@@ -55,14 +52,20 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
     P2_list = []
     P2_tm_list = []
 
-    count = 0 
+    count = 0
 
+    # BLAST result of P1 and P2
+    P1_blast_list = []
+    P2_blast_list = []
+
+    if background is not None:
+        dbname = create_blastn_db(background)
 
     for pos,seq in probes.items():
         count += 1
         probes_pos.append( int(pos) + 1)
         probes_list.append(seq)
-        
+
         probe = Seq(seq) 
         probe_5p = probe[:probe_size].reverse_complement() 
         probe_3p = probe[-probe_size:].reverse_complement()
@@ -76,13 +79,17 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
         P1_list.append(primer_5p)
         P2_list.append(primer_3p)
 
-        P1_name_list.append(f"{prefix}-{count}-5{probe_name_suffix}")
-        P2_name_list.append(f"{prefix}-{count}-3{probe_name_suffix}")
+        P1_name = f"{prefix}-{count}-5{probe_name_suffix}"
+        P1_name_list.append(P1_name)
+        P2_name = f"{prefix}-{count}-3{probe_name_suffix}"
+        P2_name_list.append(P2_name)
+
+        if background is not None and dbname:
+            P1_blast_list.append(blastn(P1_name, probe_5p, background))
+            P2_blast_list.append(blastn(P2_name, probe_3p, background))
 
         P1_tm_list.append( primer_5p_tm )
         P2_tm_list.append( primer_3p_tm )
-    
-    
 
     probe_df = pd.DataFrame({
         "probe_pos" : probes_pos,
@@ -96,7 +103,15 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
         }
     )
 
-    return probe_df
+    P1_blast_df = None
+    P2_blast_df = None
+    
+    if len(P1_blast_list) > 0:
+        P1_blast_df = pd.concat(P1_blast_list)
+    if len(P2_blast_list) > 0:
+        P2_blast_df = pd.concat(P2_blast_list)
+    
+    return probe_df, P1_blast_df, P2_blast_df
     
 
 

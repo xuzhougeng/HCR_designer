@@ -1,100 +1,250 @@
+:root {
+    --primary-bg-color: #007bff;
+    --hover-bg-color: #0056b3;
+    --text-color: #ffffff;
+    --background-default: #f4f4f4;
+    --button-bg-color: #4CAF50;
+    --button-hover-bg-color: #45a049;
+    --input-bg-color: #f8f8f8;
+    --navbar-bg-color: #333;
+    --navbar-text-color: #ffffff;
+    --navbar-hover-bg-color: #ddd;
+    --navbar-hover-text-color: #000;
+    --link-text-decoration: none;
+    --tab-inactive-bg-color: #ccc;
+    --container-width: 80%;
+    --flex-padding: 10px;
+    --border-radius: 4px;
+    --border-style: solid;
+    --border-color: #ccc;
+    --box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    --transition-speed: 0.3s;
+    --font-size-normal: 16px;
+    --container-bg-color: #fff;
+    --table-header-bg-color: #007bff;
+    --table-header-text-color: #fff;
+    --table-row-even-bg-color: #f2f2f2;
+    --label-margin-bottom: 5px;
+}
+
 body {
     font-family: Arial, sans-serif;
     margin: 0;
-    padding: 20px;
-    background-color: #f4f4f4;
+    padding: 0;
+    background-color: var(--background-default);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
 }
+
 
 .container {
+    width: var(--container-width);
     margin: auto;
-    width: 60%; /* Adjusted to 60% to give more space */
-    padding: 20px; /* Increased padding for better spacing */
-    background-color: #fff;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Softer shadow */
-}
-
-form {
-    background-color: #fff;
+    overflow: hidden;
     padding: 20px;
+    background-color: var(--container-bg-color);
     border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--box-shadow);
 }
 
-label {
-    font-weight: bold;
-    display: block;
-    margin-bottom: 5px;
+.navbar {
+    display: flex;
+    justify-content: space-around; /* 更好地分布导航链接 */
+    align-items: center;
+    padding: 10px 0;
+    margin-bottom: 20px; /* 增加与内容的间距 */
+    background: linear-gradient(to right, #007bff, #0056b3); /* 水平渐变背景 */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 轻微的阴影效果 */
 }
 
-input[type=text],
-textarea,
-select {
-    width: 100%;
-    padding: 12px 20px;
-    margin: 8px 0;
-    box-sizing: border-box;
-    border: 2px solid #ccc;
-    border-radius: 4px;
-    background-color: #f8f8f8;
-    resize: none;
+.navbar a {
+    color: var(--text-color);
+    font-size: 18px; /* 增加字体大小 */
+    padding: 12px 24px; /* 增加内边距，使链接更易点击 */
+    text-decoration: none; /* 去除下划线 */
+    border-radius: 4px; /* 轻微的圆角 */
+    transition: background-color 0.3s, transform 0.3s, color 0.3s; /* 平滑过渡效果 */
 }
 
-input[type=radio] {
-    margin-right: 5px;
+.navbar a:hover, .navbar a:focus {
+    background-color: var(--navbar-hover-bg-color);
+    color: var(--navbar-hover-text-color);
+    transform: translateY(-2px); /* 悬停时轻微上移 */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* 悬停时增加阴影 */
 }
 
-#submitBtn {
-    background-color: #4CAF50;
-    color: white;
-    padding: 14px 20px;
-    margin: 8px 0;
+.navbar a.active {
+    background-color: var(--navbar-active-color); /* 激活链接的背景色 */
+    color: #ffffff; /* 激活链接的文字颜色 */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3); /* 激活链接的阴影 */
+}
+
+
+.tab button {
+    background-color: inherit;
+    float: left;
     border: none;
-    border-radius: 4px;
+    outline: none;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    padding: 14px 16px;
+    transition: var(--transition-speed);
+    font-size: 17px;
 }
 
-#submitBtn:hover {
-    background-color: #45a049;
+.tab button:hover,
+.tab button.active {
+    background-color: var(--tab-inactive-bg-color);
+}
+
+.tabcontent {
+    display: none; /* 默认隐藏所有 tabcontent */
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-top: none; /* 避免和 tab 按钮之间的双边框 */
+}
+
+.tab button.active + .tabcontent {
+    display: block; /* 显示当前活动的 tabcontent */
 }
 
 .flex-container {
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
+    flex-wrap: wrap;
 }
 
-.flex-container>div {
+.flex-container > div {
     flex: 1;
-    padding-right: 10px;
+    padding-right: var(--flex-padding);
 }
 
-.flex-container>div:last-child {
+.flex-container > div:last-child {
     padding-right: 0;
-}
-
-.table-container {
-    margin-top: 20px;
-    overflow-x: auto;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
 }
 
-th, td {
+th,
+td {
     text-align: left;
     padding: 8px;
 }
 
 th {
-    background-color: #007BFF;
-    color: white;
+    background-color: var(--table-header-bg-color);
+    color: var(--table-header-text-color);
 }
 
 tr:nth-child(even) {
-    background-color: #f2f2f2;
+    background-color: var(--table-row-even-bg-color);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="file"],
+select,
+textarea {
+    width: 100%;
+    padding: 10px;
+    margin: 6px 0 20px;
+    border: 1px var(--border-style) var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--input-bg-color);
+    box-sizing: border-box;
+}
+
+input[type="submit"] {
+    background-color: var(--button-bg-color);
+    color: var(--text-color);
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color var(--transition-speed);
+}
+
+input[type="submit"]:hover {
+    background-color: var(--button-hover-bg-color);
+}
+
+.upload-btn-wrapper {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.btn-upload {
+    border: 2px solid var(--border-color);
+    color: gray;
+    background-color: var(--container-bg-color);
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.upload-btn-wrapper input[type="file"] {
+    font-size: 100px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+}
+
+.fancy-title {
+    font-size: 48px; /* 较大的字体大小 */
+    color: var(--primary-bg-color); /* 使用主题的主色调 */
+    background: -webkit-linear-gradient(45deg, #007bff, #ffd700);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; /* 渐变色填充文字 */
+    text-align: center;
+    padding: 20px; /* 增加内边距 */
+    margin-top: 20px; /* 顶部外边距 */
+    margin-bottom: 20px; /* 底部外边距 */
+    font-family: 'Helvetica Neue', sans-serif; /* 更现代的字体 */
+    font-weight: bold; /* 加粗字体 */
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2); /* 文字阴影效果 */
+    transition: all 0.3s ease-in-out; /* 平滑过渡效果 */
+}
+
+.fancy-title:hover {
+    transform: scale(1.05); /* 鼠标悬停时轻微放大 */
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3); /* 加深文字阴影 */
+}
+
+#submitBtnContainer {
+    text-align: center; /* 容器内内容居中 */
+    margin-top: 20px; /* 顶部外边距 */
+    margin-bottom: 20px; /* 底部外边距 */
+}
+
+#submitBtn {
+    font-size: 20px; /* 字体大小 */
+    font-weight: bold; /* 字体加粗 */
+    color: var(--text-color); /* 文字颜色 */
+    padding: 15px 30px; /* 按钮内边距 */
+    background-color: var(--primary-bg-color); /* 背景颜色 */
+    border: none; /* 无边框 */
+    border-radius: 5px; /* 圆角 */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); /* 阴影效果 */
+    cursor: pointer; /* 鼠标形状 */
+    transition: all 0.3s ease; /* 过渡效果 */
+    outline: none; /* 去除聚焦轮廓 */
+    display: inline-block; /* 确保能够居中对齐 */
+}
+
+#submitBtn:hover {
+    background-color: var(--hover-bg-color); /* 悬停背景色 */
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5); /* 悬停阴影 */
+    transform: scale(1.05); /* 悬停放大 */
+}
+
+#submitBtn:focus {
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.8); /* 聚焦阴影 */
 }

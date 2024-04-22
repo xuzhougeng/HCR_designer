@@ -242,7 +242,7 @@ def dp(position_list):
 def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2, 
                   polyN:int = 5, 
                   min_gc:float=0.3, max_gc:float=0.7, 
-                  min_tm:int=45, max_tm:int=55, k:int = 8, blastdb = None):
+                  min_tm:int=45, max_tm:int=55, k:int = 8):
     """主函数
     seq: 输入序列, 可以是cDNA序列, 也可以是cds序列, 但是不能包含非ATGC字符
 
@@ -282,24 +282,6 @@ def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2,
     # 筛选互不重叠的探针
     probes = select_maxium_probes(probes, min_gap=min_gap, method= 'quick')
     logging.info('互不重叠, 当前探针数目：%d', len(probes))
-
-    # 基于BLASTN的结果进行过滤
-    # TODO: BLAST考虑的是设计探针的基因， 如果比对的是其他基因组，代码应该不一样
-    if blastdb:
-        from .filter import blastn, filter_probe_by_blastn
-        seq_blast_table = blastn(str(seq), blastdb)
-        # 筛选seq_balst_table: 100% identity, 且qlen == slen, 长度大于探针
-        filtered_seq_blast_table = seq_blast_table[(seq_blast_table['pident'] == 100) & (seq_blast_table['qlen'] == seq_blast_table['plen'] ) & (seq_blast_table['qlen'] >  probe_size)]
-        if filtered_seq_blast_table['sseqid'].nunique() == 1:
-            
-            seq_chr = filtered_seq_blast_table['sseqid'].unique()[0]
-            seq_start = min(filtered_seq_blast_table['sstart'].min(), filtered_seq_blast_table['send'].min())
-            seq_end = max(filtered_seq_blast_table['sstart'].max(), filtered_seq_blast_table['send'].max())
-            
-            # 过滤探针对
-            filter_probe_by_blastn(probes, blastdb, seq_chr, seq_start, seq_end)
-        else:
-            print("函数没写好, 暂时就不过滤了")
     
     print('当前探针数目：', len(probes))
     return probes

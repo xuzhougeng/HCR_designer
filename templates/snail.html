@@ -63,6 +63,13 @@
 
 <body>
     <div class="container">
+        <h1 class="fancy-title">Probe Generator</h1>
+        <div class="navbar">
+            <a href="/hcr">HCR</a>
+            <a href="/splint">Splint-FISH</a>
+            <a href="/snail">SNAIL</a>
+            <a href="/help">Help</a>
+        </div>
         <form action="/snail" method="post">
 
             <!-- Other fields remain unchanged -->
@@ -75,7 +82,7 @@
             </div>
 
             <div id="GeneID" class="tabcontent">
-                <label for="geneID">Gene ID:</label>
+                <!-- <label for="geneID">Gene ID:</label> -->
                 <input type="text" id="geneID" name="geneID">
                 <!-- Radio buttons for cDNA and CDS options -->
             
@@ -86,7 +93,7 @@
             </div>
 
             <div id="Sequence" class="tabcontent">
-                <label for="seq">Sequence:</label>
+                <!-- <label for="seq">Sequence:</label> -->
                 <textarea id="seq" name="seq" rows="4" cols="50"></textarea>
             </div>
 
@@ -146,8 +153,11 @@
                 <option value=""></option>
             </select>
 
+            <div id="submitBtnContainer">
+                <button id="submitBtn" type="submit">Submit</button>
+            </div>
 
-            <button id="submitBtn" type="submit">Submit</button>
+            
             <img id="loader" src="{{ url_for('static', filename='loader.gif') }}" style="display: none;">
 
         </form>

@@ -23,7 +23,7 @@ fluor_probe_name = {
 
 
 # 20 bp +  2nt gap + 20 bp 
-def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=55, max_tm=65, fulor: str = "AF488", k:int = 8):
+def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=55, max_tm=65, fulor: str = "AF488", kmer:int = 8):
     """设计splint的探针序列
     输入数据为 cds或者cdna的序列
     输出数据为splint的探针序列

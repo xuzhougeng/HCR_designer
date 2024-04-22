@@ -1,41 +1,31 @@
+
+import os
+import shutil
+import gzip
+
+from Bio import SeqIO
+import pandas as pd
+from werkzeug.utils import secure_filename
+
+
 from flask import Flask, request, render_template, send_file, jsonify
+
 from scripts.splint import create_primer as create_splint_primer
 from scripts.hcr import create_primer as create_hcr_primer
 from scripts.snail import create_primer as create_snail_primer
-from Bio import SeqIO
-import gzip
-import pandas as pd
+from scripts.utils import load_alias, load_fasta, generate_unique_filenames, create_unique_zip
+
 app = Flask(__name__)
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'fasta', 'fa', 'gz'}
 
-# This dictionary will store your sequences
-# The keys are sequence IDs, and the values are the sequences themselves
-# SEUQENCE_ID_FILE_PATH = "sequence_id.txt"
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# gene_id_list = []
-# with open(SEUQENCE_ID_FILE_PATH, "r") as f:
-#     for line in f:
-#         gene_id_list.append(line.strip())
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-def load_fasta(file_path):
-
-    sequences = {}
-    with gzip.open(file_path, 'rt') as fasta_file:
-        for record in SeqIO.parse(fasta_file, 'fasta'):
-            sequences[record.id] = str(record.seq)
-        
-    return sequences
-
-def load_alias(file_path):
-    gene_alias = {}
-    with gzip.open(file_path, 'r') as f:
-        for line in f:
-            line = line.decode('latin-1').strip()
-            parts = line.strip().split("\t")
-            locus_name = parts[0]
-            symbol = parts[1]
-            symbol = symbol.upper()
-            gene_alias[symbol] = locus_name.upper()
-    return gene_alias
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # shortest isoform will be used for probe design
@@ -54,7 +44,6 @@ gene_alias = load_alias(GENE_ALIAS_PATH['TAIR10'])
 
 @app.route('/', methods=['GET'])
 def index():
-
     return render_template('index.html')
 
 
@@ -93,14 +82,6 @@ def hcr():
         if len(seq) == 0:
             return jsonify({'error': 'empty input sequences'}), 400
         
-        blast = request.form['blast'] == "y"
-        blastdb = None
-        if blast:
-            #blastdb = request.form['blastdb']
-            #print(blastdb)
-            #if blastdb == 'Arabidopsis':
-            blastdb = 'db/Athaliana.fa'
-
         output = 'output.csv'
         probe_df = create_hcr_primer(seq, name, probe_size * 2, polyN, min_gc, max_gc, min_tm, max_tm, initiator_type, kmer)
         probe_df.to_csv(output)
@@ -146,26 +127,65 @@ def splint():
 
         if len(seq) == 0:
             return jsonify({'error': 'empty input sequences'}), 400
-        
-        # blast = request.form['blast'] == "y"
-        # blastdb = None
-        # if blast:
-        #     #blastdb = request.form['blastdb']
-        #     #print(blastdb)
-        #     #if blastdb == 'Arabidopsis':
-        #     blastdb = 'db/Athaliana.fa';
 
-        output = 'output.csv'
+        # background file upload, for blast
+        background = None
+
+        # Handle file upload
+        if 'ref_genome' in request.files:
+            file = request.files['ref_genome']
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file_path = os.path.join( app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+
+                # Check if the file is a gzip file and decompress it
+                if filename.endswith('.gz'):
+                    decompressed_path = os.path.join( app.config['UPLOAD_FOLDER'] , filename[:-3])  # remove '.gz' from filename
+                    with gzip.open(file_path, 'rb') as f_in:
+                        with open(decompressed_path, 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                    os.remove(file_path)  # Remove the original .gz file
+                    file_path = decompressed_path  # Update file_path to point to the decompressed file
+                
+                background = file_path
+        
+        # Alternatively, check if an existing genome was selected
+        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+            existing_genome = request.form['existing_ref_genome']
+            background = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)  # Path to the selected existing file
 
         probe_df_dict = {}
+        p1_blast_df_dict = {}
+        p2_blast_df_dict = {}
+
         for probe_size in range(min_probe_size, max_probe_size + 1):
 
             key_name = f'p_{probe_size}'
-            probe_df_dict[key_name] =  create_splint_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type, kmer)
+            res = create_splint_primer(seq, name,probe_size,  polyN, min_gc, max_gc, min_tm, max_tm, fluor_type, kmer, background)
+            probe_df_dict[key_name] = res[0]
+            p1_blast_df_dict[key_name] = res[1]
+            p2_blast_df_dict[key_name] = res[2]
+
 
         probe_df = pd.concat(probe_df_dict, axis=0)
-        probe_df.to_csv(output)
-        return send_file(output, as_attachment=True)
+        p1_blast_df = pd.concat(p1_blast_df_dict, axis=0)
+        p2_blast_df = pd.concat(p2_blast_df_dict, axis=0)
+
+        # Generate unique filenames for this instance of data processing
+        output_csv, p1_blast_csv, p2_blast_csv = generate_unique_filenames()
+
+        # Saving dataframes to unique csv files
+        probe_df.to_csv(output_csv)
+        p1_blast_df.to_csv(p1_blast_csv)
+        p2_blast_df.to_csv(p2_blast_csv)
+
+        # List of files to be zipped
+        files = [output_csv, p1_blast_csv, p2_blast_csv]
+        
+        zip_path = create_unique_zip(files, "results")
+        return send_file(zip_path, as_attachment=True) 
+
     
     return render_template('splint.html')
 
@@ -231,5 +251,5 @@ def snail():
     return render_template('snail.html')
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port="6789")
+    app.run(host="0.0.0.0", port="9999")
     #app.run(debug=True)

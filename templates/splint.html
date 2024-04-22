@@ -29,6 +29,25 @@
     </style>
 
     <script>
+        function toggleInput(state) {
+            // 如果用户正在上传文件，则禁用下拉菜单
+            document.getElementById("existing_ref_genome").disabled = state.files.length > 0;
+
+            // 如果用户选择了下拉菜单的一个选项，则清空文件上传控件的值
+            if (document.getElementById("existing_ref_genome").selectedIndex !== 0) {
+                document.getElementById("ref_genome").value = "";
+            }
+        }
+
+        function toggleFileInput() {
+            // 如果文件上传控件中有文件，则禁用下拉菜单，否则启用
+            var hasFile = document.getElementById("ref_genome").files.length > 0;
+            document.getElementById("existing_ref_genome").disabled = hasFile;
+            if (hasFile) {
+                document.getElementById("existing_ref_genome").selectedIndex = 0;
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             // Your existing JavaScript code remains unchanged
 
@@ -63,7 +82,14 @@
 
 <body>
     <div class="container">
-        <form action="/splint" method="post">
+        <h1 class="fancy-title">Probe Generator</h1>
+        <div class="navbar">
+            <a href="/hcr">HCR</a>
+            <a href="/splint">Splint-FISH</a>
+            <a href="/snail">SNAIL</a>
+            <a href="/help">Help</a>
+        </div>
+        <form action="/splint" method="post" enctype="multipart/form-data" >
 
             <!-- Other fields remain unchanged -->
             <label for="name">Name:</label><br>
@@ -75,19 +101,35 @@
             </div>
 
             <div id="GeneID" class="tabcontent">
-                <label for="geneID">Gene ID:</label>
+                <!-- <label for="geneID">Gene ID:</label> -->
                 <input type="text" id="geneID" name="geneID">
                 <!-- Radio buttons for cDNA and CDS options -->
-            
-                <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>    
+
+                <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
                 <label for="cdna">cDNA</label>
                 <input type="radio" id="cds" name="sequenceType" value="cds">
-                <label for="cds">CDS</label><br>       
+                <label for="cds">CDS</label><br>
             </div>
 
             <div id="Sequence" class="tabcontent">
-                <label for="seq">Sequence:</label>
+                <!-- <label for="seq">Sequence:</label> -->
                 <textarea id="seq" name="seq" rows="4" cols="50"></textarea>
+            </div>
+
+            <div class="flex-container">
+                <div id="ReferenceGenome">
+                    <label for="ref_genome">Upload Reference Genome (fasta):</label>
+                    <input type="file" id="ref_genome" name="ref_genome" accept=".fasta, .fa, .fasta.gz, .fa.gz" onchange="toggleFileInput()">
+                </div>
+                
+                <div>
+                    <label for="existing_ref_genome">Or Choose Existing Reference Genome:</label>
+                    <select id="existing_ref_genome" name="existing_ref_genome" onchange="toggleInput(this)">
+                        <option value="">Select a genome</option>
+                        <option value="Athaliana.fa">Arabidopsis thaliana</option>
+                    </select>
+                </div>
+         
             </div>
 
             <div class="flex-container">
@@ -104,14 +146,14 @@
 
             <div class="flex-container">
                 <div>
-                <label for="polyN">Poly N:</label><br>
-                <input type="number" id="polyN" name="polyN" value="5"><br>
+                    <label for="polyN">Poly N:</label><br>
+                    <input type="number" id="polyN" name="polyN" value="5"><br>
                 </div>
                 <div>
                     <label for="kmer">kmer:</label><br>
                     <input type="number" id="kmer" name="kmer" value="8"><br>
                 </div>
-             </div>
+            </div>
 
             <div class="flex-container">
                 <div>
