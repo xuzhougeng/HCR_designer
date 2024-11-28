@@ -1,52 +1,273 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-    <meta charset="UTF-8">
-    <title>Probe Design [XU ZHOUGENG]</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f4;
-        }
-        .button-container {
-            text-align: center;
-        }
-        .nav-button {
-            background-color: #007bff;
-            border: none;
-            border-radius: 20px;
-            color: white;
-            padding: 15px 30px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 10px;
-            transition: background-color 0.3s;
-            cursor: pointer;
-        }
-        .nav-button:hover {
-            background-color: #0056b3;
-        }
-        .title {
-            font-size: 36px;
-            color: #333;
-            margin-bottom: 30px;
-        }
-    </style>
-</head>
-<body>
-    <div class="title">Probe Design</div>
-    <div class="button-container">
-        <button class="nav-button" onclick="window.location.href='/hcr';">HCR</button>
-        <button class="nav-button" onclick="window.location.href='/splint';">Splint-FISH</button>
-        <button class="nav-button" onclick="window.location.href='/snail';">SNAIL</button>
+{% extends "base.html" %}
+
+{% block title %}HCR Designer - Home{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <h1>Welcome to HCR Designer</h1>
+    <p class="lead">A comprehensive suite of tools for designing DNA/RNA probes</p>
+</div>
+
+<div class="tools-grid">
+    <div class="tool-card">
+        <div class="tool-icon">
+            <i class="fas fa-dna"></i>
+        </div>
+        <h2>HCR Probe Designer</h2>
+        <p>Design probes for Hybridization Chain Reaction (HCR) with optimized parameters for high specificity and sensitivity.</p>
+        <ul class="feature-list">
+            <li>Automated probe sequence design</li>
+            <li>GC content optimization</li>
+            <li>Melting temperature control</li>
+            <li>Secondary structure prediction</li>
+        </ul>
+        <a href="{{ url_for('hcr') }}" class="btn btn-primary">Start Designing</a>
     </div>
-</body>
-</html>
+
+    <div class="tool-card">
+        <div class="tool-icon">
+            <i class="fas fa-microscope"></i>
+        </div>
+        <h2>TCR Probe Designer</h2>
+        <p>Create optimized probes for T Cell Receptor (TCR) analysis with our specialized design algorithms.</p>
+        <ul class="feature-list">
+            <li>TCR-specific parameters</li>
+            <li>Sequence specificity check</li>
+            <li>Multiple probe design</li>
+            <li>Cross-reactivity prevention</li>
+        </ul>
+        <a href="{{ url_for('tcr') }}" class="btn btn-primary">Start Designing</a>
+    </div>
+
+    <div class="tool-card">
+        <div class="tool-icon">
+            <i class="fas fa-atom"></i>
+        </div>
+        <h2>SNAIL Probe Designer</h2>
+        <p>Design probes for SNAIL-FISH with optimized parameters for enhanced signal amplification.</p>
+        <ul class="feature-list">
+            <li>Optimized spacer design</li>
+            <li>Hairpin structure prevention</li>
+            <li>Signal strength prediction</li>
+            <li>Multiplexing support</li>
+        </ul>
+        <a href="{{ url_for('snail') }}" class="btn btn-primary">Start Designing</a>
+    </div>
+
+    <div class="tool-card">
+        <div class="tool-icon">
+            <i class="fas fa-project-diagram"></i>
+        </div>
+        <h2>Splint Probe Designer</h2>
+        <p>Create efficient splint probes for RNA/DNA detection with automated parameter optimization.</p>
+        <ul class="feature-list">
+            <li>Splint junction optimization</li>
+            <li>Ligation efficiency prediction</li>
+            <li>Background reduction</li>
+            <li>Multi-target design</li>
+        </ul>
+        <a href="{{ url_for('splint') }}" class="btn btn-primary">Start Designing</a>
+    </div>
+</div>
+
+<div class="features-section">
+    <h2>Key Features</h2>
+    <div class="features-grid">
+        <div class="feature-item">
+            <i class="fas fa-check-circle"></i>
+            <h3>Optimized Parameters</h3>
+            <p>Automatically calculate and optimize probe parameters for best performance</p>
+        </div>
+        <div class="feature-item">
+            <i class="fas fa-database"></i>
+            <h3>Reference Genomes</h3>
+            <p>Built-in support for common reference genomes and custom genome upload</p>
+        </div>
+        <div class="feature-item">
+            <i class="fas fa-chart-line"></i>
+            <h3>Performance Analysis</h3>
+            <p>Analyze probe performance metrics and predict experimental outcomes</p>
+        </div>
+        <div class="feature-item">
+            <i class="fas fa-file-export"></i>
+            <h3>Export Options</h3>
+            <p>Export results in multiple formats for downstream analysis</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Hero Section */
+.hero-section {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 8px;
+    margin-bottom: 3rem;
+}
+
+.hero-section h1 {
+    font-size: 2.5rem;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+.hero-section .lead {
+    font-size: 1.25rem;
+    color: #34495e;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Tools Grid */
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.tool-card {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.tool-icon {
+    font-size: 2.5rem;
+    color: #3498db;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.tool-card h2 {
+    color: #2c3e50;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.tool-card p {
+    color: #7f8c8d;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+}
+
+.feature-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem 0;
+}
+
+.feature-list li {
+    color: #34495e;
+    padding: 0.5rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+}
+
+.feature-list li::before {
+    content: "•";
+    color: #3498db;
+    position: absolute;
+    left: 0;
+}
+
+/* Features Section */
+.features-section {
+    padding: 3rem 0;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 3rem;
+}
+
+.features-section h2 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 2rem;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    padding: 0 2rem;
+}
+
+.feature-item {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.feature-item i {
+    font-size: 2rem;
+    color: #3498db;
+    margin-bottom: 1rem;
+}
+
+.feature-item h3 {
+    color: #2c3e50;
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.feature-item p {
+    color: #7f8c8d;
+    line-height: 1.6;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hero-section {
+        padding: 3rem 1rem;
+    }
+
+    .hero-section h1 {
+        font-size: 2rem;
+    }
+
+    .tools-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Button Styles */
+.btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background-color: #3498db;
+    color: white;
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+</style>
+
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}

@@ -8,18 +8,26 @@ from collections import Counter
 logging.basicConfig(level=logging.INFO)
 
 
-def clean_sequence(sequence):
-    """
-    清除输入的cDNA序列中的非cDNA字符（即非ATGC字符）。
 
-    :param cdna_sequence: 输入的cDNA序列（字符串）。
-    :return: 清除非cDNA字符后的序列。
+def get_sequence(input_content):
     """
+    从用户的输入中提取有效的序列信息
+    """
+
+    lines = input_content.split('\n')
+    if lines[0].startswith('>'):
+        sequence = "".join(lines[1:])
+    elif lines[0].startswith("@"):
+        sequence = lines[1].strip()
+    else:
+        sequence = "".join(lines)
+
     # 仅保留A, T, G, C字符
     valid_nucleotides = {"A", "T", "G", "C", "a", "t", "c", "g"}
     cleaned_sequence = ''.join([nucleotide for nucleotide in sequence if nucleotide in valid_nucleotides])
 
     return cleaned_sequence
+
 
 def generate_all_probes(seq, probe_size):
     """生成所有的探针
@@ -254,7 +262,7 @@ def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2,
     """
 
     # probe_size = left_probe_size + gap_size + right_probe_size
-    seq = clean_sequence(seq)
+    seq = get_sequence(seq) 
 
     odd_probe_size = (probe_size - inner_gap) // 2
     even_probe_size = probe_size - inner_gap - odd_probe_size

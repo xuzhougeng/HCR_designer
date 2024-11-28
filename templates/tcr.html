@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}TCR Probe Generator{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="fancy-title">TCR Probe Generator</h1>
+    <form action="/tcr" method="post" enctype="multipart/form-data">
+        <div class="parameter-group">
+            <h3>Basic Information</h3>
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" class="form-control" required>
+                <div class="parameter-description">Name for your output file</div>
+            </div>
+        </div>
+
+        <div class="parameter-group">
+            <h3>Sequence Input</h3>
+            <div class="tab">
+                <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
+                <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
+            </div>
+
+            <div id="GeneID" class="tabcontent">
+                <div class="form-group">
+                    <input type="text" id="geneID" name="geneID" class="form-control">
+                    <div class="parameter-description">Enter your gene ID (e.g., AT1G01010)</div>
+
+                    <div class="mt-3">
+                        <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
+                        <label for="cdna">cDNA</label>
+                        <input type="radio" id="cds" name="sequenceType" value="cds">
+                        <label for="cds">CDS</label>
+                    </div>
+                    <div class="parameter-description">Choose between cDNA (includes UTRs) or CDS (coding sequence only)</div>
+                </div>
+            </div>
+
+            <div id="Sequence" class="tabcontent">
+                <div class="form-group">
+                    <textarea id="seq" name="seq" rows="4" class="form-control"></textarea>
+                    <div class="parameter-description">Paste your DNA sequence here (ATCG only)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="parameter-group">
+            <h3>Reference Genome</h3>
+            <div class="flex-container">
+                <div class="form-group">
+                    <label for="existing_ref_genome">Choose Existing Reference Genome:</label>
+                    <select class="form-control" id="existing_ref_genome" name="existing_ref_genome" onchange="toggleInput(this)">
+                        <option value="">Select a genome</option>
+                        {% for genome in available_genomes %}
+                        <option value="{{ genome.filename }}">{{ genome.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="parameter-description">Select from pre-loaded reference genomes for BLAST search</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ref_genome">Or Upload New Reference Genome:</label>
+                    <input type="file" class="form-control-file" id="ref_genome" name="ref_genome" accept=".fa,.fasta,.fna,.gz" onchange="toggleFileInput()">
+                    <div class="parameter-description">Upload your own reference genome in FASTA format</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="parameter-group">
+            <h3>Probe Length Parameters</h3>
+            <div class="flex-container">
+                <div class="form-group">
+                    <label for="min_length">Minimum Probe Length:</label><br>
+                    <input type="number" id="min_length" name="min_length" value="15" class="form-control" min="15" max="20">
+                    <div class="parameter-description">Minimum length of probe sequence (15-20 bp)</div>
+                </div>
+                <div class="form-group">
+                    <label for="max_length">Maximum Probe Length:</label><br>
+                    <input type="number" id="max_length" name="max_length" value="20" class="form-control" min="15" max="20">
+                    <div class="parameter-description">Maximum length of probe sequence (15-20 bp)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="parameter-group">
+            <h3>Gap and Complementarity Parameters</h3>
+            <div class="flex-container">
+                <div class="form-group">
+                    <label for="min_gap">Minimum Gap:</label><br>
+                    <input type="number" id="min_gap" name="min_gap" value="15" class="form-control" min="0"><br>
+                    <div class="parameter-description">Minimum space between adjacent probes (≥0 bp)</div>
+                </div>
+                <div class="form-group">
+                    <label for="min_complementary_length">Minimum Complementary Length:</label><br>
+                    <input type="number" id="min_complementary_length" name="min_complementary_length" value="5" class="form-control" min="4" max="8"><br>
+                    <div class="parameter-description">Minimum length of complementary sequence to check (4-8 bp)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="parameter-group">
+            <h3>GC Content Parameters</h3>
+            <div class="flex-container">
+                <div class="form-group">
+                    <label for="min_gc">Minimum GC (%):</label><br>
+                    <input type="number" id="min_gc" name="min_gc" step="0.1" value="40.0" class="form-control" min="30.0" max="50.0">
+                    <div class="parameter-description">Minimum GC content (30-50%)</div>
+                </div>
+                <div class="form-group">
+                    <label for="max_gc">Maximum GC (%):</label><br>
+                    <input type="number" id="max_gc" name="max_gc" step="0.1" value="60.0" class="form-control" min="50.0" max="70.0">
+                    <div class="parameter-description">Maximum GC content (50-70%)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="parameter-group">
+            <h3>Melting Temperature Parameters</h3>
+            <div class="flex-container">
+                <div class="form-group">
+                    <label for="min_tm">Minimum Tm (°C):</label><br>
+                    <input type="number" id="min_tm" name="min_tm" step="0.1" value="47.0" class="form-control" min="40.0" max="50.0"><br>
+                    <div class="parameter-description">Minimum melting temperature (40-50°C)</div>
+                </div>
+                <div class="form-group">
+                    <label for="max_tm">Maximum Tm (°C):</label><br>
+                    <input type="number" id="max_tm" name="max_tm" step="0.1" value="53.0" class="form-control" min="50.0" max="60.0"><br>
+                    <div class="parameter-description">Maximum melting temperature (50-60°C)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="submit-container">
+            <button id="submitBtn" type="submit" class="btn btn-primary">Submit</button>
+        </div>
+        <img id="loader" src="{{ url_for('static', filename='loader.gif') }}" style="display: none;">
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.flex-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.flex-container > div {
+    flex: 1;
+    min-width: 200px;
+}
+
+.parameter-group {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.parameter-group h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-size: 1.2em;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 5px;
+}
+
+.parameter-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 2px;
+    margin-bottom: 8px;
+    font-style: italic;
+}
+
+.submit-container {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.tab {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+
+.tab button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 10px 16px;
+    transition: 0.3s;
+}
+
+.tab button:hover {
+    background-color: #ddd;
+}
+
+.tab button.active {
+    background-color: #ccc;
+}
+
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+}
+
+/* Form Styles */
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: #495057;
+    background-color: #fff;
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.form-control-file {
+    display: block;
+    width: 100%;
+}
+
+.btn {
+    display: inline-block;
+    font-weight: 400;
+    text-align: center;
+    vertical-align: middle;
+    user-select: none;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: 0.25rem;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-primary:hover {
+    color: #fff;
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+.mt-3 {
+    margin-top: 1rem;
+}
+
+/* Radio button styles */
+input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+input[type="radio"] + label {
+    margin-right: 1rem;
+}
+
+/* Select styles */
+select.form-control {
+    height: calc(1.5em + 0.75rem + 2px);
+}
+
+/* Textarea styles */
+textarea.form-control {
+    min-height: 100px;
+    resize: vertical;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.tab button').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            var tabName = this.getAttribute('data-tab');
+            openTab(e, tabName);
+        });
+    });
+
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName('tabcontent');
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = 'none';
+        }
+        tablinks = document.getElementsByClassName('tablinks');
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].classList.remove('active');
+        }
+        document.getElementById(tabName).style.display = 'block';
+        evt.currentTarget.classList.add('active');
+    }
+
+    // Open the first tab by default
+    document.querySelector('.tab button').click();
+});
+
+function toggleInput(state) {
+    document.getElementById("ref_genome").disabled = state.files.length > 0;
+    if (document.getElementById("ref_genome").selectedIndex !== 0) {
+        document.getElementById("ref_genome").value = "";
+    }
+}
+
+function toggleFileInput() {
+    var hasFile = document.getElementById("ref_genome").files.length > 0;
+    document.getElementById("existing_ref_genome").disabled = hasFile;
+    if (hasFile) {
+        document.getElementById("existing_ref_genome").selectedIndex = 0;
+    }
+}
+</script>
+{% endblock %}

@@ -22,7 +22,7 @@ fluor_probe_name = {
 }
 
 # 17 bp +  2nt gap + 17 bp 
-def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fulor: str = "AF488", kmer:int = 8, background=None):
+def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=45, max_tm=55, fluor: str = "AF488", kmer:int = 8, background=None):
     """设计splint的探针序列
 
     输入数据为 cds或者cdna的序列
@@ -36,8 +36,8 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
     # prober_size = left + right for SPLINT is 34
     probes = create_probes(seq, probe_size= probe_size * 2, inner_gap=0,  polyN=polyN, min_gc=min_gc, max_gc=max_gc, min_tm=min_tm, max_tm=max_tm, k=kmer)
 
-    color_seq = fluor_probe[fulor]
-    probe_name_suffix = fluor_probe_name[fulor]
+    color_seq = fluor_probe[fluor]
+    probe_name_suffix = fluor_probe_name[fluor]
 
     oligo_5p = "CGGTATCAAG"
     oligo_3p = "CTGTTTAAGA"
@@ -104,9 +104,10 @@ def create_primer(seq, prefix, probe_size=17, polyN=5, min_gc=0.3, max_gc=0.7, m
         "P2_name": P2_name_list,
         "P2": P2_list,
         "P2_Tm": P2_tm_list,
-        "blast_stat": blast_stat,
         }
     )
+    if len(blast_list) > 0:
+        probe_df["blast_stat"] = blast_stat
 
     blast_df = None
     

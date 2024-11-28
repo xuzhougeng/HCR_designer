@@ -39,16 +39,20 @@ def generate_unique_id():
 def create_unique_zip(files, base_dir='results'):
     unique_id = uuid.uuid4().hex
     zip_filename = f"output_{unique_id}.zip"
+    
+    # Ensure the base directory exists
+    os.makedirs(base_dir, exist_ok=True)
+    
     zip_path = os.path.join(base_dir, zip_filename)
     
     with ZipFile(zip_path, 'w') as zipf:
         for file in files:
             if os.path.isfile(file):
-                zipf.write(file)
-                os.remove(file)  # Optionally remove the file after adding it to the zip
+                # Add file to zip with just the filename as the archive name
+                zipf.write(file, os.path.basename(file))
             else:
                 print(f"Warning: The file {file} does not exist and will not be included in the zip.")
-                
+    
     return zip_path
 
 
