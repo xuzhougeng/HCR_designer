@@ -1,3 +1,14 @@
 db
 __pycache__
 output.csv
+uploads
+results
+log.txt
+cache
+*.txt
+output
+*.zip
+*.gz
+*.tar
+*.tar.gz
+*.tar.bz2

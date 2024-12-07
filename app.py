@@ -14,7 +14,7 @@ from scripts.splint import create_primer as create_splint_primer
 from scripts.hcr import create_primer as create_hcr_primer
 from scripts.snail import create_primer as create_snail_primer
 from scripts.utils import load_alias, load_fasta, generate_unique_id, create_unique_zip
-from scripts.tcr import PrimerDesignConfig, design_probe_set, output_probe
+from scripts.tcr import PrimerDesignConfig, design_prime_set
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -147,7 +147,7 @@ def hcr():
         probe_csv = os.path.join(output_dir, "probes.csv")
         
         # 生成探针结果文件
-        output_probe(probe_sets, probe_csv, blast_db=blast_db)
+        #output_primer_sets(probe_sets, probe_csv, blast_db=blast_db)
         
         # 准备要打包的文件列表
         files = [probe_csv]
@@ -528,13 +528,13 @@ def tcr():
         )
         
         # 设计探针
-        probe_sets = design_probe_set(seq, config)
+        probe_sets = design_prime_set(seq, config)
         
         # 使用固定的文件名
         probe_csv = os.path.join(output_dir, "probes.csv")
         
         # 生成探针结果文件
-        output_probe(probe_sets, probe_csv, blast_db=blast_db)
+        # output_primer_sets(probe_sets, probe_csv, blast_db=blast_db)
         # read the probe_csv
         probe_df = pd.read_csv(probe_csv)
         # creat bed file from  probe_df

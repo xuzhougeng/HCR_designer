@@ -250,7 +250,7 @@ def dp(position_list):
 def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2, 
                   polyN:int = 5, 
                   min_gc:float=0.3, max_gc:float=0.7, 
-                  min_tm:int=45, max_tm:int=55, k:int = 8):
+                  min_tm:int=45, max_tm:int=55, k:int = 8) -> Dict[int, str]:
     """主函数
     seq: 输入序列, 可以是cDNA序列, 也可以是cds序列, 但是不能包含非ATGC字符
 
@@ -259,6 +259,7 @@ def create_probes(seq:str, probe_size:int, inner_gap=0, min_gap=2,
     :param inner_gap: 探针内部引物的间隔
     :param min_gap: 探针之间的最小间隔
 
+    :return: 探针列表
     """
 
     # probe_size = left_probe_size + gap_size + right_probe_size
