@@ -1,9 +1,11 @@
 """三探针输出处理模块"""
 from typing import List, Tuple
 from pathlib import Path
+
 import csv
 import logging
 from Bio.SeqUtils import MeltingTemp as mt
+from ..common.blast_utils import analyze_blast_results
 
 from .designer import ProbeSet
 
@@ -27,6 +29,7 @@ class ProbeOutputHandler:
             blast_db: BLAST数据库路径（可选）
         """
         # 保存详细结果
+        logger.info(f"保存详细结果")
         self._save_detailed_results(probe_sets, output_prefix, blast_db)
         
         # 保存BED格式
@@ -56,28 +59,28 @@ class ProbeOutputHandler:
                 f.write("-" * 80 + "\n")
                 
                 # 写入每个探针的详细信息
-                self._write_primer_details(f, "Left", probe_set.left_probe, blast_db)
-                self._write_primer_details(f, "Middle", probe_set.middle_primer, blast_db)
-                self._write_primer_details(f, "Right", probe_set.right_primer, blast_db)
+                self._write_probe_details(f, "Left", probe_set.left_probe, blast_db)
+                self._write_probe_details(f, "Middle", probe_set.middle_probe, blast_db)
+                self._write_probe_details(f, "Right", probe_set.right_probe, blast_db)
                 
                 # 写入探针组合的评估信息
                 self._write_probe_set_evaluation(f, probe_set)
                 f.write("\n" + "=" * 80 + "\n\n")
     
-    def _write_primer_details(self, file, primer_type: str, 
-                            primer_info: Tuple,
+    def _write_probe_details(self, file, probe_type: str, 
+                            probe_info: Tuple,
                             blast_db: str = None):
         """写入单个探针详细信息
         
         Args:
             file: 输出文件对象
-            primer_type: 探针类型（Left/Middle/Right）
-            primer_info: 探针信息元组
+            probe_type: 探针类型（Left/Middle/Right）
+            probe_info: 探针信息元组
             blast_db: BLAST数据库路径（可选）
         """
-        sequence, start, end, tm, gc = primer_info
+        sequence, start, end, tm, gc = probe_info
         
-        file.write(f"\n{primer_type} Primer:\n")
+        file.write(f"\n{probe_type} Primer:\n")
         file.write(f"序列: {sequence}\n")
         file.write(f"位置: {start + 1}-{end}\n")  # 转换为1-based坐标
         file.write(f"长度: {len(sequence)}bp\n")
@@ -101,23 +104,23 @@ class ProbeOutputHandler:
         file.write("\n探针组合评估:\n")
         
         # 计算间隔
-        left_to_middle = probe_set.middle_primer[1] - probe_set.left_probe[2]
-        middle_to_right = probe_set.right_primer[1] - probe_set.middle_primer[2]
+        left_to_middle = probe_set.middle_probe[1] - probe_set.left_probe[2]
+        middle_to_right = probe_set.right_probe[1] - probe_set.middle_probe[2]
         
         file.write(f"Left-Middle间隔: {left_to_middle}bp\n")
         file.write(f"Middle-Right间隔: {middle_to_right}bp\n")
         
         # 计算总长度
-        total_length = (probe_set.right_primer[2] - probe_set.left_probe[1])
+        total_length = (probe_set.right_probe[2] - probe_set.left_probe[1])
         file.write(f"总跨度: {total_length}bp\n")
         
         # 计算平均Tm和GC
         avg_tm = (probe_set.left_probe[3] + 
-                 probe_set.middle_primer[3] + 
-                 probe_set.right_primer[3]) / 3
+                 probe_set.middle_probe[3] + 
+                 probe_set.right_probe[3]) / 3
         avg_gc = (probe_set.left_probe[4] + 
-                 probe_set.middle_primer[4] + 
-                 probe_set.right_primer[4]) / 3
+                 probe_set.middle_probe[4] + 
+                 probe_set.right_probe[4]) / 3
         
         file.write(f"平均Tm值: {avg_tm:.1f}°C\n")
         file.write(f"平均GC含量: {avg_gc:.1f}%\n")
@@ -140,12 +143,12 @@ class ProbeOutputHandler:
                        f"{probe_set.left_probe[2]}\tL-{i}\t0\t+\n")
                 
                 # 写入中间探针
-                f.write(f"{task_name}\t{probe_set.middle_primer[1]}\t"
-                       f"{probe_set.middle_primer[2]}\tM-{i}\t0\t+\n")
+                f.write(f"{task_name}\t{probe_set.middle_probe[1]}\t"
+                       f"{probe_set.middle_probe[2]}\tM-{i}\t0\t+\n")
                 
                 # 写入右探针
-                f.write(f"{task_name}\t{probe_set.right_primer[1]}\t"
-                       f"{probe_set.right_primer[2]}\tR-{i}\t0\t+\n")
+                f.write(f"{task_name}\t{probe_set.right_probe[1]}\t"
+                       f"{probe_set.right_probe[2]}\tR-{i}\t0\t+\n")
 
     def _save_csv_format(self, probe_sets: List[ProbeSet], 
                         task_name: str, output_prefix: str):
@@ -167,15 +170,15 @@ class ProbeOutputHandler:
             
             for i, probe_set in enumerate(probe_sets, 1):
                 # 写入每个探针的信息
-                for primer_type, primer_info in [
+                for probe_type, probe_info in [
                     ('Left', probe_set.left_probe),
-                    ('Middle', probe_set.middle_primer),
-                    ('Right', probe_set.right_primer)
+                    ('Middle', probe_set.middle_probe),
+                    ('Right', probe_set.right_probe)
                 ]:
-                    sequence, start, end, tm, gc = primer_info
+                    sequence, start, end, tm, gc = probe_info
                     writer.writerow([
                         f"Set_{i}",
-                        primer_type,
+                        probe_type,
                         sequence,
                         start + 1,  # 转换为1-based坐标
                         end,
@@ -200,13 +203,9 @@ class ProbeOutputHandler:
             # 获取错配统计和详细匹配信息
             mismatch_stats, detailed_matches = analyze_blast_results(sequence, blast_db)
             
-            # 获取详细的比对结果
-            alignment_details = get_detailed_blast_results(sequence, blast_db)
-            
             return {
                 'mismatch_stats': mismatch_stats,
-                'detailed_matches': detailed_matches,
-                'alignment_details': alignment_details
+                'detailed_matches': detailed_matches
             }
             
         except Exception as e:
@@ -224,25 +223,23 @@ class ProbeOutputHandler:
             file: 输出文件对象
             blast_results: BLAST分析结果
         """
+        mismatch_stats = blast_results['mismatch_stats']
+        detailed_matches = blast_results['detailed_matches']
+        
         file.write("\nBLAST分析结果:\n")
+        
         # 写入错配统计
-        file.write("\n错配统计:\n")
-        for mismatches, count in blast_results['mismatch_stats'].items():
-            file.write(f"{mismatches}个错配: {count}条序列\n")
-            
+        file.write("\nBLAST Analysis:\n")
+        file.write("Mismatches\tCount\tDescription\n")
+        file.write("-" * 50 + "\n")
+        for mismatches, count in sorted(mismatch_stats.items()):
+            description = "Perfect match" if mismatches == 0 else f"{mismatches} mismatch(es)"
+            file.write(f"{mismatches}\t\t{count}\t\t{description}\n")
+
         # 写入详细匹配信息
-        file.write("\n详细匹配信息:\n")
-        for match in blast_results['detailed_matches']:
-            file.write(f"目标序列: {match['target_seq']}\n")
-            file.write(f"匹配位置: {match['position']}\n")
-            file.write(f"错配数: {match['mismatches']}\n")
-            file.write("\n")
-            
-        # 写入比对详情
-        file.write("\n比对详情:\n")
-        for alignment in blast_results['alignment_details']:
-            file.write(f"序列ID: {alignment['seq_id']}\n")
-            file.write(f"比对区域: {alignment['alignment']}\n")
-            file.write(f"得分: {alignment['score']}\n")
-            file.write(f"E值: {alignment['evalue']}\n")
-            file.write("\n")
+        file.write("\nDetailed Matches:\n")
+        file.write("Subject ID\tMismatches\tGaps\tTotal Mismatches\n")
+        file.write("-" * 70 + "\n")
+        for subject_id, mismatches, gaps in detailed_matches:
+            total = mismatches + gaps
+            file.write(f"{subject_id}\t{mismatches}\t{gaps}\t{total}\n")

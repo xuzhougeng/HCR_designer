@@ -147,13 +147,9 @@ class ProbeOutputHandler:
             # 获取错配统计和详细匹配信息
             mismatch_stats, detailed_matches = analyze_blast_results(sequence, blast_db)
             
-            # 获取详细的比对结果
-            alignment_details = get_detailed_blast_results(sequence, blast_db)
-            
             return {
                 'mismatch_stats': mismatch_stats,
-                'detailed_matches': detailed_matches,
-                'alignment_details': alignment_details
+                'detailed_matches': detailed_matches
             }
             
         except Exception as e:
@@ -180,11 +176,3 @@ class ProbeOutputHandler:
             file.write(f"错配数: {match['mismatches']}\n")
             file.write("\n")
             
-        # 写入比对详情
-        file.write("\n比对详情:\n")
-        for alignment in blast_results['alignment_details']:
-            file.write(f"序列ID: {alignment['seq_id']}\n")
-            file.write(f"比对区域: {alignment['alignment']}\n")
-            file.write(f"得分: {alignment['score']}\n")
-            file.write(f"E值: {alignment['evalue']}\n")
-            file.write("\n")

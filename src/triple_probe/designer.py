@@ -42,10 +42,12 @@ class TripleProbeDesigner:
         used_positions = set()
         
         pos = 0
-        while pos < sequence_length - 3 * self.config.min_length:
+        logger.debug(f"Searching for probe set starting at position {pos}")
+        while pos < (sequence_length - 3 * self.config.min_length):
             logger.debug(f"Searching for probe set starting at position {pos}")
             
             # 寻找左引物
+            logger.debug(f"Searching for left probe starting at position {pos}")
             left_result = self._find_next_valid_probe(
                 sequence, pos, sequence_length, used_positions
             )
@@ -54,6 +56,7 @@ class TripleProbeDesigner:
                 continue
                 
             # 寻找中间引物（必须紧接着左引物）
+            logger.debug(f"Searching for middle probe starting at position {left_result[2]}")
             middle_result = self._find_next_valid_probe(
                 sequence, left_result[2], sequence_length, used_positions,
                 must_start_at=left_result[2]  # 确保从左引物结束位置开始
@@ -61,9 +64,9 @@ class TripleProbeDesigner:
             if not middle_result:
                 pos += 1
                 continue
-                
+            logger.debug(f"Checking left and middle probe compatibility")
             # 检查左引物和中间引物的兼容性
-            if not self._check_primer_compatibility(left_result, middle_result):
+            if not self._check_probe_compatibility(left_result, middle_result):
                 pos += 1
                 continue
                 
@@ -81,11 +84,11 @@ class TripleProbeDesigner:
                 continue
                 
             # 检查三个引物的兼容性
-            if self._check_primer_compatibility(left_result, middle_result, right_result):
-                logger.info(f"Found valid probe set:")
-                logger.info(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
-                logger.info(f"Middle probe: {middle_result[0]}, Tm: {middle_result[3]:.1f}")
-                logger.info(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
+            if self._check_probe_compatibility(left_result, middle_result, right_result):
+                logger.debug(f"Found valid probe set:")
+                logger.debug(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
+                logger.debug(f"Middle probe: {middle_result[0]}, Tm: {middle_result[3]:.1f}")
+                logger.debug(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
                 
                 probe_set = ProbeSet(left_result, middle_result, right_result)
                 probe_sets.append(probe_set)
@@ -120,15 +123,19 @@ class TripleProbeDesigner:
         """
         # 如果指定了必须的起始位置，就只检查从这个位置开始的引物
         if must_start_at is not None:
+            logger.debug(f"Must start at position {must_start_at}")
             start_pos = must_start_at
             
         for pos in range(start_pos, end_pos - self.config.min_length + 1):
             # 如果指定了必须的起始位置，但当前位置不是该位置，则跳过
+            logger.debug(f"Checking position {pos}")
             if must_start_at is not None and pos != must_start_at:
+                logger.debug(f"Not starting at {must_start_at}, skipping")
                 break
                 
             # 检查位置是否已被使用
-            if any(p in used_pos for p in range(pos, pos + self.config.max_length)):
+            if any(p in used_positions for p in range(pos, pos + self.config.max_length)):
+                logger.debug(f"Position {pos} already used, skipping")
                 continue
                 
             # 尝试不同长度的引物
@@ -137,6 +144,7 @@ class TripleProbeDesigner:
                 probe = sequence[pos:pos + length]
                 try:
                     # 检查引物是否符合基本要求
+                    logger.debug(f"Checking probe: {probe}")
                     if not is_valid_probe(probe, 
                                         min_length=self.config.min_length,
                                         max_length=self.config.max_length,
@@ -145,9 +153,12 @@ class TripleProbeDesigner:
                                         tm_min=self.config.tm_min,
                                         tm_max=self.config.tm_max,
                                         poly_n=self.config.poly_n):
+                        logger.debug(f"Probe {probe} is not valid, skipping")
                         continue
                     # 在返回之前进行反向互补
                     rev_comp_probe = str(Seq(probe).reverse_complement())
+                    tm = calculate_tm(rev_comp_probe)
+                    gc = calculate_gc_content(rev_comp_probe)
                     logger.debug(f"Found valid probe: {rev_comp_probe}, Tm: {tm:.1f}, GC: {gc:.1f}")
                     return (rev_comp_probe, pos, pos + length, tm, gc)
                 except Exception as e:

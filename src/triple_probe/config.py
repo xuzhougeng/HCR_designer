@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import json
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ class TripleProbeConfig:
     
     # 输出设置
     output_dir: Path = field(default=Path("output"))
+    
+    # 数据库设置
+    blast_db: Optional[str] = None
     
     def __post_init__(self):
         """初始化后验证"""

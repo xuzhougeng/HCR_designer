@@ -1,6 +1,8 @@
 
 from Bio.Blast.Applications import NcbiblastnCommandline
 from Bio.Blast import NCBIXML
+import tempfile
+import os
 
 def analyze_blast_results(sequence, db_path):
     """
@@ -38,7 +40,8 @@ def analyze_blast_results(sequence, db_path):
             word_size=10,
             task="blastn-short",
             dust="no",
-            perc_identity=80
+            perc_identity=80,
+            num_threads=10
         )()[0]
 
         # 处理BLAST结果

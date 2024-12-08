@@ -1,25 +1,26 @@
-from scripts.tcr import main as tcr_main
 from scripts.utils import load_fasta
 import os
 from datetime import datetime
 import multiprocessing as mp
 from functools import partial
 import zipfile
+import argparse
+from .create_triplet_probe import main as tcr_main
 
 # column two, BRIDGE ID and sequence
-probe_table_file = "resources/probe_table.txt"
+probe_table_file = "./tmp.txt"
 bridge_seq_dict = {}
 for line in open(probe_table_file):
-    bridge_id, sequence = line.strip().split("\t")
+    bridge_id, sequence = line.strip().split(" ")
     bridge_seq_dict[bridge_id] = sequence
 
 # Load cDNA sequences from TAIR10
 FASTA_FILE_PATH = {
-    "TAIR10_cdna" : "resources/Athaliana.cdna.fasta.gz",
+    "TAIR10_cdna" : "./resources/Athaliana.cdna.fasta.gz",
 }
 
 # BLAST database path
-BLAST_DB = "uploads/Athaliana_cdna.fasta"
+BLAST_DB = "./uploads/Athaliana_cdna.fasta"
 #BLAST_DB = None
 
 cdna_dict = load_fasta(FASTA_FILE_PATH['TAIR10_cdna'])
@@ -69,7 +70,7 @@ def save_cdna_sequence(gene, sequence, output_dir):
         for i in range(0, len(sequence), 60):
             f.write(f"{sequence[i:i+60]}\n")
 
-def process_gene(gene, bridge_seq_dict, cdna_dict, blast_db):
+def process_gene(gene, bridge_seq_dict, gene_to_bp_id, cdna_dict, blast_db):
     """处理单个基因的函数"""
     # 获取bridge probe ID和序列
     bp_id = f"BP_{int(gene_to_bp_id[gene]):04d}"
@@ -86,7 +87,7 @@ def process_gene(gene, bridge_seq_dict, cdna_dict, blast_db):
         return
     
     # 创建输出目录
-    output_dir = os.path.join("output", gene)
+    output_dir = os.path.join("./output", gene)
     os.makedirs(output_dir, exist_ok=True)
     
     # 保存cDNA序列到FASTA文件
@@ -98,13 +99,13 @@ def process_gene(gene, bridge_seq_dict, cdna_dict, blast_db):
     print(f"Processing gene {gene} with bridge probe {bp_id}")
     
     # 运行TCR探针设计
+    print(f"Running TCR probe design for gene {gene} with bridge probe {bp_id}")
     tcr_main(
-        sequence=sequence,
-        output_file=output_file,
-        bridge_probe=bridge_probe,
-        BP_ID=bp_id,
-        task_name=gene,
-        blast_db=blast_db
+        sequence=sequence,  
+        name=gene,
+        gene_id=bp_id,
+        ref_genome=blast_db,
+        output_dir=output_dir
     )
 
 def zip_output(output_dir="output"):
@@ -136,6 +137,7 @@ if __name__ == "__main__":
     process_gene_partial = partial(
         process_gene,
         bridge_seq_dict=bridge_seq_dict,
+        gene_to_bp_id=gene_to_bp_id,
         cdna_dict=cdna_dict,
         blast_db=BLAST_DB
     )

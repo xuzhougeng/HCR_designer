@@ -1,6 +1,7 @@
 db
 __pycache__
 output.csv
+upload
 uploads
 results
 log.txt

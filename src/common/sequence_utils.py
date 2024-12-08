@@ -1,7 +1,10 @@
 from typing import Dict, List
-
+import logging
+from Bio.Seq import Seq
 from Bio.SeqUtils import MeltingTemp as mt
+from Bio.SeqUtils import gc_fraction
 
+logger = logging.getLogger(__name__)
 
 def calculate_tm(sequence: str) -> float:
     """计算序列的Tm值"""
@@ -9,22 +12,17 @@ def calculate_tm(sequence: str) -> float:
 
 def calculate_gc_content(sequence: str) -> float:
     """计算序列的GC含量"""
-    return (sequence.count('G') + sequence.count('C')) / len(sequence)
+    return gc_fraction(Seq(sequence)) * 100
 
-def check_poly_n(sequence: str, n: int = 4) -> bool:
+def check_poly_n(sequence: str, poly_n: int = 4) -> bool:
     """检查序列中是否存在连续的N个相同碱基"""
     seq_str = str(sequence)
     bases = ['A', 'T', 'G', 'C']
     for base in bases:
         # 检查是否有大于或等于poly_n个连续碱基
-        base_count = 0
-        for current_base in seq_str:
-            if current_base == base:
-                base_count += 1
-                if base_count >= poly_n:  # 大于或等于poly_n个连续碱基
-                    return False
-            else:
-                base_count = 0
+        if seq_str.find(base * poly_n) != -1:
+            return False
+    return True
 
 
 def is_complementary(seq1, seq2):
@@ -168,15 +166,18 @@ def is_valid_probe(sequence: str,
     """
     length = len(sequence)
     if length < min_length or length > max_length:
+        logger.debug(f"长度不在范围内: {length}")
         return False
 
     gc_content = calculate_gc_content(sequence)
     if gc_content < gc_min or gc_content > gc_max:
+        logger.debug(f"GC含量不在范围内: {gc_content}")
         return False
 
     try:
         tm = calculate_tm(sequence)
         if tm < tm_min or tm > tm_max:
+            logger.debug(f"熔点温度不在范围内: {tm}")
             return False
     except Exception as e:
         logger.error(f"计算熔点温度时出错: {e}")
@@ -184,6 +185,7 @@ def is_valid_probe(sequence: str,
 
     # 避免连续N个相同的碱基
     if not check_poly_n(sequence, poly_n):
+        logger.debug(f"连续N个相同的碱基: {sequence}")
         return False
     
 
