@@ -80,3 +80,11 @@ HCR_INITIATORS = {
         "dn": "GCATGCTAATCGGATGAG"
     }
 }
+
+# Fluor probe sequences
+FLUOR_PROBE = {
+    "AF488": "TCGCGCTTGGTATAATCGCT",
+    "Cy3": "AGTAGCCGTGACTATCGACT",
+    "Texas": "TGCGTCTATTTAGTGGAGCC",
+    "Cy5": "CCTCAATGCTGCTGCTGTACTAC"    
+}

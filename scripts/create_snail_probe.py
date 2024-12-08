@@ -1,11 +1,7 @@
-# left + 2 gap + right
+from src.dual_probe import DualProbeConfig, ProbeSet, DualProbeDesigner, ProbeOutputHandler
 
-# 60读
+import argparse
 
-from .probe_generator import create_probes
-from Bio.Seq import Seq
-import pandas  as pd
-from Bio.SeqUtils import MeltingTemp as mt
 
 fluor_probe = {
     "AF488": "TCGCGCTTGGTATAATCGCT",
@@ -21,6 +17,19 @@ fluor_probe_name = {
     "Cy5": "P4"
 }
 
+def create_config(**kwargs):
+    return DualProbeConfig(**kwargs)
+
+def save_snail_probes(probes, output_file):
+    pass
+
+def generate_dual_probe(sequence, name, gene_id, ref_genome, **kwargs):
+    pass
+
+
+
+def main(sequence, name, gene_id, ref_genome, **kwargs):
+    pass
 
 # 20 bp +  2nt gap + 20 bp 
 def create_primer(seq, prefix,  probe_size=20, polyN=5, min_gc=0.3, max_gc=0.7, min_tm=55, max_tm=65, fulor  : str = "AF488", kmer:int = 8):
