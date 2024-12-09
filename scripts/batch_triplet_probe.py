@@ -8,7 +8,7 @@ import argparse
 from .create_triplet_probe import main as tcr_main
 
 # column two, BRIDGE ID and sequence
-probe_table_file = "./tmp.txt"
+probe_table_file = "./resources/probe_table.txt"
 bridge_seq_dict = {}
 for line in open(probe_table_file):
     bridge_id, sequence = line.strip().split(" ")

@@ -6,12 +6,12 @@ from Bio.Seq import Seq
 
 from .config import TripleProbeConfig
 from ..common.sequence_utils import (
-    has_hairpin,
     calculate_gc_content,
-    check_poly_n,
     has_dimer_issues,
     calculate_tm,
-    is_valid_probe
+    is_valid_probe,
+    calculate_kmer_count,
+    has_low_complexity
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class TripleProbeDesigner:
     """三探针设计器"""
     def __init__(self, config: TripleProbeConfig):
         self.config = config
+        self.kmer_list = [] # 记录重复的k-mer
         
     def design_probes(self, sequence: str) -> List[ProbeSet]:
         """设计三探针组合
@@ -40,6 +41,10 @@ class TripleProbeDesigner:
         sequence_length = len(sequence)
         probe_sets = []
         used_positions = set()
+
+        repeat_kmers = calculate_kmer_count(sequence, self.config.kmer_size, self.config.min_kmer_count)
+        self.kmer_list = list(repeat_kmers)
+        
         
         pos = 0
         logger.debug(f"Searching for probe set starting at position {pos}")
@@ -105,6 +110,8 @@ class TripleProbeDesigner:
                 
         return probe_sets
     
+
+    
     def _find_next_valid_probe(self, sequence: str, start_pos: int, 
                               end_pos: int, used_positions: set,
                               must_start_at: int = None) -> Optional[Tuple]:
@@ -145,6 +152,9 @@ class TripleProbeDesigner:
                 try:
                     # 检查引物是否符合基本要求
                     logger.debug(f"Checking probe: {probe}")
+                    if has_low_complexity(probe, self.kmer_list):
+                        logger.debug(f"Probe {probe} is low complexity, skipping")
+                        continue
                     if not is_valid_probe(probe, 
                                         min_length=self.config.min_length,
                                         max_length=self.config.max_length,

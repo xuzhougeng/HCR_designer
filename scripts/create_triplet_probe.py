@@ -10,16 +10,44 @@ logging.basicConfig(level=logging.INFO)
 # 定义碱基互补对应关系
 complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 
-def create_config(**kwargs):
+def create_config( min_length, max_length, 
+                gc_min, gc_max, tm_min, tm_max, 
+                  min_gap, r_m_gap, min_complementary_length, poly_n, kmer_size, min_kmer_count,
+                  output_dir, blast_db):
     """创建三探针配置对象
     
     Args:
-        **kwargs: 配置参数，可选参数见TripleProbeConfig类定义
+        blast_db: 参考基因组路径
+        min_length: 最小引物长度
+        max_length: 最大引物长度
+        gc_min: 最小GC含量百分比
+        gc_max: 最大GC含量百分比
+        tm_min: 最小熔解温度
+        tm_max: 最大熔解温度
+        min_gap: 探针之间最小间距
+        r_m_gap: R探针和M探针之间的固定间隔
+        min_complementary_length: 最小互补长度
+        poly_n: 多聚核苷酸长度
+        output_dir: 输出文件夹
         
     Returns:
         TripleProbeConfig: 配置对象
     """
-    return TripleProbeConfig(**kwargs)
+    return TripleProbeConfig(
+                            min_length=min_length, 
+                            max_length=max_length, 
+                            gc_min=gc_min, 
+                            gc_max=gc_max, 
+                            tm_min=tm_min, 
+                            tm_max=tm_max, 
+                            min_gap=min_gap,
+                            r_m_gap=r_m_gap,
+                            min_complementary_length=min_complementary_length,
+                            poly_n=poly_n,
+                            kmer_size=kmer_size,
+                            min_kmer_count=min_kmer_count,
+                            output_dir=output_dir,
+                            blast_db=blast_db)
 
 def save_triplet_probes(triplet_probes, output_file, task_name, BP_ID, delimiter=','):
     """
@@ -120,7 +148,7 @@ def generate_triplet_probe(sequence: str,
     # 创建 README 文件
     readme_path = os.path.join(config.output_dir, "readme.txt")
     with open(readme_path, 'w') as f:
-        f.write(f"TCR Probe Design Results\n")
+        f.write(f"Triplet Probe Design Results\n")
         f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         f.write(f"Parameters:\n")
         f.write(f"- Probe Length: {config.min_length}-{config.max_length} bp\n")
@@ -128,6 +156,8 @@ def generate_triplet_probe(sequence: str,
         f.write(f"- Melting Temperature: {config.tm_min}°C-{config.tm_max}°C\n")
         f.write(f"- Minimum Gap: {config.min_gap} bp\n")
         f.write(f"- Minimum Complementary Length: {config.min_complementary_length} bp\n")
+        f.write(f"- K-mer Size: {config.kmer_size}\n")
+        f.write(f"- Minimum K-mer Count: {config.min_kmer_count}\n")
         if config.blast_db:
             f.write(f"- Reference Genome: {os.path.basename(config.blast_db)}\n")
 
@@ -137,16 +167,35 @@ def generate_triplet_probe(sequence: str,
     save_triplet_probes(triplet_probes, output_file, task_name, BP_ID, delimiter=',')
     return probe_sets
 
-def main(sequence, name, gene_id, ref_genome, **kwargs):
-    sequence = sequence.replace("\n", "")
-    bridge_probe = 19 * "A"
-    task_name = name
-    BP_ID = gene_id
+
+def main( name, sequence, gene_id, 
+         min_length, max_length, 
+         min_gc, max_gc, 
+         min_tm, max_tm, 
+         min_gap,
+         min_complementary_length, 
+         poly_n, 
+         kmer_size, min_kmer_count,
+         ref_genome, bridge_probe, bridge_probe_id,output_dir ):
     blast_db = ref_genome
-    #blast_db = "upload/Athaliana.cdna.fasta"
-    config = create_config(**kwargs)
-    print(f"Running TCR probe design for gene {name} with bridge probe {gene_id}")
-    generate_triplet_probe(sequence, task_name, BP_ID, bridge_probe, config)
+    config = create_config(
+                           min_length=min_length, 
+                           max_length=max_length, 
+                           gc_min=min_gc, 
+                           gc_max=max_gc, 
+                           tm_min=min_tm, 
+                           tm_max=max_tm, 
+                           min_gap=min_gap, 
+                           r_m_gap=2, # default is 2
+                           min_complementary_length=min_complementary_length,
+                           poly_n=poly_n,
+                           kmer_size=kmer_size,
+                           min_kmer_count=min_kmer_count,
+                           output_dir=output_dir,
+                           blast_db=blast_db
+                           )
+    print(f"Running Triplet probe design for gene {name} with bridge probe {gene_id}")
+    generate_triplet_probe(sequence, name, bridge_probe_id, bridge_probe, config)
 
 if __name__ == "__main__":
 
@@ -155,7 +204,8 @@ if __name__ == "__main__":
     parser.add_argument('--name', required=True, help='任务名称，将用作探针ID的前缀')
     parser.add_argument('--sequence', required=True, help='目标序列')
     parser.add_argument('--gene-id', required=True, help='基因ID')
-    
+    parser.add_argument('--bridge-probe-id', required=True, help='桥接探针ID')
+    parser.add_argument('--bridge-probe', required=True, help='桥接探针序列')
     # 可选参数
     parser.add_argument('--min-length', type=int, default=15, help='最小引物长度 (default: 15)')
     parser.add_argument('--max-length', type=int, default=20, help='最大引物长度 (default: 20)')
@@ -164,14 +214,13 @@ if __name__ == "__main__":
     parser.add_argument('--min-tm', type=float, default=47.0, help='最小熔解温度 (default: 47.0)')
     parser.add_argument('--max-tm', type=float, default=53.0, help='最大熔解温度 (default: 53.0)')
     parser.add_argument('--min-gap', type=int, default=2, help='探针之间最小间距 (default: 2)')
+    parser.add_argument('--min-complementary-length', type=int, default=5, help='最小互补长度 (default: 5)')
+    parser.add_argument('--poly-n', type=int, default=4, help='多聚核苷酸长度 (default: 4)')
+    parser.add_argument('--kmer-size', type=int, default=8, help='k-mer大小 (default: 8)')
+    parser.add_argument('--min-kmer-count', type=int, default=2, help='最小k-mer计数 (default: 2)')
     parser.add_argument('--ref-genome', help='参考基因组路径（用于BLAST分析）')
     parser.add_argument('--output-dir', default='output', help='输出文件夹 (default: output)')
-    parser.add_argument('--bridge-probe', help='桥接探针序列，用于生成三合一探针')
     args = parser.parse_args()
     main(
-        sequence=args.sequence,
-        name=args.name,
-        gene_id=args.gene_id,
-        ref_genome=args.ref_genome,
         **vars(args)
     )

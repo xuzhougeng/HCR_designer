@@ -3,8 +3,52 @@ import logging
 from Bio.Seq import Seq
 from Bio.SeqUtils import MeltingTemp as mt
 from Bio.SeqUtils import gc_fraction
+from collections import Counter
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_kmer_count(sequence: str, kmer_size: int = 4, min_count: int = 2) -> set:
+    """计算序列中k-mer的计数"""
+    def reverse_complement(seq):
+        complement = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+        return ''.join([complement[base] for base in reversed(seq)])
+    
+    seq_rc = reverse_complement(sequence)
+    
+    # 生成k-mer计数
+    seq_kmers = Counter([sequence[i:i+kmer_size] for i in range(len(sequence) - kmer_size + 1)])
+    rc_kmers = Counter([seq_rc[i:i+kmer_size] for i in range(len(seq_rc) - kmer_size + 1)])
+    
+    # 合并重复k-mer
+    repeat_kmers = set()
+    for kmer, count in seq_kmers.items():
+        if count >= min_count:
+            repeat_kmers.add(kmer)
+    for kmer, count in rc_kmers.items():
+        if count >= min_count:
+            repeat_kmers.add(kmer)
+
+    return repeat_kmers
+
+
+def has_low_complexity(sequence: str, kmer_list: List[str]) -> bool:
+    """
+    分析sequence中是否存在低复杂度序列
+
+    如果sequence中存在kmer_list中的k-mer, 则认为sequence包含低复杂度序列
+    
+    Parameters:
+    -----------
+    sequence: str
+        序列
+    kmer_list: List[str]
+        k-mer列表, 记录重复的k-mer
+    """
+    for kmer in kmer_list:
+        if kmer in sequence:
+            return True
+    return False
 
 def calculate_tm(sequence: str) -> float:
     """计算序列的Tm值"""

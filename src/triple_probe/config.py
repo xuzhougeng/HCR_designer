@@ -24,6 +24,8 @@ class TripleProbeConfig:
     r_m_gap: int = 2   # R探针和M探针之间的固定间隔
     
     # 结构参数
+    kmer_size: int = 8
+    min_kmer_count: int = 2
     min_complementary_length: int = 5
     poly_n: int = 4
     
@@ -62,6 +64,8 @@ class TripleProbeConfig:
             "r_m_gap": self.r_m_gap,
             "min_complementary_length": self.min_complementary_length,
             "poly_n": self.poly_n,
+            "kmer_size": self.kmer_size,
+            "min_kmer_count": self.min_kmer_count,
             "output_dir": str(self.output_dir)
         }
 

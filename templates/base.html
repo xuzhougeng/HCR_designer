@@ -3,17 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}HCR Designer{% endblock %}</title>
+    <title>{% block title %}Probe Designer{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="nav">
         <a href="{{ url_for('index') }}" class="nav-link">Home</a>
-        <a href="{{ url_for('tcr') }}" class="nav-link">TCR Designer</a>
-        <a href="{{ url_for('hcr') }}" class="nav-link">HCR Designer</a>
-        <a href="{{ url_for('splint') }}" class="nav-link">Splint Designer</a>
-        <a href="{{ url_for('snail') }}" class="nav-link">Snail Designer</a>
+        <a href="{{ url_for('triplet') }}" class="nav-link">Triplet Designer</a>
     </nav>
     
     <div class="container">

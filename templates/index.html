@@ -1,72 +1,27 @@
 {% extends "base.html" %}
 
-{% block title %}HCR Designer - Home{% endblock %}
+{% block title %}Probe Designer - Home{% endblock %}
 
 {% block content %}
 <div class="hero-section">
-    <h1>Welcome to HCR Designer</h1>
+    <h1>Welcome to Probe Designer</h1>
     <p class="lead">A comprehensive suite of tools for designing DNA/RNA probes</p>
 </div>
 
 <div class="tools-grid">
     <div class="tool-card">
         <div class="tool-icon">
-            <i class="fas fa-dna"></i>
-        </div>
-        <h2>HCR Probe Designer</h2>
-        <p>Design probes for Hybridization Chain Reaction (HCR) with optimized parameters for high specificity and sensitivity.</p>
-        <ul class="feature-list">
-            <li>Automated probe sequence design</li>
-            <li>GC content optimization</li>
-            <li>Melting temperature control</li>
-            <li>Secondary structure prediction</li>
-        </ul>
-        <a href="{{ url_for('hcr') }}" class="btn btn-primary">Start Designing</a>
-    </div>
-
-    <div class="tool-card">
-        <div class="tool-icon">
             <i class="fas fa-microscope"></i>
         </div>
-        <h2>TCR Probe Designer</h2>
-        <p>Create optimized probes for T Cell Receptor (TCR) analysis with our specialized design algorithms.</p>
+        <h2>Triplet Probe Designer</h2>
+        <p>Create triplets for in situ hybridization</p>
         <ul class="feature-list">
-            <li>TCR-specific parameters</li>
+            <li>Triplet-specific parameters</li>
             <li>Sequence specificity check</li>
             <li>Multiple probe design</li>
             <li>Cross-reactivity prevention</li>
         </ul>
-        <a href="{{ url_for('tcr') }}" class="btn btn-primary">Start Designing</a>
-    </div>
-
-    <div class="tool-card">
-        <div class="tool-icon">
-            <i class="fas fa-atom"></i>
-        </div>
-        <h2>SNAIL Probe Designer</h2>
-        <p>Design probes for SNAIL-FISH with optimized parameters for enhanced signal amplification.</p>
-        <ul class="feature-list">
-            <li>Optimized spacer design</li>
-            <li>Hairpin structure prevention</li>
-            <li>Signal strength prediction</li>
-            <li>Multiplexing support</li>
-        </ul>
-        <a href="{{ url_for('snail') }}" class="btn btn-primary">Start Designing</a>
-    </div>
-
-    <div class="tool-card">
-        <div class="tool-icon">
-            <i class="fas fa-project-diagram"></i>
-        </div>
-        <h2>Splint Probe Designer</h2>
-        <p>Create efficient splint probes for RNA/DNA detection with automated parameter optimization.</p>
-        <ul class="feature-list">
-            <li>Splint junction optimization</li>
-            <li>Ligation efficiency prediction</li>
-            <li>Background reduction</li>
-            <li>Multi-target design</li>
-        </ul>
-        <a href="{{ url_for('splint') }}" class="btn btn-primary">Start Designing</a>
+        <a href="{{ url_for('triplet') }}" class="btn btn-primary">Start Designing</a>
     </div>
 </div>
 
