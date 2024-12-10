@@ -19,13 +19,16 @@ class DualProbeConfig:
     
     # 间隔参数
     min_gap: int = 15  # 探针之间最小间距
-    probe_size: int = 50  # 探针总长度
-    inner_gap: int = 10  # 探针内部间隔
+    inner_gap: int = 0  # 探针内部间隔
     
     # 结构参数
-    poly_n: int = 5  # 最大连续碱基数
     kmer_size: int = 8  # k-mer大小
-    
+    min_kmer_count: int = 2  # 最小k-mer计数
+    min_complementary_length: int = 5  # 最小互补长度
+    poly_n: int = 5  # 最大连续碱基数
+
+    blast_db: str = None
+
     # 输出设置
     output_dir: Path = field(default=Path("output"))
     
@@ -44,10 +47,7 @@ class DualProbeConfig:
             
         if not 0 <= self.tm_min <= self.tm_max <= 100:
             raise ValueError(f"温度范围无效: {self.tm_min}-{self.tm_max}")
-            
-        if self.inner_gap >= self.probe_size:
-            raise ValueError(f"内部间隔({self.inner_gap})不能大于等于探针总长度({self.probe_size})")
-
+ 
     def to_dict(self):
         """转换为字典格式"""
         return {
@@ -58,10 +58,10 @@ class DualProbeConfig:
             "tm_min": self.tm_min,
             "tm_max": self.tm_max,
             "min_gap": self.min_gap,
-            "probe_size": self.probe_size,
             "inner_gap": self.inner_gap,
             "poly_n": self.poly_n,
-            "kmer": self.kmer,
+            "kmer_size": self.kmer_size,
+            "min_kmer_count": self.min_kmer_count,
             "output_dir": str(self.output_dir)
         }
 

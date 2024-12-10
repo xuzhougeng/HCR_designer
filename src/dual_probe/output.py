@@ -3,7 +3,7 @@ from typing import List, Tuple
 from pathlib import Path
 import csv
 import logging
-from Bio.SeqUtils import MeltingTemp as mt
+from ..common.blast_utils import analyze_blast_results
 
 from .designer import ProbeSet
 
@@ -131,7 +131,7 @@ class ProbeOutputHandler:
                 ]:
                     sequence, start, end, tm, gc = primer_info
                     writer.writerow([
-                        f"Set_{i}",
+                        f"{task_name}_{i}",
                         primer_type,
                         sequence,
                         start + 1,  # 转换为1-based坐标
@@ -161,18 +161,29 @@ class ProbeOutputHandler:
             }
 
     def _write_blast_results(self, file, blast_results: dict):
-        """写入BLAST分析结果"""
+        """写入BLAST分析结果
+        
+        Args:
+            file: 输出文件对象
+            blast_results: BLAST分析结果
+        """
+        mismatch_stats = blast_results['mismatch_stats']
+        detailed_matches = blast_results['detailed_matches']
+        
         file.write("\nBLAST分析结果:\n")
+        
         # 写入错配统计
-        file.write("\n错配统计:\n")
-        for mismatches, count in blast_results['mismatch_stats'].items():
-            file.write(f"{mismatches}个错配: {count}条序列\n")
-            
+        file.write("\nBLAST Analysis:\n")
+        file.write("Mismatches\tCount\tDescription\n")
+        file.write("-" * 50 + "\n")
+        for mismatches, count in sorted(mismatch_stats.items()):
+            description = "Perfect match" if mismatches == 0 else f"{mismatches} mismatch(es)"
+            file.write(f"{mismatches}\t\t{count}\t\t{description}\n")
+
         # 写入详细匹配信息
-        file.write("\n详细匹配信息:\n")
-        for match in blast_results['detailed_matches']:
-            file.write(f"目标序列: {match['target_seq']}\n")
-            file.write(f"匹配位置: {match['position']}\n")
-            file.write(f"错配数: {match['mismatches']}\n")
-            file.write("\n")
-            
+        file.write("\nDetailed Matches:\n")
+        file.write("Subject ID\tMismatches\tGaps\tTotal Mismatches\n")
+        file.write("-" * 70 + "\n")
+        for subject_id, mismatches, gaps in detailed_matches:
+            total = mismatches + gaps
+            file.write(f"{subject_id}\t{mismatches}\t{gaps}\t{total}\n")

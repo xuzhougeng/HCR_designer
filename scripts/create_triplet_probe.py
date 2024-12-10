@@ -12,8 +12,8 @@ complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 
 def create_config( min_length, max_length, 
                 gc_min, gc_max, tm_min, tm_max, 
-                  min_gap, r_m_gap, min_complementary_length, poly_n, kmer_size, min_kmer_count,
-                  output_dir, blast_db):
+                min_gap, r_m_gap, min_complementary_length, poly_n, kmer_size, min_kmer_count,
+                output_dir, blast_db):
     """创建三探针配置对象
     
     Args:
@@ -76,11 +76,11 @@ def save_triplet_probes(triplet_probes, output_file, task_name, BP_ID, delimiter
         # 写入探针序列
         for i, (L, M, R) in enumerate(triplet_probes, 1):
             # 写入L探针
-            f.write(f"{task_name}-{i}-L_{BP_ID}{delimiter}{L}\n")
+            f.write(f"{task_name}-{i}-L_{BP_ID}{delimiter}Left{delimiter}{L}\n")
             # 写入M探针
-            f.write(f"{task_name}-{i}-M{delimiter}{M}\n")
+            f.write(f"{task_name}-{i}-M{delimiter}Middle{delimiter}{M}\n")
             # 写入R探针
-            f.write(f"{task_name}-{i}-R{delimiter}{R}\n")
+            f.write(f"{task_name}-{i}-R{delimiter}Right{delimiter}{R}\n")
 
 
 def generate_triplet_probe(sequence: str, 
@@ -122,7 +122,7 @@ def generate_triplet_probe(sequence: str,
     
     # 输出探针信息, 包括详细结果和BED格式
     output_handler = ProbeOutputHandler(config.output_dir)
-    output_handler.save_probe_sets(probe_sets, "triplet_probe", "triplet_probe", config.blast_db)
+    output_handler.save_probe_sets(probe_sets, task_name, "triplet_probe", config.blast_db)
 
     # 获取杂交探针(HCR probe)
     # 随机碱基选择
@@ -170,8 +170,8 @@ def generate_triplet_probe(sequence: str,
 
 def main( name, sequence, gene_id, 
          min_length, max_length, 
-         min_gc, max_gc, 
-         min_tm, max_tm, 
+         gc_min, gc_max, 
+         tm_min, tm_max, 
          min_gap,
          min_complementary_length, 
          poly_n, 
@@ -181,10 +181,10 @@ def main( name, sequence, gene_id,
     config = create_config(
                            min_length=min_length, 
                            max_length=max_length, 
-                           gc_min=min_gc, 
-                           gc_max=max_gc, 
-                           tm_min=min_tm, 
-                           tm_max=max_tm, 
+                           gc_min=gc_min, 
+                           gc_max=gc_max, 
+                           tm_min=tm_min, 
+                           tm_max=tm_max, 
                            min_gap=min_gap, 
                            r_m_gap=2, # default is 2
                            min_complementary_length=min_complementary_length,

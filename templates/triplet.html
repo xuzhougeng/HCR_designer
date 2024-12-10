@@ -15,8 +15,8 @@
             </div>
             <div class="form-group">
                 <label for="bp_id">BP_ID:</label>
-                <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[1-3][0-9]{3}" value="BP_1001" required>
-                <div class="parameter-description">Enter your BP ID (Valid range: BP_1001 to BP_3507)</div>
+                <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[0-3][0-9]{3}" value="BP_0001" required>
+                <div class="parameter-description">Enter your BP ID (Valid range: BP_0001 to BP_0060, BP_1001 to BP_3507)</div>
             </div>
 
             <div class="form-group">
@@ -145,10 +145,17 @@
                 <!--Low Complexity Parameters-->
                 <div class="advanced-section">
                     <h4>Low Complexity Parameters</h4>
-                    <div class="form-group">
-                        <label for="min_kmer_count">Minimum K-mer Count:</label><br>
-                        <input type="number" id="min_kmer_count" name="min_kmer_count" value="2" class="form-control" min="2" max="4"><br>
-                        <div class="parameter-description">Minimum count of repeated k-mer (2-4)</div>
+                    <div class="flex-container">
+                        <div class="form-group">
+                            <label for="kmer_size">K-mer Size:</label><br>
+                            <input type="number" id="kmer_size" name="kmer_size" value="8" class="form-control" min="6" max="10"><br>
+                            <div class="parameter-description">Size of k-mer for checking sequence complexity (6-10 bp)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="min_kmer_count">Minimum K-mer Count:</label><br>
+                            <input type="number" id="min_kmer_count" name="min_kmer_count" value="2" class="form-control" min="2" max="4"><br>
+                            <div class="parameter-description">Minimum count of repeated k-mer (2-4)</div>
+                        </div>
                     </div>
                 </div>
             </div>

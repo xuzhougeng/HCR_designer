@@ -8,12 +8,13 @@ from collections import Counter
 
 from .config import DualProbeConfig
 from ..common.sequence_utils import (
-    has_hairpin,
     calculate_gc_content, 
     check_poly_n,
     has_dimer_issues,
     calculate_tm,
-    is_valid_probe
+    is_valid_probe,
+    calculate_kmer_count,
+    has_low_complexity
 )
 
 logger = logging.getLogger(__name__)
@@ -86,15 +87,15 @@ def binary_search(probe_list, index):
     return -1
 
 
-
 @dataclass
 class ProbeSet:
     """探针组合结果类"""
     left_probe: Tuple[str, int, int, float, float]  # 序列,起始位置,结束位置,Tm值,GC含量
     right_probe: Tuple[str, int, int, float, float]
 
-class DualProbeDesigner:
-    """双探针设计器"""
+
+class DualFixedProbeDesigner:
+    """双探针设计器(固定长度)"""
     def __init__(self, config: DualProbeConfig):
         self.config = config
 
@@ -270,3 +271,144 @@ class DualProbeDesigner:
         return probe_sets
 
 
+class DualProbeDesigner:
+    """双探针设计器(可变长度)"""
+    def __init__(self, config: DualProbeConfig):
+        self.config = config
+        self.kmer_list = [] # 记录重复的k-mer
+        
+    def design_probes(self, sequence: str) -> List[ProbeSet]:
+        """设计双探针组合
+        
+        Args:
+            sequence: 目标序列
+            
+        Returns:
+            List[ProbeSet]: 探针组合列表
+        """
+        sequence_length = len(sequence)
+        probe_sets = []
+        used_positions = set()
+
+        repeat_kmers = calculate_kmer_count(sequence, self.config.kmer_size, self.config.min_kmer_count)
+        self.kmer_list = list(repeat_kmers)
+        
+        
+        pos = 0
+        logger.debug(f"Searching for probe set starting at position {pos}")
+        while pos < (sequence_length - 3 * self.config.min_length):
+            logger.debug(f"Searching for probe set starting at position {pos}")
+            
+            # 寻找左引物
+            logger.debug(f"Searching for left probe starting at position {pos}")
+            left_result = self._find_next_valid_probe(
+                sequence, pos, sequence_length, used_positions
+            )
+            if not left_result:
+                pos += 1
+                continue
+                
+            # 寻找右引物（与中间引物之间保持固定的gap）
+            right_start = left_result[2] + self.config.inner_gap # 右引物起始位置 = 左引物结束位置 + 内部间隔
+            if right_start >= sequence_length - self.config.min_length:
+                pos += 1
+                continue
+                
+            right_result = self._find_next_valid_probe(
+                sequence, right_start, sequence_length, used_positions
+            )
+            if not right_result:
+                pos += 1
+                continue
+                
+            # 检查两个引物的兼容性
+            if self._check_probe_compatibility(left_result, right_result):
+                logger.debug(f"Found valid probe set:")
+                logger.debug(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
+                logger.debug(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
+                
+                probe_set = ProbeSet(left_result, right_result)
+                probe_sets.append(probe_set)
+                
+                # 更新已使用的位置
+                for result in [left_result, right_result]:
+                    for i in range(result[1], result[2]):
+                        used_positions.add(i)
+                
+                # 从左引物后继续搜索
+                pos = left_result[2]
+            else:
+                pos += 1
+                
+        return probe_sets
+    
+
+    
+    def _find_next_valid_probe(self, sequence: str, start_pos: int, 
+                              end_pos: int, used_positions: set,
+                              must_start_at: int = None) -> Optional[Tuple]:
+        """在指定范围内找到第一个有效的引物
+        
+        Parameters:
+        -----------
+        start_pos : int
+            起始位置
+        end_pos : int
+            结束位置
+        used_pos : set
+            已使用的位置集合
+        must_start_at : int, optional
+            必须从这个位置开始（用于确保Middle紧接Left）
+        """
+        # 如果指定了必须的起始位置，就只检查从这个位置开始的引物
+        if must_start_at is not None:
+            logger.debug(f"Must start at position {must_start_at}")
+            start_pos = must_start_at
+            
+        for pos in range(start_pos, end_pos - self.config.min_length + 1):
+            # 如果指定了必须的起始位置，但当前位置不是该位置，则跳过
+            logger.debug(f"Checking position {pos}")
+            if must_start_at is not None and pos != must_start_at:
+                logger.debug(f"Not starting at {must_start_at}, skipping")
+                break
+                
+            # 检查位置是否已被使用
+            if any(p in used_positions for p in range(pos, pos + self.config.max_length)):
+                logger.debug(f"Position {pos} already used, skipping")
+                continue
+                
+            # 尝试不同长度的引物
+            for length in range(self.config.min_length, 
+                                min(self.config.max_length + 1, end_pos - pos + 1)):
+                probe = sequence[pos:pos + length]
+                try:
+                    # 检查引物是否符合基本要求
+                    logger.debug(f"Checking probe: {probe}")
+                    if has_low_complexity(probe, self.kmer_list):
+                        logger.debug(f"Probe {probe} is low complexity, skipping")
+                        continue
+                    if not is_valid_probe(probe, 
+                                        min_length=self.config.min_length,
+                                        max_length=self.config.max_length,
+                                        gc_min=self.config.gc_min,
+                                        gc_max=self.config.gc_max,
+                                        tm_min=self.config.tm_min,
+                                        tm_max=self.config.tm_max,
+                                        poly_n=self.config.poly_n):
+                        logger.debug(f"Probe {probe} is not valid, skipping")
+                        continue
+                    # 在返回之前进行反向互补
+                    rev_comp_probe = str(Seq(probe).reverse_complement())
+                    tm = calculate_tm(rev_comp_probe)
+                    gc = calculate_gc_content(rev_comp_probe)
+                    logger.debug(f"Found valid probe: {rev_comp_probe}, Tm: {tm:.1f}, GC: {gc:.1f}")
+                    return (rev_comp_probe, pos, pos + length, tm, gc)
+                except Exception as e:
+                    logger.error(f"计算引物参数时出错: {e}")
+                    continue
+            return None
+
+    def _check_probe_compatibility(self, probe1, probe2, probe3=None):
+        """检查引物之间是否存在互补性问题"""
+        probes = [p[0] for p in [probe1, probe2, probe3] if p is not None]
+        return not has_dimer_issues(probes, self.config.min_complementary_length)

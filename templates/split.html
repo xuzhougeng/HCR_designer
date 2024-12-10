@@ -1,221 +1,408 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
-    <title>Probe Generator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        /* Inline styles - replace with your own styles.css content */
-        .AF488 {
-            background-color: #8EDD65;
-        }
+{% block title %}Split Probe Generator{% endblock %}
 
-        /* Greenish color */
-        .Cy3 {
-            background-color: #FFD700;
-        }
+{% block content %}
+<div class="container">
+    <h1 class="fancy-title">Split Probe Generator</h1>
+    <form action="/split" method="post" enctype="multipart/form-data">
+        <div class="parameter-group">
+            <h3>Basic Information</h3>
+            <div class="form-group">
+                <label for="name">Task Name:</label>
+                <input type="text" id="name" name="name" class="form-control" required>
+                <div class="parameter-description">Name for your output file</div>
+            </div>
+            <div class="form-group">
+                <label for="bp_id">BP_ID:</label>
+                <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[0-3][0-9]{3}" value="BP_1001" required>
+                <div class="parameter-description">Enter your BP ID (Valid range: BP_0001 to BP_0060 or BP_1001 to BP_3507)</div>
+            </div>
 
-        /* Yellow color */
-        .TexasRed {
-            background-color: #FF4136;
-        }
+            <div class="form-group">
+                <label>Sequence Input:</label>
+                <div class="tab">
+                    <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
+                    <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
+                </div>
 
-        /* Red color */
-        .Cy5 {
-            background-color: #DD4B39;
-        }
+                <div id="GeneID" class="tabcontent">
+                    <div class="form-group">
+                        <input type="text" id="geneID" name="geneID" class="form-control">
+                        <div class="parameter-description">Enter your gene ID (e.g., AT1G01010)</div>
 
-        /* Reddish color */
-    </style>
+                        <div class="mt-3" style="display: flex; gap: 20px;">
+                            <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
+                            <label for="cdna">cDNA</label>
+                            <input type="radio" id="cds" name="sequenceType" value="cds">
+                            <label for="cds">CDS</label>
+                        </div>
+                        <div class="parameter-description">Choose between cDNA (includes UTRs) or CDS (coding sequence only)</div>
+                    </div>
+                </div>
 
-    <script>
-        function toggleInput(state) {
-            // 如果用户正在上传文件，则禁用下拉菜单
-            document.getElementById("existing_ref_genome").disabled = state.files.length > 0;
-
-            // 如果用户选择了下拉菜单的一个选项，则清空文件上传控件的值
-            if (document.getElementById("existing_ref_genome").selectedIndex !== 0) {
-                document.getElementById("ref_genome").value = "";
-            }
-        }
-
-        function toggleFileInput() {
-            // 如果文件上传控件中有文件，则禁用下拉菜单，否则启用
-            var hasFile = document.getElementById("ref_genome").files.length > 0;
-            document.getElementById("existing_ref_genome").disabled = hasFile;
-            if (hasFile) {
-                document.getElementById("existing_ref_genome").selectedIndex = 0;
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function () {
-            // Your existing JavaScript code remains unchanged
-
-            // Event listener for the tab buttons
-            document.querySelectorAll('.tab button').forEach(function (btn) {
-                btn.addEventListener('click', function (e) {
-                    var tabName = this.getAttribute('data-tab');
-                    openTab(e, tabName);
-                });
-            });
-
-            // Function to open a tab
-            function openTab(evt, tabName) {
-                var i, tabcontent, tablinks;
-                tabcontent = document.getElementsByClassName('tabcontent');
-                for (i = 0; i < tabcontent.length; i++) {
-                    tabcontent[i].style.display = 'none';
-                }
-                tablinks = document.getElementsByClassName('tablinks');
-                for (i = 0; i < tablinks.length; i++) {
-                    tablinks[i].classList.remove('active');
-                }
-                document.getElementById(tabName).style.display = 'block';
-                evt.currentTarget.classList.add('active');
-            }
-
-            // Open the first tab by default
-            document.querySelector('.tab button').click();
-        });
-    </script>
-</head>
-
-<body>
-    <div class="container">
-        <h1 class="fancy-title">Probe Generator</h1>
-        <div class="navbar">
-            <a href="/hcr">HCR</a>
-            <a href="/splint">Splint-FISH</a>
-            <a href="/snail">SNAIL</a>
-            <a href="/help">Help</a>
+                <div id="Sequence" class="tabcontent">
+                    <div class="form-group">
+                        <textarea id="seq" name="seq" rows="4" class="form-control"></textarea>
+                        <div class="parameter-description">Paste your DNA sequence here (ATCG only)</div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <form action="/splint" method="post" enctype="multipart/form-data" >
 
-            <!-- Other fields remain unchanged -->
-            <label for="name">Name:</label><br>
-            <input type="text" id="name" name="name" required><br>
-
-            <div class="tab">
-                <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
-                <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
-            </div>
-
-            <div id="GeneID" class="tabcontent">
-                <!-- <label for="geneID">Gene ID:</label> -->
-                <input type="text" id="geneID" name="geneID">
-                <!-- Radio buttons for cDNA and CDS options -->
-
-                <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
-                <label for="cdna">cDNA</label>
-                <input type="radio" id="cds" name="sequenceType" value="cds">
-                <label for="cds">CDS</label><br>
-            </div>
-
-            <div id="Sequence" class="tabcontent">
-                <!-- <label for="seq">Sequence:</label> -->
-                <textarea id="seq" name="seq" rows="4" cols="50"></textarea>
-            </div>
-
+        <div class="parameter-group">
+            <h3>Background sequence</h3>
             <div class="flex-container">
-                <div id="ReferenceGenome">
-                    <label for="ref_genome">Upload Reference Genome (fasta):</label>
-                    <input type="file" id="ref_genome" name="ref_genome" accept=".fasta, .fa, .fasta.gz, .fa.gz" onchange="toggleFileInput()">
+                <div class="form-group">
+                    <label for="existing_ref_genome">Choose Existing Background Sequence:</label>
+                    <select class="form-control" id="existing_ref_genome" name="existing_ref_genome" onchange="toggleInput(this)">
+                        <option value="">Select a genome</option>
+                        {% for genome in available_genomes %}
+                        <option value="{{ genome.filename }}">{{ genome.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="parameter-description">Select from pre-loaded reference genomes for BLAST search</div>
                 </div>
                 
-                <div>
-                    <label for="existing_ref_genome">Or Choose Existing Reference Genome:</label>
-                    <select id="existing_ref_genome" name="existing_ref_genome" onchange="toggleInput(this)">
-                        <option value="">Select a genome</option>
-                        <option value="Athaliana_cdna.fasta">Arabidopsis thaliana</option>
-                        <option value="bol_bju_cdna.fasta">B.ol + B.ju</option>
-                    </select>
-                </div>
-         
-            </div>
-
-            <div class="flex-container">
-                <div>
-                    <label for="min_probe_size">Min Probe Size:</label><br>
-                    <input type="number" id="min_probe_size" name="min_probe_size" step="1" value="15">
-                </div>
-                <div>
-                    <label for="max_probe_size">Max Probe Size:</label><br>
-                    <input type="number" id="max_probe_size" name="max_probe_size" step="1" value="19">
+                <div class="form-group">
+                    <label for="ref_genome">Or Upload New Reference Genome:</label>
+                    <input type="file" class="form-control-file" id="ref_genome" name="ref_genome" accept=".fa,.fasta,.fna,.gz" onchange="toggleFileInput()">
+                    <div class="parameter-description">Upload your own reference genome in FASTA format</div>
                 </div>
             </div>
+        </div>
 
-
-            <div class="flex-container">
-                <div>
-                    <label for="polyN">Poly N:</label><br>
-                    <input type="number" id="polyN" name="polyN" value="5"><br>
+        <div class="parameter-group">
+            <h3>Advanced Options <button type="button" class="toggle-btn" onclick="toggleAdvancedOptions(this)">▼</button></h3>
+            <div id="advancedOptions" style="display: none;">
+                <!-- Probe Length Parameters -->
+                <div class="advanced-section">
+                    <h4>Probe Length Parameters</h4>
+                    <div class="flex-container">
+                        <div class="form-group">
+                            <label for="min_length">Minimum Probe Length:</label><br>
+                            <input type="number" id="min_length" name="min_length" value="15" class="form-control" min="15" max="20">
+                            <div class="parameter-description">Minimum length of probe sequence (15-20 bp)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="max_length">Maximum Probe Length:</label><br>
+                            <input type="number" id="max_length" name="max_length" value="20" class="form-control" min="15" max="20">
+                            <div class="parameter-description">Maximum length of probe sequence (15-20 bp)</div>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label for="kmer">kmer:</label><br>
-                    <input type="number" id="kmer" name="kmer" value="8"><br>
+
+                <!-- Gap and Complementarity Parameters -->
+                <div class="advanced-section">
+                    <h4>Gap and Complementarity Parameters</h4>
+                    <div class="flex-container">
+                        <div class="form-group">
+                            <label for="min_gap">Minimum Gap:</label><br>
+                            <input type="number" id="min_gap" name="min_gap" value="15" class="form-control" min="0"><br>
+                            <div class="parameter-description">Minimum space between adjacent probes (≥0 bp)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="min_complementary_length">Minimum Complementary Length:</label><br>
+                            <input type="number" id="min_complementary_length" name="min_complementary_length" value="5" class="form-control" min="4" max="8"><br>
+                            <div class="parameter-description">Minimum length of complementary sequence to check (4-8 bp)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GC Content Parameters -->
+                <div class="advanced-section">
+                    <h4>GC Content Parameters</h4>
+                    <div class="flex-container">
+                        <div class="form-group">
+                            <label for="min_gc">Minimum GC (%):</label><br>
+                            <input type="number" id="min_gc" name="min_gc" step="0.1" value="40.0" class="form-control" min="30.0" max="50.0">
+                            <div class="parameter-description">Minimum GC content (30-50%)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="max_gc">Maximum GC (%):</label><br>
+                            <input type="number" id="max_gc" name="max_gc" step="0.1" value="60.0" class="form-control" min="50.0" max="70.0">
+                            <div class="parameter-description">Maximum GC content (50-70%)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Melting Temperature Parameters -->
+                <div class="advanced-section">
+                    <h4>Melting Temperature Parameters</h4>
+                    <div class="flex-container">
+                        <div class="form-group">
+                            <label for="min_tm">Minimum Tm (°C):</label><br>
+                            <input type="number" id="min_tm" name="min_tm" step="0.1" value="47.0" class="form-control" min="40.0" max="50.0"><br>
+                            <div class="parameter-description">Minimum melting temperature (40-50°C)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="max_tm">Maximum Tm (°C):</label><br>
+                            <input type="number" id="max_tm" name="max_tm" step="0.1" value="53.0" class="form-control" min="50.0" max="60.0"><br>
+                            <div class="parameter-description">Maximum melting temperature (50-60°C)</div>
+                        </div>
+                    </div>
+                </div>
+                <!--Low Complexity Parameters-->
+                <div class="advanced-section">
+                    <h4>Low Complexity Parameters</h4>
+                    <div class="flex-container">
+                        <div class="form-group">
+                            <label for="kmer_size">K-mer Size:</label><br>
+                            <input type="number" id="kmer_size" name="kmer_size" value="8" class="form-control" min="6" max="10"><br>
+                            <div class="parameter-description">Size of k-mer for checking sequence complexity (6-10 bp)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="min_kmer_count">Minimum K-mer Count:</label><br>
+                            <input type="number" id="min_kmer_count" name="min_kmer_count" value="2" class="form-control" min="2" max="4"><br>
+                            <div class="parameter-description">Minimum count of repeated k-mer (2-4)</div>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="flex-container">
-                <div>
-                    <label for="min_gc">Min GC:</label><br>
-                    <input type="number" id="min_gc" name="min_gc" step="0.01" value="0.3">
-                </div>
-                <div>
-                    <label for="max_gc">Max GC:</label><br>
-                    <input type="number" id="max_gc" name="max_gc" step="0.01" value="0.7">
-                </div>
-            </div>
+        <div class="submit-container">
+            <button id="submitBtn" type="submit" class="btn btn-primary">Submit</button>
+        </div>
+        <img id="loader" src="{{ url_for('static', filename='loader.gif') }}" style="display: none;">
+    </form>
+</div>
+{% endblock %}
 
-            <div class="flex-container">
-                <div>
-                    <label for="min_tm">Min TM:</label><br>
-                    <input type="number" id="min_tm" name="min_tm" step="0.5" value="45"><br>
-                </div>
-                <div>
-                    <label for="max_tm">Max TM:</label><br>
-                    <input type="number" id="max_tm" name="max_tm" step="0.5" value="55"><br>
-                </div>
-            </div>
+{% block extra_css %}
+<style>
+.flex-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
 
+.flex-container > div {
+    flex: 1;
+    min-width: 200px;
+}
 
-            <label for="fluor">Fluor probe:</label><br>
-            <select id="fluor" name="fluor">
-                <option value="AF488">AF488-5'</option>
-                <option value="Cy3">Cy3-5'</option>
-                <option value="Texas">Texas Red-5</option>
-                <option value="Cy5">Cy5-5'</option>
-                <option value=""></option>
-            </select>
+.parameter-group {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
 
+.parameter-group h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-size: 1.2em;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 5px;
+}
 
-            <button id="submitBtn" type="submit">Submit</button>
-            <img id="loader" src="{{ url_for('static', filename='loader.gif') }}" style="display: none;">
+.parameter-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 2px;
+    margin-bottom: 8px;
+    font-style: italic;
+}
 
-        </form>
-        <table>
-            <tr>
-                <th>Fluor probe-1</th>
-                <td class="AF488">AF488-5'</td>
-                <td>TCGCGCTTGGTATAATCGCT</td>
-            </tr>
-            <tr>
-                <th>Fluor probe-2</th>
-                <td class="Cy3">Cy3-5'</td>
-                <td>AGTAGCCGTGACTATCGACT</td>
-            </tr>
-            <tr>
-                <th>Fluor probe-3</th>
-                <td class="TexasRed">Texas Red-5'</td>
-                <td>TGCTCTATTTAGTGGAGCC</td>
-            </tr>
-            <tr>
-                <th>Fluor probe-4</th>
-                <td class="Cy5">Cy5-5'</td>
-                <td>CCTCAATGCTGCTGCTGTACTAC</td>
-            </tr>
-        </table>
-    </div>
-</body>
+.submit-container {
+    margin: 20px 0;
+    text-align: center;
+}
 
-</html>
+.tab {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+
+.tab button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 10px 16px;
+    transition: 0.3s;
+}
+
+.tab button:hover {
+    background-color: #ddd;
+}
+
+.tab button.active {
+    background-color: #ccc;
+}
+
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+}
+
+/* Form Styles */
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: #495057;
+    background-color: #fff;
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.form-control-file {
+    display: block;
+    width: 100%;
+}
+
+.btn {
+    display: inline-block;
+    font-weight: 400;
+    text-align: center;
+    vertical-align: middle;
+    user-select: none;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: 0.25rem;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-primary:hover {
+    color: #fff;
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+.mt-3 {
+    margin-top: 1rem;
+}
+
+/* Radio button styles */
+input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+input[type="radio"] + label {
+    margin-right: 1rem;
+}
+
+/* Select styles */
+select.form-control {
+    height: calc(1.5em + 0.75rem + 2px);
+}
+
+/* Textarea styles */
+textarea.form-control {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.toggle-btn {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    color: #3498db;
+    cursor: pointer;
+    padding: 0 5px;
+    transition: transform 0.3s;
+}
+
+.toggle-btn.active {
+    transform: rotate(180deg);
+}
+
+.advanced-section {
+    border-bottom: 1px solid #eee;
+    padding: 15px 0;
+    margin-bottom: 15px;
+}
+
+.advanced-section:last-child {
+    border-bottom: none;
+}
+
+.advanced-section h4 {
+    color: #2c3e50;
+    font-size: 1.1em;
+    margin-bottom: 15px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.tab button').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            var tabName = this.getAttribute('data-tab');
+            openTab(e, tabName);
+        });
+    });
+
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName('tabcontent');
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = 'none';
+        }
+        tablinks = document.getElementsByClassName('tablinks');
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].classList.remove('active');
+        }
+        document.getElementById(tabName).style.display = 'block';
+        evt.currentTarget.classList.add('active');
+    }
+
+    // Open the first tab by default
+    document.querySelector('.tab button').click();
+});
+
+function toggleInput(state) {
+    document.getElementById("ref_genome").disabled = state.files.length > 0;
+    if (document.getElementById("ref_genome").selectedIndex !== 0) {
+        document.getElementById("ref_genome").value = "";
+    }
+}
+
+function toggleFileInput() {
+    var hasFile = document.getElementById("ref_genome").files.length > 0;
+    document.getElementById("existing_ref_genome").disabled = hasFile;
+    if (hasFile) {
+        document.getElementById("existing_ref_genome").selectedIndex = 0;
+    }
+}
+
+function toggleAdvancedOptions(btn) {
+    const advancedOptions = document.getElementById('advancedOptions');
+    const isVisible = advancedOptions.style.display !== 'none';
+    
+    advancedOptions.style.display = isVisible ? 'none' : 'block';
+    btn.classList.toggle('active');
+}
+</script>
+{% endblock %}

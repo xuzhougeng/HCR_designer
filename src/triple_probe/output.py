@@ -177,7 +177,7 @@ class ProbeOutputHandler:
                 ]:
                     sequence, start, end, tm, gc = probe_info
                     writer.writerow([
-                        f"Set_{i}",
+                        f"{task_name}_{i}",
                         probe_type,
                         sequence,
                         start + 1,  # 转换为1-based坐标
