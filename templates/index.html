@@ -38,6 +38,21 @@
         </ul>
         <a href="{{ url_for('split') }}" class="btn btn-primary">Start Designing</a>
     </div>
+
+    <div class="tool-card">
+        <div class="tool-icon">
+            <i class="fas fa-project-diagram"></i>
+        </div>
+        <h2>Bridge Probe System</h2>
+        <p>Get suggestions for non-overlapping bridge probes</p>
+        <ul class="feature-list">
+            <li>K-mer based analysis</li>
+            <li>Multiple probe suggestion</li>
+            <li>Sequence uniqueness check</li>
+            <li>Batch processing support</li>
+        </ul>
+        <a href="{{ url_for('bridge') }}" class="btn btn-primary">Start Designing</a>
+    </div>
 </div>
 
 <div class="features-section">
@@ -65,6 +80,8 @@
         </div>
     </div>
 </div>
+
+<a href="{{ url_for('bridge') }}" class="nav-link">Bridge Probe System</a>
 {% endblock %}
 
 {% block extra_css %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Bridge Probe Sequence Analysis{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin-top: 2rem;
+    }
+    .kmer-badge {
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+    .query-form {
+        background-color: #f8f9fa;
+        padding: 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    .query-result {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+    }
+    .sequence-cell {
+        font-family: monospace;
+        word-break: break-all;
+    }
+    .action-buttons {
+        margin: 1rem 0;
+    }
+    .conflict-table {
+        margin-top: 1.5rem;
+    }
+    .btn {
+        display: inline-block;  
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 500;
+        text-decoration: none;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .btn-outline-primary {
+        color: #2563eb;
+        background: transparent;
+        border: 2px solid #2563eb;
+    }
+
+    .btn-outline-primary:hover {
+        color: #ffffff;
+        background: #2563eb;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+
+    .btn-outline-primary:active {
+        transform: translateY(0);
+        box-shadow: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Bridge Probe 序列分析</h1>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('bridge') }}" class="btn btn-outline-primary">
+            切换到设计系统
+        </a>
+        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary ms-2">
+            切换到BP_ID查询
+        </a>
+        <a href="{{ url_for('bridge_list') }}" class="btn btn-outline-primary ms-2">
+            查看探针列表
+        </a>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="query-form">
+        <div class="mb-3">
+            <label for="sequences" class="form-label">输入要分析的序列（每行一个）</label>
+            <textarea class="form-control" id="sequences" name="sequences" rows="5"
+                      placeholder="例如:&#10;ATCGATCG&#10;GCTAGCTA" required>{{ sequences if sequences }}</textarea>
+        </div>
+
+        <div class="mb-3">
+            <label for="kmer" class="form-label">k-mer长度</label>
+            <input type="number" class="form-control" id="kmer" name="kmer" value="{{ kmer }}" min="3" max="15">
+        </div>
+
+        <button type="submit" class="btn btn-primary">分析序列冲突</button>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger mt-4" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if sequence_results %}
+    <div class="query-result">
+        <h3>序列分析结果</h3>
+        {% for sequence, conflicts in sequence_results %}
+        <div class="sequence-section mb-4">
+            <h4>输入序列 {{ loop.index }}</h4>
+            <div class="sequence-cell mb-3">{{ sequence }}</div>
+            
+            {% if conflicts %}
+            <table class="table table-striped conflict-table">
+                <thead>
+                    <tr>
+                        <th>BP_ID</th>
+                        <th>序列</th>
+                        <th>重叠k-mer数量</th>
+                        <th>示例k-mer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bp_id, bp_sequence, overlap_count, overlap_kmers in conflicts %}
+                    <tr>
+                        <td>{{ bp_id }}</td>
+                        <td class="sequence-cell">{{ bp_sequence }}</td>
+                        <td>{{ overlap_count }}</td>
+                        <td>
+                            {% for kmer in overlap_kmers %}
+                            <span class="badge bg-info kmer-badge">{{ kmer }}</span>
+                            {% endfor %}
+                            {% if overlap_count > 3 %}
+                            <span class="badge bg-secondary">+{{ overlap_count - 3 }} more</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-success">
+                该序列与现有探针没有k-mer重叠
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="action-buttons">
+            <button class="btn btn-success" onclick="downloadResults()">下载分析结果</button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function downloadResults() {
+    const sections = document.querySelectorAll('.sequence-section');
+    let csv = 'Input_Sequence\tBP_ID\tBP_Sequence\tOverlap_Count\tExample_KMers\n';
+    
+    sections.forEach((section, index) => {
+        const sequence = section.querySelector('.sequence-cell').textContent;
+        const rows = section.querySelectorAll('table tbody tr');
+        
+        if (rows.length === 0) {
+            csv += `${sequence}\tNo conflicts\t-\t0\t-\n`;
+        } else {
+            rows.forEach(row => {
+                const bp_id = row.cells[0].textContent;
+                const bp_sequence = row.cells[1].textContent;
+                const overlap_count = row.cells[2].textContent;
+                const kmers = Array.from(row.cells[3].querySelectorAll('.kmer-badge'))
+                                  .map(span => span.textContent)
+                                  .join(',');
+                csv += `${sequence}\t${bp_id}\t${bp_sequence}\t${overlap_count}\t${kmers}\n`;
+            });
+        }
+    });
+    
+    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sequence_analysis_results.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %} 

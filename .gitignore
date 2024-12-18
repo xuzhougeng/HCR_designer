@@ -14,3 +14,4 @@ output
 *.tar.gz
 *.tar.bz2
 .DS_Store
+nohup.out

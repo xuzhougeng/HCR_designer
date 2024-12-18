@@ -28,6 +28,10 @@ class ProbeOutputHandler:
             output_prefix: 输出文件前缀
             blast_db: BLAST数据库路径（可选）
         """
+        # 如果提供了BLAST数据库，先对探针进行排序
+        if blast_db:
+            probe_sets = self._sort_probe_sets(probe_sets, blast_db)
+        
         # 保存详细结果
         logger.info(f"保存详细结果")
         self._save_detailed_results(probe_sets, output_prefix, blast_db)
@@ -243,3 +247,61 @@ class ProbeOutputHandler:
         for subject_id, mismatches, gaps in detailed_matches:
             total = mismatches + gaps
             file.write(f"{subject_id}\t{mismatches}\t{gaps}\t{total}\n")
+
+    def _calculate_probe_score(self, blast_results: dict) -> float:
+        """计算探针的质量评分
+        
+        评分规则:
+        - 完全匹配得分最高 (100分)
+        - 根据错配数量递减
+        - 连续错配会严重降低分数
+        
+        Returns:
+            float: 探针质量评分 (0-100)
+        """
+        mismatch_stats = blast_results.get('mismatch_stats', {})
+        detailed_matches = blast_results.get('detailed_matches', [])
+        
+        # 如果有完全匹配，给予最高分
+        if 0 in mismatch_stats:
+            base_score = 100
+        else:
+            # 根据错配数量计算基础分数
+            min_mismatches = min(mismatch_stats.keys()) if mismatch_stats else 4
+            base_score = max(0, 100 - min_mismatches * 20)  # 每个错配扣20分
+        
+        # 检查是否存在连续错配
+        has_consecutive = False
+        for match in detailed_matches:
+            if "consecutive_mismatches" in match:  # 需要BLAST分析结果提供此信息
+                has_consecutive = True
+                break
+        
+        # 如果存在连续错配，严重降低分数
+        final_score = base_score * 0.1 if has_consecutive else base_score
+        
+        return final_score
+
+    def _sort_probe_sets(self, probe_sets: List[ProbeSet], blast_db: str = None) -> List[ProbeSet]:
+        """根据探针质量对探针组合进行排序"""
+        if not blast_db:
+            return probe_sets
+        
+        scored_probes = []
+        for probe_set in probe_sets:
+            # 分析三个探针
+            left_blast = self._run_blast_analysis(probe_set.left_probe[0], blast_db)
+            middle_blast = self._run_blast_analysis(probe_set.middle_probe[0], blast_db)
+            right_blast = self._run_blast_analysis(probe_set.right_probe[0], blast_db)
+            
+            # 计算组合得分
+            left_score = self._calculate_probe_score(left_blast)
+            middle_score = self._calculate_probe_score(middle_blast)
+            right_score = self._calculate_probe_score(right_blast)
+            total_score = (left_score + middle_score + right_score) / 3
+            
+            scored_probes.append((probe_set, total_score))
+        
+        # 按得分降序排序
+        scored_probes.sort(key=lambda x: x[1], reverse=True)
+        return [probe[0] for probe in scored_probes]

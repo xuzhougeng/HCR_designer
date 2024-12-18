@@ -6,45 +6,58 @@
 <div class="container">
     <h1 class="fancy-title">Split Probe Generator</h1>
     <form action="/split" method="post" enctype="multipart/form-data">
+        <!-- Batch Processing Section -->
         <div class="parameter-group">
-            <h3>Basic Information</h3>
+            <h3>Batch Processing</h3>
             <div class="form-group">
-                <label for="name">Task Name:</label>
-                <input type="text" id="name" name="name" class="form-control" required>
-                <div class="parameter-description">Name for your output file</div>
+                <label for="batch_file">Upload CSV file for batch processing:</label>
+                <input type="file" class="form-control-file" id="batch_file" name="batch_file" accept=".csv" onchange="toggleInputMode(this)">
+                <div class="parameter-description">CSV format: task_name,BP_ID,gene_id (e.g., task1,BP_1001,AT1G01010)</div>
             </div>
-            <div class="form-group">
-                <label for="bp_id">BP_ID:</label>
-                <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[0-3][0-9]{3}" value="BP_1001" required>
-                <div class="parameter-description">Enter your BP ID (Valid range: BP_0001 to BP_0060 or BP_1001 to BP_3507)</div>
-            </div>
+        </div>
 
-            <div class="form-group">
-                <label>Sequence Input:</label>
-                <div class="tab">
-                    <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
-                    <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
+        <!-- Single Processing Section -->
+        <div id="singleInputSection">
+            <div class="parameter-group">
+                <h3>Basic Information</h3>
+                <div class="form-group">
+                    <label for="name">Task Name:</label>
+                    <input type="text" id="name" name="name" class="form-control">
+                    <div class="parameter-description">Name for your output file</div>
+                </div>
+                <div class="form-group">
+                    <label for="bp_id">BP_ID:</label>
+                    <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[0-3][0-9]{3}" value="BP_1001">
+                    <div class="parameter-description">Enter your BP ID (Valid range: BP_0001 to BP_0060 or BP_1001 to BP_3507)</div>
                 </div>
 
-                <div id="GeneID" class="tabcontent">
-                    <div class="form-group">
-                        <input type="text" id="geneID" name="geneID" class="form-control">
-                        <div class="parameter-description">Enter your gene ID (e.g., AT1G01010)</div>
-
-                        <div class="mt-3" style="display: flex; gap: 20px;">
-                            <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
-                            <label for="cdna">cDNA</label>
-                            <input type="radio" id="cds" name="sequenceType" value="cds">
-                            <label for="cds">CDS</label>
-                        </div>
-                        <div class="parameter-description">Choose between cDNA (includes UTRs) or CDS (coding sequence only)</div>
+                <div class="form-group">
+                    <label>Sequence Input:</label>
+                    <div class="tab">
+                        <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
+                        <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
                     </div>
-                </div>
 
-                <div id="Sequence" class="tabcontent">
-                    <div class="form-group">
-                        <textarea id="seq" name="seq" rows="4" class="form-control"></textarea>
-                        <div class="parameter-description">Paste your DNA sequence here (ATCG only)</div>
+                    <div id="GeneID" class="tabcontent">
+                        <div class="form-group">
+                            <input type="text" id="geneID" name="geneID" class="form-control">
+                            <div class="parameter-description">Enter your gene ID (e.g., AT1G01010)</div>
+
+                            <div class="mt-3" style="display: flex; gap: 20px;">
+                                <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
+                                <label for="cdna">cDNA</label>
+                                <input type="radio" id="cds" name="sequenceType" value="cds">
+                                <label for="cds">CDS</label>
+                            </div>
+                            <div class="parameter-description">Choose between cDNA (includes UTRs) or CDS (coding sequence only)</div>
+                        </div>
+                    </div>
+
+                    <div id="Sequence" class="tabcontent">
+                        <div class="form-group">
+                            <textarea id="seq" name="seq" rows="4" class="form-control"></textarea>
+                            <div class="parameter-description">Paste your DNA sequence here (ATCG only)</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -403,6 +416,27 @@ function toggleAdvancedOptions(btn) {
     
     advancedOptions.style.display = isVisible ? 'none' : 'block';
     btn.classList.toggle('active');
+}
+
+function toggleInputMode(input) {
+    const singleInputSection = document.getElementById('singleInputSection');
+    const singleInputs = singleInputSection.querySelectorAll('input, textarea');
+    
+    if (input.files.length > 0) {
+        // Batch mode - hide single input section and disable its inputs
+        singleInputSection.style.display = 'none';
+        singleInputs.forEach(input => {
+            input.required = false;
+        });
+    } else {
+        // Single mode - show single input section and enable its inputs
+        singleInputSection.style.display = 'block';
+        singleInputs.forEach(input => {
+            if (input.id === 'name' || input.id === 'bp_id' || input.id === 'geneID') {
+                input.required = true;
+            }
+        });
+    }
 }
 </script>
 {% endblock %}

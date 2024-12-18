@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Bridge Probe System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin-top: 2rem;
+    }
+    .result-table {
+        margin-top: 1.5rem;
+    }
+    .action-buttons {
+        margin: 1rem 0;
+    }
+    .sequence-cell {
+        font-family: monospace;
+        word-break: break-all;
+    }
+    .form-section {
+        background-color: #f8f9fa;
+        padding: 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    .btn {
+        display: inline-block;  
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 500;
+        text-decoration: none;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .btn-outline-primary {
+        color: #2563eb;
+        background: transparent;
+        border: 2px solid #2563eb;
+    }
+
+    .btn-outline-primary:hover {
+        color: #ffffff;
+        background: #2563eb;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+
+    .btn-outline-primary:active {
+        transform: translateY(0);
+        box-shadow: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Bridge Probe System</h1>
+    <div class="action-buttons">
+        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary">
+            切换到冲突查询系统
+        </a>
+        <a href="{{ url_for('bridge_list') }}" class="btn btn-outline-primary ms-2">
+            查看探针列表
+        </a>
+    </div>
+    
+
+    <form method="POST" enctype="multipart/form-data" class="form-section">
+        <div class="mb-3">
+            <label for="bp_file" class="form-label">上传BP_ID文件（可选，每行一个BP_ID）</label>
+            <input type="file" class="form-control" id="bp_file" name="bp_file" accept=".txt,.csv">
+            <div class="form-text">或者在下方直接输入BP_ID列表</div>
+        </div>
+
+        <div class="mb-3">
+            <label for="bp_ids" class="form-label">已有的BP_ID列表（可选，用逗号分隔）</label>
+            <textarea class="form-control" id="bp_ids" name="bp_ids" rows="3" 
+                       placeholder="例如: BP001,BP002,BP003">{{ bp_ids if bp_ids }}</textarea>
+        </div>
+
+        <div class="mb-3">
+            <label for="number" class="form-label">需要的新探针数量</label>
+            <input type="number" class="form-control" id="number" name="number" value="{{ number }}" min="1" max="100">
+        </div>
+
+        <div class="mb-3">
+            <label for="kmer" class="form-label">k-mer长度</label>
+            <input type="number" class="form-control" id="kmer" name="kmer" value="{{ kmer }}" min="3" max="15">
+        </div>
+
+        <button type="submit" class="btn btn-primary">获取探针建议</button>
+    </form>
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if result_probes %}
+    <div class="mb-4">
+        <h2>推荐的探针</h2>
+        <div class="action-buttons">
+            <button class="btn btn-success" onclick="downloadResults()">下载结果</button>
+        </div>
+        <table class="table table-striped result-table">
+            <thead>
+                <tr>
+                    <th>BP_ID</th>
+                    <th>序列</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bp_id, sequence in result_probes %}
+                <tr>
+                    <td>{{ bp_id }}</td>
+                    <td class="sequence-cell">{{ sequence }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function downloadResults() {
+    const rows = document.querySelectorAll('table tbody tr');
+    let csv = 'BP_ID\tSequence\n';
+    
+    rows.forEach(row => {
+        const bp_id = row.cells[0].textContent;
+        const sequence = row.cells[1].textContent;
+        csv += `${bp_id}\t${sequence}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'suggested_probes.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %} 
