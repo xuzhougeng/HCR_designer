@@ -18,26 +18,58 @@ class ProbeOutputHandler:
     def save_probe_sets(self, probe_sets: List[ProbeSet], 
                        task_name: str, output_prefix: str,
                        blast_db: str = None):
-        """保存探针组合结果
+        """保存探针组合结果，并根据质量得分排序
         
         Args:
             probe_sets: 探针组合列表
             task_name: 任务名称
             output_prefix: 输出文件前缀
             blast_db: BLAST数据库路径（可选）
+            
+        Returns:
+            List[ProbeSet]: 按质量得分排序后的探针组合列表
         """
-        # 如果提供了BLAST数据库，先对探针进行排序
+        # 如果有BLAST数据库，先计算所有探针的BLAST结果并排序
         if blast_db:
-            probe_sets = self._sort_probe_sets(probe_sets, blast_db)
+            # 存储所有探针的BLAST结果，避免重复计算
+            blast_cache = {}
+            scored_probes = []
+            
+            for probe_set in probe_sets:
+                # 获取或计算BLAST结果
+                left_seq = probe_set.left_probe[0]
+                right_seq = probe_set.right_probe[0]
+                
+                if left_seq not in blast_cache:
+                    blast_cache[left_seq] = self._run_blast_analysis(left_seq, blast_db)
+                if right_seq not in blast_cache:
+                    blast_cache[right_seq] = self._run_blast_analysis(right_seq, blast_db)
+                
+                # 计算探针组合得分
+                blast_results_dict = {
+                    'left': blast_cache[left_seq],
+                    'right': blast_cache[right_seq]
+                }
+                score = self._calculate_probe_set_score(blast_results_dict)
+                scored_probes.append((probe_set, score, blast_results_dict))
+            
+            # 按得分排序（得分越低越好）
+            scored_probes.sort(key=lambda x: x[1])
+            
+            # 保存详细结果
+            self._save_detailed_results_with_cache(scored_probes, output_prefix)
+            
+            # 更新排序后的probe_sets
+            probe_sets = [p[0] for p in scored_probes]
+        else:
+            # 如果没有BLAST数据库，直接保存结果
+            self._save_detailed_results(probe_sets, output_prefix, None)
         
-        # 保存详细结果
-        self._save_detailed_results(probe_sets, output_prefix, blast_db)
-        
-        # 保存BED格式
+        # 保存其他格式
         self._save_bed_format(probe_sets, task_name, output_prefix)
-        
-        # 保存CSV格式
         self._save_csv_format(probe_sets, task_name, output_prefix)
+        
+        return probe_sets
 
     def _save_detailed_results(self, probe_sets: List[ProbeSet], 
                              output_prefix: str,
@@ -53,19 +85,38 @@ class ProbeOutputHandler:
                 f.write(f"探针组合 {i}:\n")
                 f.write("-" * 80 + "\n")
                 
-                # 写入每个探针的详细信息
-                self._write_primer_details(f, "Left", probe_set.left_probe, blast_db)
-                self._write_primer_details(f, "Right", probe_set.right_probe, blast_db)
+                # 收集每个探针的BLAST结果
+                blast_results_dict = {
+                    'left': self._write_primer_details(f, "Left", probe_set.left_probe, blast_db),
+                    'right': self._write_primer_details(f, "Right", probe_set.right_probe, blast_db)
+                }
+                
+                # 计算探针组合得分
+                if blast_db:
+                    probe_set_score = self._calculate_probe_set_score(blast_results_dict)
+                else:
+                    probe_set_score = None
                 
                 # 写入探针组合的评估信息
-                self._write_probe_set_evaluation(f, probe_set)
+                self._write_probe_set_evaluation(f, probe_set, probe_set_score)
                 f.write("\n" + "=" * 80 + "\n\n")
     
     def _write_primer_details(self, file, primer_type: str, 
                             primer_info: Tuple,
-                            blast_db: str = None):
-        """写入单个探针详细信息"""
+                            blast_db: str = None) -> dict:
+        """写入单个探针详细信息并返回BLAST结果
+        
+        Args:
+            file: 输出文件对象
+            primer_type: 探针类型（Left/Right）
+            primer_info: 探针信息元组
+            blast_db: BLAST数据库路径（可选）
+            
+        Returns:
+            dict: BLAST分析结果
+        """
         sequence, start, end, tm, gc = primer_info
+        blast_results = {}
         
         file.write(f"\n{primer_type} Primer:\n")
         file.write(f"序列: {sequence}\n")
@@ -80,8 +131,50 @@ class ProbeOutputHandler:
             self._write_blast_results(file, blast_results)
             
         file.write("\n")
+        return blast_results
     
-    def _write_probe_set_evaluation(self, file, probe_set: ProbeSet):
+    def _calculate_probe_set_score(self, blast_results_dict: dict) -> float:
+        """计算探针组合的总体得分
+        
+        评分规则:
+        1. 每个探针的错配数量（越少越好）
+        2. 探针的特异性（唯一匹配更好）
+        3. 连续错配的惩罚
+        
+        Args:
+            blast_results_dict: 包含每个探针BLAST结果的字典
+            
+        Returns:
+            float: 探针组合的得分（分数越低越好）
+        """
+        total_score = 0
+        
+        for probe_type, blast_results in blast_results_dict.items():
+            mismatch_stats = blast_results.get('mismatch_stats', {})
+            detailed_matches = blast_results.get('detailed_matches', [])
+            
+            # 计算错配分数
+            if mismatch_stats:
+                min_mismatches = min(mismatch_stats.keys())
+                mismatch_score = min_mismatches * 10  # 每个错配加10分
+            else:
+                mismatch_score = 50  # 如果没有匹配，给予较高的惩罚分数
+                
+            # 计算多重匹配惩罚
+            multiple_match_penalty = max(0, len(detailed_matches) - 1) * 5
+            
+            # 连续错配惩罚
+            consecutive_penalty = 0
+            for match in detailed_matches:
+                if "consecutive_mismatches" in match:
+                    consecutive_penalty += 20
+                    
+            probe_score = mismatch_score + multiple_match_penalty + consecutive_penalty
+            total_score += probe_score
+        
+        return total_score
+    
+    def _write_probe_set_evaluation(self, file, probe_set: ProbeSet, probe_set_score: float = None):
         """写入探针组合的评估信息"""
         file.write("\n探针组合评估:\n")
         
@@ -99,6 +192,10 @@ class ProbeOutputHandler:
         
         file.write(f"平均Tm值: {avg_tm:.1f}°C\n")
         file.write(f"平均GC含量: {avg_gc:.1f}%\n")
+        
+        # 如果有探针组合得分，写入得分信息
+        if probe_set_score is not None:
+            file.write(f"探针组合质量得分: {probe_set_score:.1f} (分数越低越好)\n")
 
     def _save_bed_format(self, probe_sets: List[ProbeSet], 
                         task_name: str, output_prefix: str):
@@ -128,7 +225,7 @@ class ProbeOutputHandler:
             writer.writerow(headers)
             
             for i, probe_set in enumerate(probe_sets, 1):
-                # 写入每个探针的信息
+                # 写入每个探���的信息
                 for primer_type, primer_info in [
                     ('Left', probe_set.left_probe),
                     ('Right', probe_set.right_probe)
@@ -192,58 +289,54 @@ class ProbeOutputHandler:
             total = mismatches + gaps
             file.write(f"{subject_id}\t{mismatches}\t{gaps}\t{total}\n")
 
-    def _calculate_probe_score(self, blast_results: dict) -> float:
-        """计算探针的质量评分
+    def _save_detailed_results_with_cache(self, scored_probes: List[Tuple], output_prefix: str):
+        """使用缓存的BLAST结果保存详细信息
         
-        评分规则:
-        - 完全匹配得分最高 (100分)
-        - 根据错配数量递减
-        - 连续错配会严重降低分数
-        
-        Returns:
-            float: 探针质量评分 (0-100)
+        Args:
+            scored_probes: 包含(probe_set, score, blast_results_dict)的列表
+            output_prefix: 输出文件前缀
         """
-        mismatch_stats = blast_results.get('mismatch_stats', {})
-        detailed_matches = blast_results.get('detailed_matches', [])
+        output_file = self.output_dir / f"{output_prefix}_detailed.txt"
         
-        # 如果有完全匹配，给予最高分
-        if 0 in mismatch_stats:
-            base_score = 100
-        else:
-            # 根据错配数量计算基础分数
-            min_mismatches = min(mismatch_stats.keys()) if mismatch_stats else 4
-            base_score = max(0, 100 - min_mismatches * 20)  # 每个错配扣20分
-        
-        # 检查是否存在连续错配
-        has_consecutive = False
-        for match in detailed_matches:
-            if "consecutive_mismatches" in match:  # 需要BLAST分析结果提供此信息
-                has_consecutive = True
-                break
-        
-        # 如果存在连续错配，严重降低���数
-        final_score = base_score * 0.1 if has_consecutive else base_score
-        
-        return final_score
+        with open(output_file, 'w') as f:
+            f.write("双探针设计结果报告\n")
+            f.write("=" * 80 + "\n\n")
+            
+            for i, (probe_set, score, blast_results_dict) in enumerate(scored_probes, 1):
+                f.write(f"探针组合 {i}:\n")
+                f.write("-" * 80 + "\n")
+                
+                # 写入每个探针的详细信息
+                self._write_primer_details_with_cache(f, "Left", probe_set.left_probe, 
+                                                    blast_results_dict['left'])
+                self._write_primer_details_with_cache(f, "Right", probe_set.right_probe, 
+                                                    blast_results_dict['right'])
+                
+                # 写入探针组合的评估信息
+                self._write_probe_set_evaluation(f, probe_set, score)
+                f.write("\n" + "=" * 80 + "\n\n")
 
-    def _sort_probe_sets(self, probe_sets: List[ProbeSet], blast_db: str = None) -> List[ProbeSet]:
-        """根据探针质量对探针组合进行排序"""
-        if not blast_db:
-            return probe_sets
+    def _write_primer_details_with_cache(self, file, primer_type: str, 
+                                       primer_info: Tuple,
+                                       blast_results: dict):
+        """使用缓存的BLAST结果写入探针详细信息
         
-        scored_probes = []
-        for probe_set in probe_sets:
-            # 分析两个探针
-            left_blast = self._run_blast_analysis(probe_set.left_probe[0], blast_db)
-            right_blast = self._run_blast_analysis(probe_set.right_probe[0], blast_db)
-            
-            # 计算组合得分
-            left_score = self._calculate_probe_score(left_blast)
-            right_score = self._calculate_probe_score(right_blast)
-            total_score = (left_score + right_score) / 2
-            
-            scored_probes.append((probe_set, total_score))
+        Args:
+            file: 输出文件对象
+            primer_type: 探针类型
+            primer_info: 探针信息元组
+            blast_results: 缓存的BLAST结果
+        """
+        sequence, start, end, tm, gc = primer_info
         
-        # 按得分降序排序
-        scored_probes.sort(key=lambda x: x[1], reverse=True)
-        return [probe[0] for probe in scored_probes]
+        file.write(f"\n{primer_type} Primer:\n")
+        file.write(f"序列: {sequence}\n")
+        file.write(f"位置: {start + 1}-{end}\n")
+        file.write(f"长度: {len(sequence)}bp\n")
+        file.write(f"GC含量: {gc:.1f}%\n")
+        file.write(f"Tm值: {tm:.1f}°C\n")
+        
+        if blast_results:
+            self._write_blast_results(file, blast_results)
+            
+        file.write("\n")

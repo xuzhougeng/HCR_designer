@@ -72,15 +72,15 @@ def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=','):
     
     with open(dual_file, 'w') as f:
         # 写入表头
-        headers = ['Probe ID', 'Type', 'Sequence']
+        headers = ['Probe ID', 'Sequence']
         f.write(delimiter.join(headers) + '\n')
         
         # 写入探针序列
         for i, (L, R) in enumerate(dual_probes, 1):
             # 写入L探针
-            f.write(f"{task_name}-{i}-L{delimiter}Left{delimiter}{L}\n")
+            f.write(f"{task_name}-{i}-L{delimiter}{L}\n")
             # 写入R探针
-            f.write(f"{task_name}-{i}-R-{BP_ID}{delimiter}Right{delimiter}{R}\n")
+            f.write(f"{task_name}-{i}-R-{BP_ID}{delimiter}{R}\n")
 
 
 def generate_dual_probe(sequence: str, 
@@ -122,7 +122,7 @@ def generate_dual_probe(sequence: str,
     
     # 输出探针信息, 包括详细结果和BED格式
     output_handler = ProbeOutputHandler(config.output_dir)
-    output_handler.save_probe_sets(probe_sets, task_name, "dual_probe", config.blast_db)
+    probe_sets = output_handler.save_probe_sets(probe_sets, task_name, "dual_probe", config.blast_db)
 
     # 获取杂交探针(HCR probe)
     # 随机碱基选择

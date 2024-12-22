@@ -76,11 +76,11 @@ def save_triplet_probes(triplet_probes, output_file, task_name, BP_ID, delimiter
         # 写入探针序列
         for i, (L, M, R) in enumerate(triplet_probes, 1):
             # 写入L探针
-            f.write(f"{task_name}-{i}-L_{BP_ID}{delimiter}Left{delimiter}{L}\n")
+            f.write(f"{task_name}-{i}-L_{BP_ID}{delimiter}{L}\n")
             # 写入M探针
-            f.write(f"{task_name}-{i}-M{delimiter}Middle{delimiter}{M}\n")
+            f.write(f"{task_name}-{i}-M{delimiter}{M}\n")
             # 写入R探针
-            f.write(f"{task_name}-{i}-R{delimiter}Right{delimiter}{R}\n")
+            f.write(f"{task_name}-{i}-R{delimiter}{R}\n")
 
 
 def generate_triplet_probe(sequence: str, 
@@ -122,7 +122,7 @@ def generate_triplet_probe(sequence: str,
     
     # 输出探针信息, 包括详细结果和BED格式
     output_handler = ProbeOutputHandler(config.output_dir)
-    output_handler.save_probe_sets(probe_sets, task_name, "triplet_probe", config.blast_db)
+    probe_sets = output_handler.save_probe_sets(probe_sets, task_name, "triplet_probe", config.blast_db)
 
     # 获取杂交探针(HCR probe)
     # 随机碱基选择
