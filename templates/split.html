@@ -5,17 +5,12 @@
 {% block content %}
 <div class="container">
     <h1 class="fancy-title">Split Probe Generator</h1>
+    <div class="action-buttons mb-4">
+        <a href="{{ url_for('split_batch') }}" class="btn btn-outline-primary">
+            切换到批量处理
+        </a>
+    </div>
     <form action="/split" method="post" enctype="multipart/form-data">
-        <!-- Batch Processing Section -->
-        <div class="parameter-group">
-            <h3>Batch Processing</h3>
-            <div class="form-group">
-                <label for="batch_file">Upload CSV file for batch processing:</label>
-                <input type="file" class="form-control-file" id="batch_file" name="batch_file" accept=".csv" onchange="toggleInputMode(this)">
-                <div class="parameter-description">CSV format: task_name,BP_ID,gene_id (e.g., task1,BP_1001,AT1G01010)</div>
-            </div>
-        </div>
-
         <!-- Single Processing Section -->
         <div id="singleInputSection">
             <div class="parameter-group">

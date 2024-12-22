@@ -2,87 +2,6 @@
 
 {% block title %}Bridge Probe List{% endblock %}
 
-{% block extra_css %}
-<style>
-    .container {
-        max-width: 1200px;
-        margin-top: 2rem;
-    }
-    .sequence-cell {
-        font-family: monospace;
-        word-break: break-all;
-    }
-    .action-buttons {
-        margin: 1rem 0;
-    }
-    .probe-table {
-        margin-top: 1.5rem;
-    }
-    .search-box {
-        max-width: 300px;
-        margin-bottom: 1rem;
-    }
-    .btn {
-        display: inline-block;  
-        padding: 12px 24px;
-        font-size: 16px;
-        font-weight: 500;
-        text-decoration: none;
-        border-radius: 6px;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-
-    .btn-outline-primary {
-        color: #2563eb;
-        background: transparent;
-        border: 2px solid #2563eb;
-    }
-
-    .btn-outline-primary:hover {
-        color: #ffffff;
-        background: #2563eb;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-    }
-
-    .btn-outline-primary:active {
-        transform: translateY(0);
-        box-shadow: none;
-    }
-    
-    .stats-box {
-        background-color: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 8px;
-        margin-bottom: 2rem;
-    }
-    
-    .stats-item {
-        margin-bottom: 0.5rem;
-    }
-    
-    .stats-cell {
-        white-space: nowrap;
-    }
-    .tm-badge {
-        background-color: #17a2b8;
-        color: white;
-        padding: 0.2em 0.6em;
-        border-radius: 0.25rem;
-        font-size: 0.875em;
-    }
-    .gc-badge {
-        background-color: #28a745;
-        color: white;
-        padding: 0.2em 0.6em;
-        border-radius: 0.25rem;
-        font-size: 0.875em;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="container">
     <h1 class="mb-4">Bridge Probe 列表</h1>
@@ -91,7 +10,7 @@
         <a href="{{ url_for('bridge') }}" class="btn btn-outline-primary">
             切换到设计系统
         </a>
-        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary ms-2">
+        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary">
             切换到查询系统
         </a>
     </div>
@@ -99,6 +18,9 @@
     <div class="stats-box">
         <h4>探针统计</h4>
         <div class="stats-item">总数量: {{ probes|length }}</div>
+        <button class="btn btn-outline-primary ms-2" onclick="downloadProbes()">
+            下载已有探针序列
+        </button>
     </div>
 
     <div class="mb-3">
@@ -141,14 +63,10 @@
             </tbody>
         </table>
     </div>
-
-    <div class="action-buttons">
-        <button class="btn btn-success" onclick="downloadProbes()">下载探针列表</button>
-    </div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
 function filterTable() {
     const input = document.getElementById('searchInput');
@@ -171,24 +89,29 @@ function filterTable() {
 
 function downloadProbes() {
     const rows = document.querySelectorAll('#probeTable tbody tr');
-    let csv = 'BP_ID\tSequence\tLength\tTm\tGC%\n';
+    let csv = 'BP_ID,Sequence,Length,Tm,GC%\n';
     
     rows.forEach(row => {
         if (row.style.display !== 'none') {  // 只下载显示的行
-            const bp_id = row.cells[0].textContent;
-            const sequence = row.cells[1].textContent;
-            const length = row.cells[2].textContent;
-            const tm = row.cells[3].textContent;
-            const gc = row.cells[4].textContent;
-            csv += `${bp_id}\t${sequence}\t${length}\t${tm}\t${gc}\n`;
+            const bp_id = row.cells[0].textContent.trim();
+            const sequence = row.cells[1].textContent.trim();
+            const length = row.cells[2].textContent.trim();
+            const tm = row.cells[3].querySelector('.tm-badge').textContent.trim();
+            const gc = row.cells[4].querySelector('.gc-badge').textContent.trim();
+            csv += `${bp_id},${sequence},${length},${tm},${gc}\n`;
         }
     });
     
-    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
+    downloadFile(csv, 'bridge_probes.csv');
+}
+
+
+function downloadFile(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'bridge_probes.txt';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

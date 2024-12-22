@@ -66,143 +66,6 @@ def get_available_genomes():
 def index():
     return render_template('index.html')
 
-
-# @app.route('/hcr', methods=['GET', 'POST'])
-# def hcr():
-#     if request.method == 'POST':
-#         name = request.form['name']
-#         seq = request.form['seq']
-#         gene_id = request.form['geneID'].upper()
-
-#         # Create output directory if it doesn't exist
-#         output_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'hcr_results')
-#         os.makedirs(output_dir, exist_ok=True)
-
-#         # 处理参考基因组/BLAST数据库
-#         blast_db = None
-
-#         # Handle file upload
-#         if 'ref_genome' in request.files:
-#             file = request.files['ref_genome']
-#             if file and allowed_file(file.filename):
-#                 filename = secure_filename(file.filename)
-#                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-#                 file.save(file_path)
-
-#                 # Check if the file is a gzip file and decompress it
-#                 if filename.endswith('.gz'):
-#                     decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])  # remove '.gz' from filename
-#                     with gzip.open(file_path, 'rb') as f_in:
-#                         with open(decompressed_path, 'wb') as f_out:
-#                             shutil.copyfileobj(f_in, f_out)
-#                     os.remove(file_path)  # Remove the original .gz file
-#                     file_path = decompressed_path  # Update file_path to point to the decompressed file
-                
-#                 blast_db = file_path
-
-#         # Alternatively, check if an existing genome was selected
-#         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-#             existing_genome = request.form['existing_ref_genome']
-#             blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-
-#         if gene_id in gene_alias:
-#             gene_id = gene_alias[gene_id]
-
-#         # 获取表单参数
-#         gc_min = float(request.form.get('min_gc', 40.0))
-#         gc_max = float(request.form.get('max_gc', 60.0))
-#         tm_min = float(request.form.get('min_tm', 47.0))
-#         tm_max = float(request.form.get('max_tm', 53.0))
-
-#         # HCR特定参数
-#         probe_size = int(request.form.get('probe_size', 50))
-#         polyN = int(request.form.get('polyN', 5))
-#         initiator_type = request.form.get('initiator_type', 'B1')
-#         kmer = int(request.form.get('kmer', 8))
-#         prefix = request.form.get('name', 'probe')  # 使用name作为prefix，如果没有则默认为'probe'
-
-#         if len(gene_id) > 0:
-#             sequence_type = request.form['sequenceType']
-#             if sequence_type == 'cds':
-#                 if gene_id not in cds_dict:
-#                     return jsonify({'error': f'GeneID {gene_id} not found in CDS data'}), 400
-#                 seq = cds_dict[gene_id]
-#             elif sequence_type == 'cdna':
-#                 if gene_id  not in cdna_dict:
-#                     return jsonify({'error': f'GeneID {gene_id} not found in cDNA data'}), 400
-#                 seq = cdna_dict[gene_id]
-
-#         if len(seq) == 0:
-#             return jsonify({'error': 'empty input sequences'}), 400
-        
-#         # 设计探针 - 直接传递所需参数
-#         probe_sets = create_hcr_primer(
-#             seq=seq,
-#             prefix=prefix,
-#             probe_size=probe_size,
-#             polyN=polyN,
-#             min_gc=gc_min,
-#             max_gc=gc_max,
-#             min_tm=tm_min,
-#             max_tm=tm_max,
-#             initiator_type=initiator_type,
-#             kmer=kmer
-#         )
-        
-#         # 使用固定的文件名
-#         probe_csv = os.path.join(output_dir, "probes.csv")
-        
-#         # 生成探针果文件
-#         #output_primer_sets(probe_sets, probe_csv, blast_db=blast_db)
-        
-#         # 准备要打包的文件列表
-#         files = [probe_csv]
-        
-#         # 如果存在 BLAST 详细结果文件，也添加到文件列表中
-#         blast_details = probe_csv.rsplit('.', 1)[0] + '_blast_details.txt'
-#         if os.path.exists(blast_details):
-#             files.append(blast_details)
-
-#         # 创建 README 文件
-#         readme_path = os.path.join(output_dir, "readme.txt")
-#         with open(readme_path, 'w') as f:
-#             f.write(f"HCR Probe Design Results\n")
-#             f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-#             f.write(f"Parameters:\n")
-#             f.write(f"- Probe Size: {probe_size} bp\n")
-#             f.write(f"- Poly N Length: {polyN} bp\n")
-#             f.write(f"- GC Content: {gc_min}%-{gc_max}%\n")
-#             f.write(f"- Melting Temperature: {tm_min}°C-{tm_max}°C\n")
-#             f.write(f"- Initiator Type: {initiator_type}\n")
-#             f.write(f"- k-mer Size: {kmer}\n")
-#             if blast_db:
-#                 f.write(f"- Reference Genome: {os.path.basename(blast_db)}\n")
-#         files.append(readme_path)
-        
-#         # 生成随机的ZIP文件名
-#         unique_id = generate_unique_id()
-#         zip_filename = f"hcr_results_{unique_id}.zip"
-#         zip_path = os.path.join(output_dir, zip_filename)
-        
-#         # 创建 ZIP 文件
-#         with ZipFile(zip_path, 'w') as zipf:
-#             for file in files:
-#                 if os.path.isfile(file):
-#                     zipf.write(file, os.path.basename(file))
-        
-#         # 清理临时文件
-#         for file in files:
-#             if os.path.exists(file):
-#                 os.remove(file)
-        
-#         # 返回 ZIP 文件
-#         return send_file(zip_path, as_attachment=True)
-    
-#     # GET 请求时，获取可用的参考基因组列表并传递给模板
-#     available_genomes = get_available_genomes()
-#     return render_template('hcr.html', available_genomes=available_genomes)
-
-
 @app.route('/split', methods=['GET', 'POST'])
 def split():
     if request.method == 'POST':
@@ -292,6 +155,10 @@ def split():
                             # 为每个任务创建单独的输出目录
                             task_dir = os.path.join(batch_dir, task_name)
                             os.makedirs(task_dir, exist_ok=True)
+                            
+                            # Add this line to save sequence to FASTA file
+                            fasta_file = os.path.join(task_dir, f"{gene_id}.fasta")
+                            save_sequence(gene_id, sequence, fasta_file)
                             
                             # 运行split probe设计
                             create_split_probe(
@@ -407,14 +274,141 @@ def split():
     available_genomes = get_available_genomes()
     return render_template('split.html', available_genomes=available_genomes)
 
+@app.route('/split/batch', methods=['GET', 'POST'])
+def split_batch():
+    if request.method == 'POST':
+        # 生成随机的文件夹名
+        unique_id = generate_unique_id()
+        output_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'split_results', unique_id)
+        os.makedirs(output_dir, exist_ok=True)
 
+        # 处理参考基因组/BLAST数据库
+        blast_db = None
+        if 'ref_genome' in request.files:
+            file = request.files['ref_genome']
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+
+                if filename.endswith('.gz'):
+                    decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
+                    with gzip.open(file_path, 'rb') as f_in:
+                        with open(decompressed_path, 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                    os.remove(file_path)
+                    file_path = decompressed_path
+                
+                blast_db = file_path
+
+        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+            existing_genome = request.form['existing_ref_genome']
+            blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+
+        # 获取通用参数
+        min_length = int(request.form.get('min_length', 15))
+        max_length = int(request.form.get('max_length', 20))
+        min_gc = float(request.form.get('min_gc', 40.0))
+        max_gc = float(request.form.get('max_gc', 60.0))
+        min_tm = float(request.form.get('min_tm', 47.0))
+        max_tm = float(request.form.get('max_tm', 53.0))
+        min_gap = int(request.form.get('min_gap', 2))
+        poly_n = int(request.form.get('poly_n', 4))
+        kmer_size = int(request.form.get('kmer_size', 8))
+        min_kmer_count = int(request.form.get('min_kmer_count', 2))
+        min_complementary_length = int(request.form.get('min_complementary_length', 5))
+
+        # 批量处理
+        if 'batch_file' in request.files:
+            batch_file = request.files['batch_file']
+            if batch_file:
+                # 创建一个子目录存放所有批量结果
+                batch_dir = os.path.join(output_dir, 'batch_results')
+                os.makedirs(batch_dir, exist_ok=True)
+                
+                # 读取CSV文件
+                import csv
+                from io import StringIO
+                csv_content = batch_file.read().decode('utf-8')
+                csv_reader = csv.reader(StringIO(csv_content))
+                
+                for row in csv_reader:
+                    if len(row) >= 3:
+                        task_name, bp_id, gene_id = row[:3]
+                        gene_id = gene_id.upper()
+                        
+                        # 获取probe sequence
+                        probe_seq = bridge_seq_dict.get(bp_id, None)
+                        if probe_seq is None:
+                            continue
+                            
+                        # 获取序列
+                        if gene_id in gene_alias:
+                            gene_id = gene_alias[gene_id]
+                            
+                        sequence = None
+                        if gene_id in cds_dict:
+                            sequence = cds_dict[gene_id]
+                        elif gene_id in cdna_dict:
+                            sequence = cdna_dict[gene_id]
+                            
+                        if sequence:
+                            # 为每个任务创建单独的输出目录
+                            task_dir = os.path.join(batch_dir, task_name)
+                            os.makedirs(task_dir, exist_ok=True)
+                            
+                            # 保存序列到FASTA文件
+                            fasta_file = os.path.join(task_dir, f"{gene_id}.fasta")
+                            save_sequence(gene_id, sequence, fasta_file)
+                            
+                            # 运行split probe设计
+                            create_split_probe(
+                                name=task_name,
+                                sequence=sequence,
+                                gene_id=gene_id,
+                                min_length=min_length,
+                                max_length=max_length,
+                                gc_min=min_gc,
+                                gc_max=max_gc,
+                                tm_min=min_tm,
+                                tm_max=max_tm,
+                                min_gap=min_gap,
+                                min_complementary_length=min_complementary_length,
+                                poly_n=poly_n,
+                                kmer_size=kmer_size,
+                                min_kmer_count=min_kmer_count,
+                                ref_genome=blast_db,
+                                bridge_probe_id=bp_id,
+                                bridge_probe=probe_seq,
+                                output_dir=task_dir
+                            )
+                
+                # 创建ZIP文件
+                zip_filename = f"split_batch_results_{unique_id}.zip"
+                zip_path = os.path.join(app.config['UPLOAD_FOLDER'], 'split_results', zip_filename)
+                
+                with ZipFile(zip_path, 'w') as zipf:
+                    for root, dirs, files in os.walk(batch_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, batch_dir)
+                            zipf.write(file_path, arcname)
+                
+                # 清理临时文件
+                shutil.rmtree(output_dir)
+                
+                # 返回ZIP文件
+                return send_file(zip_path, as_attachment=True)
+
+    # GET请求返回批量处理页面
+    available_genomes = get_available_genomes()
+    return render_template('split_batch.html', available_genomes=available_genomes)
 
 @app.route('/triplet', methods=['GET', 'POST'])
 def triplet():
     if request.method == 'POST':
         # 生成随机的文件夹名
         unique_id = generate_unique_id()
-        # Create output directory if it doesn't exist
         output_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', unique_id)
         os.makedirs(output_dir, exist_ok=True)
 
@@ -457,7 +451,125 @@ def triplet():
         min_kmer_count = int(request.form.get('min_kmer_count', 2))
         min_complementary_length = int(request.form.get('min_complementary_length', 5))
 
-        # 检查是否为批量处理
+        # 原有的单个处理逻辑保持不变
+        seq = request.form['seq']
+        gene_id = request.form['geneID'].upper()
+        task_name = request.form['name']
+        BP_ID = request.form['bp_id']
+        
+        # 获取probe sequence
+        probe_seq = bridge_seq_dict.get(BP_ID, None)
+        if probe_seq is None:
+            return jsonify({'error': f'BP_ID {BP_ID} not found in probe table'}), 400
+
+        if len(gene_id) > 0:
+            sequence_type = request.form['sequenceType']
+            if sequence_type == 'cds':
+                if gene_id not in cds_dict:
+                    return jsonify({'error': f'GeneID {gene_id} not found in CDS data'}), 400
+                seq = cds_dict[gene_id]
+            elif sequence_type == 'cdna':
+                if gene_id  not in cdna_dict:
+                    return jsonify({'error': f'GeneID {gene_id} not found in cDNA data'}), 400
+                seq = cdna_dict[gene_id]
+
+        if len(seq) == 0:
+            return jsonify({'error': 'empty input sequences'}), 400
+        
+        create_triplet_probe(
+            name=task_name,
+            sequence=seq,
+            gene_id=gene_id,
+            min_length=min_length,
+            max_length=max_length,
+            gc_min=min_gc,
+            gc_max=max_gc,
+            tm_min=min_tm,
+            tm_max=max_tm,
+            min_gap=min_gap,
+            min_complementary_length=min_complementary_length,
+            poly_n=poly_n,
+            kmer_size=kmer_size,
+            min_kmer_count=min_kmer_count,
+            ref_genome=blast_db,
+            bridge_probe_id=BP_ID,
+            bridge_probe=probe_seq,
+            output_dir=output_dir
+        )
+        
+
+        zip_filename = f"triplet_results_{unique_id}.zip"
+        zip_path = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', zip_filename)
+        
+        # get files in output_dir
+        files = os.listdir(output_dir)
+        fasta_name = f"{gene_id}.fasta"
+        fasta_file = os.path.join(output_dir, fasta_name)
+        save_sequence(gene_id, seq, fasta_file)
+        files.append(fasta_name)
+        # 创建 ZIP 文件
+        with ZipFile(zip_path, 'w') as zipf:
+            for file in files:
+                if os.path.isfile(os.path.join(output_dir, file)):
+                    zipf.write(os.path.join(output_dir, file), os.path.basename(file))
+        
+        # 清理临时文件
+        for file in files:
+            if os.path.exists(os.path.join(output_dir, file)):
+                os.remove(os.path.join(output_dir, file))
+        
+        # 返回 ZIP 文件
+        return send_file(zip_path, as_attachment=True)
+    
+    # GET请求处理保持不变
+    available_genomes = get_available_genomes()
+    return render_template('triplet.html', available_genomes=available_genomes)
+
+@app.route('/triplet/batch', methods=['GET', 'POST'])
+def triplet_batch():
+    if request.method == 'POST':
+        # 生成随机的文件夹名
+        unique_id = generate_unique_id()
+        output_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', unique_id)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 处理参考基因组/BLAST数据库
+        blast_db = None
+        if 'ref_genome' in request.files:
+            file = request.files['ref_genome']
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+
+                if filename.endswith('.gz'):
+                    decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
+                    with gzip.open(file_path, 'rb') as f_in:
+                        with open(decompressed_path, 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                    os.remove(file_path)
+                    file_path = decompressed_path
+                
+                blast_db = file_path
+
+        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+            existing_genome = request.form['existing_ref_genome']
+            blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+
+        # 获取通用参数
+        min_length = int(request.form.get('min_length', 15))
+        max_length = int(request.form.get('max_length', 20))
+        min_gc = float(request.form.get('min_gc', 40.0))
+        max_gc = float(request.form.get('max_gc', 60.0))
+        min_tm = float(request.form.get('min_tm', 47.0))
+        max_tm = float(request.form.get('max_tm', 53.0))
+        min_gap = int(request.form.get('min_gap', 2))
+        poly_n = int(request.form.get('poly_n', 4))
+        kmer_size = int(request.form.get('kmer_size', 8))
+        min_kmer_count = int(request.form.get('min_kmer_count', 2))
+        min_complementary_length = int(request.form.get('min_complementary_length', 5))
+
+        # 批量处理
         if 'batch_file' in request.files:
             batch_file = request.files['batch_file']
             if batch_file:
@@ -470,7 +582,6 @@ def triplet():
                 from io import StringIO
                 csv_content = batch_file.read().decode('utf-8')
                 csv_reader = csv.reader(StringIO(csv_content))
-                next(csv_reader, None)  # 跳过表头
                 
                 for row in csv_reader:
                     if len(row) >= 3:
@@ -496,6 +607,10 @@ def triplet():
                             # 为每个任务创建单独的输出目录
                             task_dir = os.path.join(batch_dir, task_name)
                             os.makedirs(task_dir, exist_ok=True)
+                            
+                            # 保存序列到FASTA文件
+                            fasta_file = os.path.join(task_dir, f"{gene_id}.fasta")
+                            save_sequence(gene_id, sequence, fasta_file)
                             
                             # 运行triplet probe设计
                             create_triplet_probe(
@@ -535,81 +650,10 @@ def triplet():
                 
                 # 返回ZIP文件
                 return send_file(zip_path, as_attachment=True)
-                
-        else:
-            # 原有的单个处理逻辑保持不变
-            seq = request.form['seq']
-            gene_id = request.form['geneID'].upper()
-            task_name = request.form['name']
-            BP_ID = request.form['bp_id']
-            
-            # 获取probe sequence
-            probe_seq = bridge_seq_dict.get(BP_ID, None)
-            if probe_seq is None:
-                return jsonify({'error': f'BP_ID {BP_ID} not found in probe table'}), 400
 
-            if len(gene_id) > 0:
-                sequence_type = request.form['sequenceType']
-                if sequence_type == 'cds':
-                    if gene_id not in cds_dict:
-                        return jsonify({'error': f'GeneID {gene_id} not found in CDS data'}), 400
-                    seq = cds_dict[gene_id]
-                elif sequence_type == 'cdna':
-                    if gene_id  not in cdna_dict:
-                        return jsonify({'error': f'GeneID {gene_id} not found in cDNA data'}), 400
-                    seq = cdna_dict[gene_id]
-
-            if len(seq) == 0:
-                return jsonify({'error': 'empty input sequences'}), 400
-            
-            create_triplet_probe(
-                name=task_name,
-                sequence=seq,
-                gene_id=gene_id,
-                min_length=min_length,
-                max_length=max_length,
-                gc_min=min_gc,
-                gc_max=max_gc,
-                tm_min=min_tm,
-                tm_max=max_tm,
-                min_gap=min_gap,
-                min_complementary_length=min_complementary_length,
-                poly_n=poly_n,
-                kmer_size=kmer_size,
-                min_kmer_count=min_kmer_count,
-                ref_genome=blast_db,
-                bridge_probe_id=BP_ID,
-                bridge_probe=probe_seq,
-                output_dir=output_dir
-            )
-            
-
-            zip_filename = f"triplet_results_{unique_id}.zip"
-            zip_path = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', zip_filename)
-            
-            # get files in output_dir
-            files = os.listdir(output_dir)
-            fasta_name = f"{gene_id}.fasta"
-            fasta_file = os.path.join(output_dir, fasta_name)
-            save_sequence(gene_id, seq, fasta_file)
-            files.append(fasta_name)
-            # 创建 ZIP 文件
-            with ZipFile(zip_path, 'w') as zipf:
-                for file in files:
-                    if os.path.isfile(os.path.join(output_dir, file)):
-                        zipf.write(os.path.join(output_dir, file), os.path.basename(file))
-            
-            # 清理临时文件
-            for file in files:
-                if os.path.exists(os.path.join(output_dir, file)):
-                    os.remove(os.path.join(output_dir, file))
-            
-            # 返回 ZIP 文件
-            return send_file(zip_path, as_attachment=True)
-    
-    # GET请求处理保持不变
+    # GET请求返回批量处理页面
     available_genomes = get_available_genomes()
-    return render_template('triplet.html', available_genomes=available_genomes)
+    return render_template('triplet_batch.html', available_genomes=available_genomes)
 
 @app.route('/bridge', methods=['GET', 'POST'])
 def bridge():
@@ -743,7 +787,7 @@ def bridge_list():
     # 获取所有探针信息并按BP_ID排序
     probes = []
     for bp_id, seq in bridge_seq_dict.items():
-        tm = round(calculate_tm(seq), 1)  # 计算Tm值并四舍五入到1位小数
+        tm = round(calculate_tm(seq), 1)  # 计算Tm值并四舍五��到1位小数
         gc = round(calculate_gc_content(seq), 1)  # 计算GC含量并四舍五入到1位小数
         probes.append({
             'bp_id': bp_id,

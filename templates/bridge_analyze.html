@@ -2,43 +2,6 @@
 
 {% block title %}Bridge Probe Conflict Analysis{% endblock %}
 
-{% block extra_css %}
-<style>
-    .container {
-        max-width: 1200px;
-        margin-top: 2rem;
-    }
-    .kmer-badge {
-        margin-right: 5px;
-        margin-bottom: 5px;
-    }
-    .input-form {
-        background-color: #f8f9fa;
-        padding: 2rem;
-        border-radius: 8px;
-        margin-bottom: 2rem;
-    }
-    .analysis-result {
-        margin-top: 2rem;
-    }
-    .sequence-cell {
-        font-family: monospace;
-        word-break: break-all;
-    }
-    .action-buttons {
-        margin: 1rem 0;
-    }
-    .no-conflicts {
-        color: #198754;
-        font-weight: 500;
-    }
-    .has-conflicts {
-        color: #dc3545;
-        font-weight: 500;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="container">
     <h1 class="mb-4">Bridge Probe Conflict Analysis</h1>

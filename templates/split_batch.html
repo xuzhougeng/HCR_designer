@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Split Batch Processing{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Split Probe 批量设计</h1>
+    
+    <div class="action-buttons mb-4">
+        <a href="{{ url_for('split') }}" class="btn btn-outline-primary">
+            返回单样本设计
+        </a>
+    </div>
+
+    <div class="parameter-group">
+        <h3>批量处理输入</h3>
+        <form action="{{ url_for('split_batch') }}" method="post" enctype="multipart/form-data">
+            <div class="form-group mb-4">
+                <label for="batch_file">上传CSV文件进行批量处理:</label>
+                <input type="file" class="form-control" id="batch_file" name="batch_file" accept=".csv" required>
+                <div class="parameter-description">
+                    CSV格式要求：<br>
+                    - 每行包含：task_name,BP_ID,gene_id<br>
+                    - 示例：task1,BP_1001,AT1G01010<br>
+                    - BP_ID范围：BP_0001到BP_0143或BP_1001到BP_3507<br>
+                    - 基因ID支持AGI或别名
+                </div>
+            </div>
+
+            <div class="parameter-group">
+                <h3>Background sequence</h3>
+                <div class="flex-container">
+                    <div class="form-group">
+                        <label for="existing_ref_genome">选择已有参考基因组:</label>
+                        <select class="form-control" id="existing_ref_genome" name="existing_ref_genome" onchange="toggleInput(this)">
+                            <option value="">选择基因组</option>
+                            {% for genome in available_genomes %}
+                            <option value="{{ genome.filename }}">{{ genome.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ref_genome">或上传新的参考基因组:</label>
+                        <input type="file" class="form-control" id="ref_genome" name="ref_genome" accept=".fa,.fasta,.fna,.gz" onchange="toggleFileInput()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="parameter-group">
+                <h3>Advanced Options <button type="button" class="toggle-btn" onclick="toggleAdvancedOptions(this)">▼</button></h3>
+                <div id="advancedOptions" style="display: none;">
+                    <!-- Probe Length Parameters -->
+                    <div class="advanced-section">
+                        <h4>探针长度参数</h4>
+                        <div class="flex-container">
+                            <div class="form-group">
+                                <label for="min_length">最小长度:</label>
+                                <input type="number" id="min_length" name="min_length" value="15" class="form-control" min="15" max="20">
+                            </div>
+                            <div class="form-group">
+                                <label for="max_length">最大长度:</label>
+                                <input type="number" id="max_length" name="max_length" value="20" class="form-control" min="15" max="20">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GC Content Parameters -->
+                    <div class="advanced-section">
+                        <h4>GC含量参数</h4>
+                        <div class="flex-container">
+                            <div class="form-group">
+                                <label for="min_gc">最小GC含量 (%):</label>
+                                <input type="number" id="min_gc" name="min_gc" step="0.1" value="40.0" class="form-control" min="30.0" max="50.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="max_gc">最大GC含量 (%):</label>
+                                <input type="number" id="max_gc" name="max_gc" step="0.1" value="60.0" class="form-control" min="50.0" max="70.0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Melting Temperature Parameters -->
+                    <div class="advanced-section">
+                        <h4>熔解温度参数</h4>
+                        <div class="flex-container">
+                            <div class="form-group">
+                                <label for="min_tm">最小Tm (°C):</label>
+                                <input type="number" id="min_tm" name="min_tm" step="0.1" value="47.0" class="form-control" min="40.0" max="50.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="max_tm">最大Tm (°C):</label>
+                                <input type="number" id="max_tm" name="max_tm" step="0.1" value="53.0" class="form-control" min="50.0" max="60.0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Other Parameters -->
+                    <div class="advanced-section">
+                        <h4>其他参数</h4>
+                        <div class="flex-container">
+                            <div class="form-group">
+                                <label for="min_gap">最小间隔:</label>
+                                <input type="number" id="min_gap" name="min_gap" value="2" class="form-control" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="min_complementary_length">最小互补长度:</label>
+                                <input type="number" id="min_complementary_length" name="min_complementary_length" value="5" class="form-control" min="4" max="8">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="submit-container">
+                <button type="submit" class="btn btn-primary">开始批量设计</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleInput(state) {
+    document.getElementById("ref_genome").disabled = state.files.length > 0;
+    if (document.getElementById("ref_genome").selectedIndex !== 0) {
+        document.getElementById("ref_genome").value = "";
+    }
+}
+
+function toggleFileInput() {
+    var hasFile = document.getElementById("ref_genome").files.length > 0;
+    document.getElementById("existing_ref_genome").disabled = hasFile;
+    if (hasFile) {
+        document.getElementById("existing_ref_genome").selectedIndex = 0;
+    }
+}
+
+function toggleAdvancedOptions(btn) {
+    const advancedOptions = document.getElementById('advancedOptions');
+    const isVisible = advancedOptions.style.display !== 'none';
+    
+    advancedOptions.style.display = isVisible ? 'none' : 'block';
+    btn.classList.toggle('active');
+}
+</script>
+{% endblock %} 
