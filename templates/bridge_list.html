@@ -62,6 +62,24 @@
     .stats-item {
         margin-bottom: 0.5rem;
     }
+    
+    .stats-cell {
+        white-space: nowrap;
+    }
+    .tm-badge {
+        background-color: #17a2b8;
+        color: white;
+        padding: 0.2em 0.6em;
+        border-radius: 0.25rem;
+        font-size: 0.875em;
+    }
+    .gc-badge {
+        background-color: #28a745;
+        color: white;
+        padding: 0.2em 0.6em;
+        border-radius: 0.25rem;
+        font-size: 0.875em;
+    }
 </style>
 {% endblock %}
 
@@ -95,17 +113,25 @@
                     <th>BP_ID</th>
                     <th>序列</th>
                     <th>长度</th>
+                    <th>Tm (°C)</th>
+                    <th>GC (%)</th>
                     <th>操作</th>
                 </tr>
             </thead>
             <tbody>
-                {% for bp_id, sequence in probes %}
+                {% for probe in probes %}
                 <tr>
-                    <td>{{ bp_id }}</td>
-                    <td class="sequence-cell">{{ sequence }}</td>
-                    <td>{{ sequence|length }}</td>
+                    <td>{{ probe.bp_id }}</td>
+                    <td class="sequence-cell">{{ probe.sequence }}</td>
+                    <td>{{ probe.length }}</td>
+                    <td class="stats-cell">
+                        <span class="tm-badge">{{ probe.tm }}</span>
+                    </td>
+                    <td class="stats-cell">
+                        <span class="gc-badge">{{ probe.gc }}</span>
+                    </td>
                     <td>
-                        <a href="{{ url_for('bridge_query', bp_id=bp_id) }}" 
+                        <a href="{{ url_for('bridge_query', bp_id=probe.bp_id) }}" 
                            class="btn btn-sm btn-outline-primary">
                             查看冲突
                         </a>
@@ -145,14 +171,16 @@ function filterTable() {
 
 function downloadProbes() {
     const rows = document.querySelectorAll('#probeTable tbody tr');
-    let csv = 'BP_ID\tSequence\tLength\n';
+    let csv = 'BP_ID\tSequence\tLength\tTm\tGC%\n';
     
     rows.forEach(row => {
         if (row.style.display !== 'none') {  // 只下载显示的行
             const bp_id = row.cells[0].textContent;
             const sequence = row.cells[1].textContent;
             const length = row.cells[2].textContent;
-            csv += `${bp_id}\t${sequence}\t${length}\n`;
+            const tm = row.cells[3].textContent;
+            const gc = row.cells[4].textContent;
+            csv += `${bp_id}\t${sequence}\t${length}\t${tm}\t${gc}\n`;
         }
     });
     

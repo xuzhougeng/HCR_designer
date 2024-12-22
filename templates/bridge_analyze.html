@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Bridge Probe Conflict Analysis{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin-top: 2rem;
+    }
+    .kmer-badge {
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+    .input-form {
+        background-color: #f8f9fa;
+        padding: 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    .analysis-result {
+        margin-top: 2rem;
+    }
+    .sequence-cell {
+        font-family: monospace;
+        word-break: break-all;
+    }
+    .action-buttons {
+        margin: 1rem 0;
+    }
+    .no-conflicts {
+        color: #198754;
+        font-weight: 500;
+    }
+    .has-conflicts {
+        color: #dc3545;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Bridge Probe Conflict Analysis</h1>
+    
+    <div class="input-form">
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="input_file">Upload Input File:</label>
+                <input type="file" class="form-control" id="input_file" name="input_file" accept=".txt,.csv">
+                <div class="form-text">Upload a file with one BP_ID or sequence per line</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="input_content">Or Enter Content Directly:</label>
+                <textarea class="form-control" id="input_content" name="input_content" rows="5"
+                          placeholder="Enter BP_IDs or sequences (one per line)">{{ input_content if input_content }}</textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label for="kmer">k-mer Length:</label>
+                <input type="number" class="form-control" id="kmer" name="kmer" 
+                       value="{{ kmer }}" min="3" max="15">
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Analyze Conflicts</button>
+        </form>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if results %}
+    <div class="analysis-result">
+        <h2>Analysis Results</h2>
+        <div class="action-buttons">
+            <button class="btn btn-success" onclick="downloadResults()">Download Results</button>
+        </div>
+        
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Input</th>
+                    <th>Conflicts</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for input_item, conflicts in results %}
+                <tr>
+                    <td class="sequence-cell">{{ input_item }}</td>
+                    <td>
+                        {% if conflicts %}
+                        <div class="has-conflicts">Found {{ conflicts|length }} conflicts:</div>
+                        {% for conflict_item, overlap_count, overlap_kmers in conflicts %}
+                        <div class="mb-2">
+                            <strong>With {{ conflict_item }}:</strong>
+                            <br>
+                            {{ overlap_count }} overlapping k-mers
+                            <br>
+                            Example k-mers:
+                            {% for kmer in overlap_kmers %}
+                            <span class="badge bg-info kmer-badge">{{ kmer }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="no-conflicts">No conflicts found</div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function downloadResults() {
+    const rows = document.querySelectorAll('table tbody tr');
+    let csv = 'Input\tConflicting_Input\tOverlap_Count\tExample_KMers\n';
+    
+    rows.forEach(row => {
+        const input = row.cells[0].textContent;
+        const conflicts = row.cells[1].querySelectorAll('div.mb-2');
+        
+        if (conflicts.length === 0) {
+            csv += `${input}\tNo conflicts\t0\t-\n`;
+        } else {
+            conflicts.forEach(conflict => {
+                const conflictText = conflict.textContent;
+                const conflictingInput = conflictText.match(/With (.*?):/)[1];
+                const overlapCount = conflictText.match(/(\d+) overlapping/)[1];
+                const kmers = Array.from(conflict.querySelectorAll('.kmer-badge'))
+                                 .map(span => span.textContent)
+                                 .join(',');
+                csv += `${input}\t${conflictingInput}\t${overlapCount}\t${kmers}\n`;
+            });
+        }
+    });
+    
+    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'conflict_analysis_results.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %} 

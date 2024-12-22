@@ -28,7 +28,7 @@
                 <div class="form-group">
                     <label for="bp_id">BP_ID:</label>
                     <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[0-3][0-9]{3}" value="BP_1001">
-                    <div class="parameter-description">Enter your BP ID (Valid range: BP_0001 to BP_0060 or BP_1001 to BP_3507)</div>
+                    <div class="parameter-description">Enter your BP ID (Valid range: BP_0001 to BP_0143 or BP_1001 to BP_3507)</div>
                 </div>
 
                 <div class="form-group">
@@ -374,6 +374,18 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function(e) {
             var tabName = this.getAttribute('data-tab');
             openTab(e, tabName);
+            
+            // 处理required属性
+            const geneIDInput = document.getElementById('geneID');
+            const seqInput = document.getElementById('seq');
+            
+            if (tabName === 'GeneID') {
+                geneIDInput.required = true;
+                seqInput.required = false;
+            } else {
+                geneIDInput.required = false;
+                seqInput.required = true;
+            }
         });
     });
 
@@ -421,6 +433,8 @@ function toggleAdvancedOptions(btn) {
 function toggleInputMode(input) {
     const singleInputSection = document.getElementById('singleInputSection');
     const singleInputs = singleInputSection.querySelectorAll('input, textarea');
+    const geneIDInput = document.getElementById('geneID');
+    const seqInput = document.getElementById('seq');
     
     if (input.files.length > 0) {
         // Batch mode - hide single input section and disable its inputs
@@ -432,10 +446,22 @@ function toggleInputMode(input) {
         // Single mode - show single input section and enable its inputs
         singleInputSection.style.display = 'block';
         singleInputs.forEach(input => {
-            if (input.id === 'name' || input.id === 'bp_id' || input.id === 'geneID') {
+            if (input.id === 'name' || input.id === 'bp_id') {
                 input.required = true;
             }
         });
+        
+        // 特殊处理GeneID和Sequence输入
+        const activeTab = document.querySelector('.tablinks.active');
+        if (activeTab) {
+            if (activeTab.getAttribute('data-tab') === 'GeneID') {
+                geneIDInput.required = true;
+                seqInput.required = false;
+            } else {
+                geneIDInput.required = false;
+                seqInput.required = true;
+            }
+        }
     }
 }
 </script>

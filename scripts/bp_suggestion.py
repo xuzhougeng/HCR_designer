@@ -13,7 +13,8 @@ class BridgeProbeSystem:
         :param k: kmer的长度
         """
         self.k = k
-        self.probes = self._load_probes(file_path)
+        self.original_probes = self._load_probes(file_path)  # 保存原始探针
+        self.probes = self.original_probes.copy()  # 用于过滤后的探针
         self.kmer_sets = {}
         self._calculate_all_kmer_sets()
     
@@ -27,7 +28,7 @@ class BridgeProbeSystem:
         return probes
     
     def _get_kmers(self, sequence: str) -> Set[str]:
-        """获取序列的所有k-mers集合，包括反向互补序列的k-mers"""
+        """获取序��的所有k-mers集合，包括反向互补序列的k-mers"""
         # 获取原序列的k-mers
         kmers = set(sequence[i:i+self.k] for i in range(len(sequence)-self.k+1))
         # 获取反向互补序列的k-mers
@@ -152,42 +153,75 @@ class BridgeProbeSystem:
             results.append((seq, conflicts))
         
         return results
+    
+    def filter_probes_by_range(self, start_id: str, end_id: str):
+        """根据BP_ID范围过滤探针"""
+        try:
+            start_num = int(start_id[3:])
+            end_num = int(end_id[3:])
+            if start_num > end_num:
+                start_num, end_num = end_num, start_num
+                
+            # 重置探针字典和kmer集合
+            self.probes = {}
+            for bp_id, seq in self.original_probes.items():
+                if bp_id.startswith('BP_'):
+                    try:
+                        num = int(bp_id[3:])
+                        if start_num <= num <= end_num:
+                            self.probes[bp_id] = seq
+                    except ValueError:
+                        continue
+            
+            # 重新计算kmer集合
+            self.kmer_sets = {}
+            self._calculate_all_kmer_sets()
+            
+            if not self.probes:
+                raise ValueError(f"No probes found in range {start_id}-{end_id}")
+                
+        except ValueError as e:
+            raise ValueError(f"Invalid BP range format: {str(e)}")
+    
+    def reset_probes(self):
+        """重置为原始探针集合"""
+        self.probes = self.original_probes.copy()
+        self.kmer_sets = {}
+        self._calculate_all_kmer_sets()
 
 
 def design_multiple_probes(probe_table_file: str, 
-                           input_bp_ids: List[str]=[], 
-                           n: int=1,
-                           k: int=9) -> List[Tuple[str, str]]:
+                         input_bp_ids: List[str]=[], 
+                         n: int=1,
+                         k: int=9,
+                         bp_range: Tuple[str, str]=None) -> List[Tuple[str, str]]:
     """
     基于已有探针设计N个新的探针
-    
-    Args:
-        input_bp_ids: 已有的BP_ID列表
-        n: 需要设计的新探针数量
-    
-    Returns:
-        新设计的BP_ID和序列的元组列表
     """
-    # 用于存储结果
     result_probes = []
     current_bp_ids = input_bp_ids.copy()
     
     system = BridgeProbeSystem(probe_table_file, k=k)
-
+    
+    # 如果指定了范围，过滤可用的探针
+    if bp_range and len(bp_range) == 2:
+        start_id, end_id = bp_range
+        # 验证范围格式
+        if not (start_id.startswith('BP_') and end_id.startswith('BP_')):
+            raise ValueError("BP range must be in format BP_XXXX")
+        
+        try:
+            system.filter_probes_by_range(start_id, end_id)
+        except ValueError as e:
+            raise ValueError(str(e))
+    
     # 迭代设计n个探针
     while len(result_probes) < n:
-        # 每次找一个不相似的探针
         dissimilar = system.find_dissimilar_probes(current_bp_ids, 1)
-        
-        # 如果找不到更多不相似的探针,退出循环
         if not dissimilar:
             break
-            
-        # 将找到的探针添加到结果中
         new_probe = dissimilar[0]
         result_probes.append(new_probe)
-        
-        # 将新探针的BP_ID添加到current_bp_ids中,用下一轮迭代
         current_bp_ids.append(new_probe[0])
         
     return result_probes
@@ -207,6 +241,67 @@ def query_conflicting_probes(probe_table_file: str, bp_id: str, k: int = 9) -> L
     """
     system = BridgeProbeSystem(probe_table_file, k=k)
     return system.find_conflicting_probes(bp_id)
+
+
+def analyze_input_conflicts(probe_table_file: str, input_content: str, k: int = 9) -> list:
+    """
+    分析输入内容（BP_ID或序列）之间的冲突
+    
+    Args:
+        probe_table_file: probe table文件路径
+        input_content: 输入内容，每行一个BP_ID或序列
+        k: kmer长度
+        
+    Returns:
+        List of tuples: [(input1, [(conflicting_input, overlap_kmers),...]),...]
+    """
+    system = BridgeProbeSystem(probe_table_file, k=k)
+    
+    # 解析输入内容
+    inputs = [line.strip() for line in input_content.split('\n') if line.strip()]
+    results = []
+    
+    # 创建序列字典
+    sequence_dict = {}
+    for input_item in inputs:
+        if input_item.startswith('BP_'):  # 如果是BP_ID
+            if input_item in system.probes:
+                sequence_dict[input_item] = system.probes[input_item]
+        else:  # 如果是序列
+            sequence_dict[input_item] = input_item
+    
+    # 分析每个输入与其他输入之间的冲突
+    for input_item, sequence in sequence_dict.items():
+        conflicts = []
+        input_kmers = system._get_kmers(sequence)
+        
+        for other_input, other_sequence in sequence_dict.items():
+            if other_input != input_item:
+                other_kmers = system._get_kmers(other_sequence)
+                overlap = input_kmers.intersection(other_kmers)
+                if overlap:
+                    # 检查重叠的k-mers中是否包含反向互补序列
+                    rc_overlap = set()
+                    for kmer in overlap:
+                        rc_kmer = reverse_complement(kmer)
+                        if rc_kmer in overlap:
+                            rc_overlap.add(kmer)
+                            rc_overlap.add(rc_kmer)
+                    
+                    conflicts.append((
+                        other_input,
+                        len(overlap),
+                        list(rc_overlap)[:3] if rc_overlap else list(overlap)[:3]
+                    ))
+        
+        if conflicts:
+            # 按重叠k-mer数量排序
+            conflicts.sort(key=lambda x: x[1], reverse=True)
+            results.append((input_item, conflicts))
+        else:
+            results.append((input_item, []))
+            
+    return results
 
 
 # if __name__ == "__main__":

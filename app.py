@@ -13,6 +13,8 @@ from scripts.create_split_probe import main as create_split_probe
 from scripts.bp_suggestion import design_multiple_probes
 from scripts.bp_suggestion import query_conflicting_probes
 from scripts.bp_suggestion import BridgeProbeSystem
+from scripts.bp_suggestion import analyze_input_conflicts
+from src.common.sequence_utils import calculate_tm, calculate_gc_content
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -336,7 +338,7 @@ def split():
             gene_id = request.form['geneID'].upper()
             task_name = request.form['name']
             BP_ID = request.form['bp_id']
-            
+            print(BP_ID + " " + gene_id)
             # 获取probe sequence
             probe_seq = bridge_seq_dict.get(BP_ID, None)
             if probe_seq is None:
@@ -616,6 +618,8 @@ def bridge():
         input_bp_ids = request.form.get('bp_ids', '').strip()
         n = int(request.form.get('number', 1))
         k = int(request.form.get('kmer', 9))
+        bp_start = request.form.get('bp_start', '').strip()
+        bp_end = request.form.get('bp_end', '').strip()
         
         # 处理BP_ID列表
         bp_id_list = []
@@ -624,9 +628,7 @@ def bridge():
         if 'bp_file' in request.files:
             file = request.files['bp_file']
             if file and file.filename:
-                # 读取文件内容
                 content = file.read().decode('utf-8')
-                # 将文件内容按行分割并去除空白字符
                 file_bp_ids = [line.strip() for line in content.splitlines() if line.strip()]
                 bp_id_list.extend(file_bp_ids)
         
@@ -639,26 +641,30 @@ def bridge():
         bp_id_list = list(dict.fromkeys(bp_id_list))
         
         try:
-            # ��design_multiple_probes函数
             result_probes = design_multiple_probes(
                 probe_table_file="resources/probe_table.txt",
                 input_bp_ids=bp_id_list,
                 n=n,
-                k=k
+                k=k,
+                bp_range=(bp_start, bp_end) if bp_start and bp_end else None
             )
             
             return render_template('bridge.html', 
-                                  result_probes=result_probes,
-                                  bp_ids=input_bp_ids,
-                                  number=n,
-                                  kmer=k)
+                                result_probes=result_probes,
+                                bp_ids=input_bp_ids,
+                                number=n,
+                                kmer=k,
+                                bp_start=bp_start,
+                                bp_end=bp_end)
             
         except Exception as e:
             return render_template('bridge.html', 
-                                  error=str(e),
-                                  bp_ids=input_bp_ids,
-                                  number=n,
-                                  kmer=k)
+                                error=str(e),
+                                bp_ids=input_bp_ids,
+                                number=n,
+                                kmer=k,
+                                bp_start=bp_start,
+                                bp_end=bp_end)
     
     return render_template('bridge.html', number=1, kmer=9)
 
@@ -734,9 +740,21 @@ def bridge_query():
 
 @app.route('/bridge/list', methods=['GET'])
 def bridge_list():
-    # 获���所有探针信息并按BP_ID排序
-    probes = [(bp_id, seq) for bp_id, seq in bridge_seq_dict.items()]
-    probes.sort(key=lambda x: x[0])  # 按BP_ID排序
+    # 获取所有探针信息并按BP_ID排序
+    probes = []
+    for bp_id, seq in bridge_seq_dict.items():
+        tm = round(calculate_tm(seq), 1)  # 计算Tm值并四舍五入到1位小数
+        gc = round(calculate_gc_content(seq), 1)  # 计算GC含量并四舍五入到1位小数
+        probes.append({
+            'bp_id': bp_id,
+            'sequence': seq,
+            'length': len(seq),
+            'tm': tm,
+            'gc': gc
+        })
+    
+    # 按BP_ID排序
+    probes.sort(key=lambda x: x['bp_id'])
     
     return render_template('bridge_list.html', probes=probes)
 
@@ -767,6 +785,46 @@ def bridge_sequence():
                                   kmer=k)
       
     return render_template('bridge_sequence.html', kmer=9)
+
+@app.route('/bridge/analyze', methods=['GET', 'POST'])
+def bridge_analyze():
+    if request.method == 'POST':
+        k = int(request.form.get('kmer', 9))
+        
+        # 处理文件上传
+        if 'input_file' in request.files:
+            file = request.files['input_file']
+            if file:
+                content = file.read().decode('utf-8')
+            else:
+                content = request.form.get('input_content', '').strip()
+        else:
+            content = request.form.get('input_content', '').strip()
+            
+        if not content:
+            return render_template('bridge_analyze.html',
+                                error="Please provide input content",
+                                kmer=k)
+        
+        try:
+            results = analyze_input_conflicts(
+                probe_table_file="resources/probe_table.txt",
+                input_content=content,
+                k=k
+            )
+            
+            return render_template('bridge_analyze.html',
+                                results=results,
+                                input_content=content,
+                                kmer=k)
+            
+        except Exception as e:
+            return render_template('bridge_analyze.html',
+                                error=str(e),
+                                input_content=content,
+                                kmer=k)
+    
+    return render_template('bridge_analyze.html', kmer=9)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port="6789", debug=True)

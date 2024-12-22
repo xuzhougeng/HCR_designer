@@ -70,29 +70,46 @@
     
 
     <form method="POST" enctype="multipart/form-data" class="form-section">
-        <div class="mb-3">
-            <label for="bp_file" class="form-label">上传BP_ID文件（可选，每行一个BP_ID）</label>
-            <input type="file" class="form-control" id="bp_file" name="bp_file" accept=".txt,.csv">
-            <div class="form-text">或者在下方直接输入BP_ID列表</div>
-        </div>
+        <div class="parameter-group">
+            <h3>Bridge Probe System</h3>
+            <div class="mb-3">
+                <label for="bp_range">BP Range (Optional):</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="bp_start" name="bp_start" 
+                           placeholder="e.g., BP_0001" pattern="BP_[0-3][0-9]{3}"
+                           value="{{ bp_start if bp_start }}">
+                    <span class="input-group-text">to</span>
+                    <input type="text" class="form-control" id="bp_end" name="bp_end" 
+                           placeholder="e.g., BP_0048" pattern="BP_[0-3][0-9]{3}"
+                           value="{{ bp_end if bp_end }}">
+                </div>
+                <div class="form-text">Limit probe selection to a specific range (e.g., BP_0001-BP_0048)</div>
+            </div>
 
-        <div class="mb-3">
-            <label for="bp_ids" class="form-label">已有的BP_ID列表（可选，用逗号分隔）</label>
-            <textarea class="form-control" id="bp_ids" name="bp_ids" rows="3" 
-                       placeholder="例如: BP001,BP002,BP003">{{ bp_ids if bp_ids }}</textarea>
-        </div>
+            <div class="mb-3">
+                <label for="bp_file">Upload BP_ID file (Optional):</label>
+                <input type="file" class="form-control" id="bp_file" name="bp_file" accept=".txt,.csv">
+                <div class="form-text">Or upload a file with one BP_ID per line</div>
+            </div>
 
-        <div class="mb-3">
-            <label for="number" class="form-label">需要的新探针数量</label>
-            <input type="number" class="form-control" id="number" name="number" value="{{ number }}" min="1" max="100">
-        </div>
+            <div class="mb-3">
+                <label for="bp_ids">Or enter BP_IDs directly:</label>
+                <textarea class="form-control" id="bp_ids" name="bp_ids" rows="3" 
+                          placeholder="Enter BP_IDs separated by commas">{{ bp_ids if bp_ids }}</textarea>
+            </div>
 
-        <div class="mb-3">
-            <label for="kmer" class="form-label">k-mer长度</label>
-            <input type="number" class="form-control" id="kmer" name="kmer" value="{{ kmer }}" min="3" max="15">
-        </div>
+            <div class="mb-3">
+                <label for="number" class="form-label">需要的新探针数量</label>
+                <input type="number" class="form-control" id="number" name="number" value="{{ number }}" min="1" max="100">
+            </div>
 
-        <button type="submit" class="btn btn-primary">获取探针建议</button>
+            <div class="mb-3">
+                <label for="kmer" class="form-label">k-mer长度</label>
+                <input type="number" class="form-control" id="kmer" name="kmer" value="{{ kmer }}" min="3" max="15">
+            </div>
+
+            <button type="submit" class="btn btn-primary">获取探针建议</button>
+        </div>
     </form>
     {% if error %}
     <div class="alert alert-danger" role="alert">
