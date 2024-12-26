@@ -28,7 +28,7 @@ class BridgeProbeSystem:
         return probes
     
     def _get_kmers(self, sequence: str) -> Set[str]:
-        """获取序��的所有k-mers集合，包括反向互补序列的k-mers"""
+        """获取序列的所有k-mers集合，包括反向互补序列的k-mers"""
         # 获取原序列的k-mers
         kmers = set(sequence[i:i+self.k] for i in range(len(sequence)-self.k+1))
         # 获取反向互补序列的k-mers
@@ -154,8 +154,8 @@ class BridgeProbeSystem:
         
         return results
     
-    def filter_probes_by_range(self, start_id: str, end_id: str):
-        """根据BP_ID范围过滤探针"""
+    def filter_probes_by_range(self, start_id: str, end_id: str, keep_bp_ids: List[str] = None):
+        """根据BP_ID范围过滤探针，同时保留指定的BP_IDs"""
         try:
             start_num = int(start_id[3:])
             end_num = int(end_id[3:])
@@ -165,6 +165,11 @@ class BridgeProbeSystem:
             # 重置探针字典和kmer集合
             self.probes = {}
             for bp_id, seq in self.original_probes.items():
+                # 如果在keep_bp_ids中，直接保留
+                if keep_bp_ids and bp_id in keep_bp_ids:
+                    self.probes[bp_id] = seq
+                    continue
+                    
                 if bp_id.startswith('BP_'):
                     try:
                         num = int(bp_id[3:])
@@ -203,7 +208,12 @@ def design_multiple_probes(probe_table_file: str,
     
     system = BridgeProbeSystem(probe_table_file, k=k)
     
-    # 如果指定了范围，过滤可用的探针
+    # 首先验证所有input_bp_ids是否存在
+    for bp_id in input_bp_ids:
+        if bp_id not in system.probes:
+            raise ValueError(f"BP_ID {bp_id} not found in original probe database")
+    
+    # 如果指定了范围，过滤可用的探针，但保留input_bp_ids
     if bp_range and len(bp_range) == 2:
         start_id, end_id = bp_range
         # 验证范围格式
@@ -211,7 +221,7 @@ def design_multiple_probes(probe_table_file: str,
             raise ValueError("BP range must be in format BP_XXXX")
         
         try:
-            system.filter_probes_by_range(start_id, end_id)
+            system.filter_probes_by_range(start_id, end_id, keep_bp_ids=input_bp_ids)
         except ValueError as e:
             raise ValueError(str(e))
     
