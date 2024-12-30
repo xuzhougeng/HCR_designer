@@ -4,6 +4,8 @@ import gzip
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from zipfile import ZipFile
+import csv
+import re
 
 from flask import Flask, request, render_template, send_file, jsonify
 
@@ -14,7 +16,7 @@ from scripts.bp_suggestion import design_multiple_probes
 from scripts.bp_suggestion import query_conflicting_probes
 from scripts.bp_suggestion import BridgeProbeSystem
 from scripts.bp_suggestion import analyze_input_conflicts
-from src.common.sequence_utils import calculate_tm, calculate_gc_content
+from src.common.sequence_utils import calculate_tm, calculate_gc_content, is_valid_probe, check_poly_n
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -779,6 +781,99 @@ def bridge_analyze():
                                 kmer=k)
     
     return render_template('bridge_analyze.html', kmer=9)
+
+@app.route('/bridge/validate', methods=['GET', 'POST'])
+def bridge_validate():
+    # 默认参数值
+    default_params = {
+        'min_length': 17,
+        'max_length': 20,
+        'min_gc': 40.0,
+        'max_gc': 60.0,
+        'min_tm': 47.0,
+        'max_tm': 53.0,
+        'poly_n': 4
+    }
+    
+    if request.method == 'POST':
+        # 获取用户设置的参数
+        params = {
+            'min_length': int(request.form.get('min_length', default_params['min_length'])),
+            'max_length': int(request.form.get('max_length', default_params['max_length'])),
+            'min_gc': float(request.form.get('min_gc', default_params['min_gc'])),
+            'max_gc': float(request.form.get('max_gc', default_params['max_gc'])),
+            'min_tm': float(request.form.get('min_tm', default_params['min_tm'])),
+            'max_tm': float(request.form.get('max_tm', default_params['max_tm'])),
+            'poly_n': int(request.form.get('poly_n', default_params['poly_n']))
+        }
+        
+        if 'probe_file' not in request.files:
+            return render_template('bridge_validate.html', error="请上传文件", **params)
+        
+        file = request.files['probe_file']
+        if file.filename == '':
+            return render_template('bridge_validate.html', error="未选择文件", **params)
+            
+        if not file.filename.endswith('.csv'):
+            return render_template('bridge_validate.html', error="请上传CSV文件", **params)
+            
+        try:
+            # 读取CSV文件
+            content = file.read().decode('utf-8')
+            reader = csv.reader(content.splitlines())
+            next(reader)  # 跳过表头
+            
+            results = []
+            for row in reader:
+                if len(row) < 2:
+                    continue
+                    
+                probe_id, sequence = row[0].strip(), row[1].strip()
+                is_valid = True
+                reasons = []
+                
+                # 检查序列格式
+                if not re.match('^[ATCG]+$', sequence):
+                    is_valid = False
+                    reasons.append("序列包含非法字符")
+                
+                # 使用用户设置的参数进行验证
+                length = len(sequence)
+                if length < params['min_length'] or length > params['max_length']:
+                    is_valid = False
+                    reasons.append(f"长度不符合要求: {length}bp")
+                
+                gc = calculate_gc_content(sequence)
+                if gc < params['min_gc'] or gc > params['max_gc']:
+                    is_valid = False
+                    reasons.append(f"GC含量不适合: {gc:.1f}%")
+                
+                try:
+                    tm = calculate_tm(sequence)
+                    if tm < params['min_tm'] or tm > params['max_tm']:
+                        is_valid = False
+                        reasons.append(f"Tm值不适合: {tm:.1f}°C")
+                except:
+                    is_valid = False
+                    reasons.append("Tm值计算失败")
+                
+                if not check_poly_n(sequence, params['poly_n']):
+                    is_valid = False
+                    reasons.append(f"存在{params['poly_n']}个以上连续碱基")
+                
+                results.append({
+                    'probe_id': probe_id,
+                    'sequence': sequence,
+                    'is_valid': is_valid,
+                    'reasons': '；'.join(reasons) if reasons else '符合要求'
+                })
+            
+            return render_template('bridge_validate.html', results=results, **params)
+            
+        except Exception as e:
+            return render_template('bridge_validate.html', error=str(e), **params)
+            
+    return render_template('bridge_validate.html', **default_params)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port="6789", debug=True)
