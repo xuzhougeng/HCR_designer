@@ -48,7 +48,7 @@ gene_alias = load_alias(GENE_ALIAS_PATH['TAIR10'])
 probe_table_file = "resources/probe_table.txt"
 bridge_seq_dict = {}
 for line in open(probe_table_file):
-    bridge_id, sequence = line.strip().split(" ")
+    bridge_id, sequence = line.strip().split()
     bridge_seq_dict[bridge_id] = sequence
 
 def get_available_genomes():
