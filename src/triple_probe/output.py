@@ -7,6 +7,7 @@ import logging
 from Bio.SeqUtils import MeltingTemp as mt
 from ..common.blast_utils import analyze_blast_results
 import json
+from ..common.probeset_select import select_probe_sets
 
 from .designer import ProbeSet
 
@@ -433,3 +434,134 @@ class ProbeOutputHandler:
             total_score += probe_score * weight
         
         return total_score
+
+    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str):
+        """
+        基于select_probe_sets对探针组合进行筛选并输出报告
+        
+        Args:
+            json_data: 包含探针组合数据的字典
+            output_prefix: 输出文件前缀
+        """
+        # 使用select_probe_sets进行筛选
+        filtered_data = select_probe_sets(json_data)
+        
+        # 保存筛选后的完整JSON数据
+        json_output_file = self.output_dir / f"{output_prefix}_filtered.json"
+        with open(json_output_file, 'w', encoding='utf-8') as f:
+            json.dump(filtered_data, f, indent=2, ensure_ascii=False)
+        
+        # 生成筛选报告
+        report_file = self.output_dir / f"{output_prefix}_filtered_report.txt"
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write("探针组合筛选报告\n")
+            f.write("=" * 80 + "\n\n")
+            
+            # 统计信息
+            total_sets = len(filtered_data['probe_sets'])
+            selected_sets = sum(1 for probe_set in filtered_data['probe_sets'] if probe_set.get('keep', False))
+            
+            f.write(f"总探针组合数: {total_sets}\n")
+            f.write(f"筛选后保留数: {selected_sets}\n")
+            f.write("\n" + "-" * 80 + "\n\n")
+            
+            # 输出保留的探针组合详细信息
+            f.write("保留的探针组合:\n")
+            f.write("-" * 80 + "\n")
+            for probe_set in filtered_data['probe_sets']:
+                if probe_set.get('keep', False):
+                    f.write(f"\n探针组合 ID: {probe_set['id']}\n")
+                    
+                    # 左探针信息
+                    left_probe = probe_set['left_probe']
+                    f.write("\n左探针:\n")
+                    f.write(f"序列: {left_probe['sequence']}\n")
+                    f.write(f"位置: {left_probe['position']['start']}-{left_probe['position']['end']}\n")
+                    f.write(f"GC含量: {left_probe['gc_content']}%\n")
+                    f.write(f"Tm值: {left_probe['tm']}°C\n")
+                    
+                    # 中间探针信息
+                    middle_probe = probe_set['middle_probe']
+                    f.write("\n中间探针:\n")
+                    f.write(f"序列: {middle_probe['sequence']}\n")
+                    f.write(f"位置: {middle_probe['position']['start']}-{middle_probe['position']['end']}\n")
+                    f.write(f"GC含量: {middle_probe['gc_content']}%\n")
+                    f.write(f"Tm值: {middle_probe['tm']}°C\n")
+                    
+                    # 右探针信息
+                    right_probe = probe_set['right_probe']
+                    f.write("\n右探针:\n")
+                    f.write(f"序列: {right_probe['sequence']}\n")
+                    f.write(f"位置: {right_probe['position']['start']}-{right_probe['position']['end']}\n")
+                    f.write(f"GC含量: {right_probe['gc_content']}%\n")
+                    f.write(f"Tm值: {right_probe['tm']}°C\n")
+                    
+                    # 评估信息
+                    eval_info = probe_set['evaluation']
+                    f.write("\n评估信息:\n")
+                    f.write(f"质量得分: {eval_info['quality_score']}\n")
+                    f.write(f"左中间隔: {eval_info['gaps']['left_to_middle']}bp\n")
+                    f.write(f"中右间隔: {eval_info['gaps']['middle_to_right']}bp\n")
+                    f.write(f"总跨度: {eval_info['total_span']}bp\n")
+                    f.write(f"平均Tm值: {eval_info['average_tm']}°C\n")
+                    f.write(f"平均GC含量: {eval_info['average_gc_content']}%\n")
+                    f.write(f"筛选原因: {probe_set['reason']}\n")
+                    f.write("\n" + "-" * 80 + "\n")
+            
+            # 输出未保留的探针组合简要信息
+            f.write("\n\n未保留的探针组合:\n")
+            f.write("-" * 80 + "\n")
+            for probe_set in filtered_data['probe_sets']:
+                if not probe_set.get('keep', False):
+                    f.write(f"\n探针组合 ID: {probe_set['id']}\n")
+                    f.write(f"质量得分: {probe_set['evaluation']['quality_score']}\n")
+                    f.write(f"未保留原因: {probe_set['reason']}\n")
+                    f.write("-" * 40 + "\n")
+        
+        # 保存筛选后的BED格式
+        bed_file = self.output_dir / f"{output_prefix}_filtered.bed"
+        task_name = output_prefix.split('_filtered')[0]  # 获取原始task_name
+        with open(bed_file, 'w') as f:
+            for probe_set in filtered_data['probe_sets']:
+                if probe_set.get('keep', False):
+                    set_id = probe_set['id']
+                    # 写入左探针
+                    f.write(f"{task_name}\t{probe_set['left_probe']['position']['start']}\t"
+                           f"{probe_set['left_probe']['position']['end']}\tL-{set_id}\t0\t+\n")
+                    
+                    # 写入中间探针
+                    f.write(f"{task_name}\t{probe_set['middle_probe']['position']['start']}\t"
+                           f"{probe_set['middle_probe']['position']['end']}\tM-{set_id}\t0\t+\n")
+                    
+                    # 写入右探针
+                    f.write(f"{task_name}\t{probe_set['right_probe']['position']['start']}\t"
+                           f"{probe_set['right_probe']['position']['end']}\tR-{set_id}\t0\t+\n")
+        
+        # 保存筛选后的CSV格式
+        csv_file = self.output_dir / f"{output_prefix}_filtered.csv"
+        headers = ['Set_ID', 'Primer_Type', 'Sequence', 'Start', 'End', 
+                  'Length', 'Tm', 'GC_Content']
+        
+        with open(csv_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            
+            for probe_set in filtered_data['probe_sets']:
+                if probe_set.get('keep', False):
+                    set_id = probe_set['id']
+                    # 写入每个探针的信息
+                    for probe_type, probe_info in [
+                        ('Left', probe_set['left_probe']),
+                        ('Middle', probe_set['middle_probe']),
+                        ('Right', probe_set['right_probe'])
+                    ]:
+                        writer.writerow([
+                            f"{task_name}_{set_id}",
+                            probe_type,
+                            probe_info['sequence'],
+                            probe_info['position']['start'],
+                            probe_info['position']['end'],
+                            len(probe_info['sequence']),
+                            probe_info['tm'],
+                            probe_info['gc_content']
+                        ])

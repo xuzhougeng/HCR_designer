@@ -4,6 +4,7 @@ import random
 from datetime import datetime
 import logging
 import argparse
+import json
 # set logging level info
 logging.basicConfig(level=logging.INFO)
 
@@ -122,7 +123,59 @@ def generate_dual_probe(sequence: str,
     
     # 输出探针信息, 包括详细结果和BED格式
     output_handler = ProbeOutputHandler(config.output_dir)
+    
+    # 保存原始探针组合结果
     probe_sets = output_handler.save_probe_sets(probe_sets, task_name, "dual_probe", config.blast_db)
+    
+    # 将探针组合转换为JSON格式用于筛选
+    probe_sets_json = {
+        "probe_sets": [
+            {
+                "id": i + 1,
+                "left_probe": {
+                    "sequence": probe_set.left_probe[0],
+                    "position": {
+                        "start": probe_set.left_probe[1],
+                        "end": probe_set.left_probe[2]
+                    },
+                    "tm": probe_set.left_probe[3],
+                    "gc_content": probe_set.left_probe[4]
+                },
+                "right_probe": {
+                    "sequence": probe_set.right_probe[0],
+                    "position": {
+                        "start": probe_set.right_probe[1],
+                        "end": probe_set.right_probe[2]
+                    },
+                    "tm": probe_set.right_probe[3],
+                    "gc_content": probe_set.right_probe[4]
+                },
+                "evaluation": {
+                    "quality_score": i,  # 这里使用索引作为临时得分
+                    "gap": probe_set.right_probe[1] - probe_set.left_probe[2],
+                    "total_span": probe_set.right_probe[2] - probe_set.left_probe[1],
+                    "average_tm": (probe_set.left_probe[3] + probe_set.right_probe[3]) / 2,
+                    "average_gc_content": (probe_set.left_probe[4] + probe_set.right_probe[4]) / 2
+                }
+            }
+            for i, probe_set in enumerate(probe_sets)
+        ]
+    }
+    
+    # 应用筛选并保存筛选结果
+    output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered")
+    
+    # 获取筛选后的探针组合
+    filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered_filtered.json")
+    with open(filtered_json_path, 'r') as f:
+        filtered_data = json.load(f)
+    
+    # 只使用被保留的探针组合
+    filtered_probe_sets = [
+        probe_set for probe_set in probe_sets_json["probe_sets"]
+        if any(fs.get('keep', False) and fs['id'] == probe_set['id'] 
+              for fs in filtered_data['probe_sets'])
+    ]
 
     # 获取杂交探针(HCR probe)
     # 随机碱基选择
@@ -132,13 +185,13 @@ def generate_dual_probe(sequence: str,
     bridge_end_complement = ''.join(complement[base] for base in bridge_probe[17:19])
     
     dual_probes = []
-    for probe_set in probe_sets:
-        # 使用probe_sets中的序列信息
-        L = probe_set.left_probe[0]  # 获取左引物序列
-        R = probe_set.right_probe[0]  # 获取右引物序列
+    for probe_set in filtered_probe_sets:
+        # 使用筛选后的探针序列
+        L = probe_set['left_probe']['sequence']
+        R = probe_set['right_probe']['sequence']
         
         # 构建三个探针
-        L_probe = L + ANCHOR_SEQ  + "CGGTATCAAG"
+        L_probe = L + ANCHOR_SEQ + "CGGTATCAAG"
         R_probe = 'CTGTTTAAGA' + random_base + bridge_probe[0:17] + bridge_end_complement + R
         
         dual_probes.append((L_probe, R_probe))
@@ -158,11 +211,14 @@ def generate_dual_probe(sequence: str,
         f.write(f"- Minimum K-mer Count: {config.min_kmer_count}\n")
         if config.blast_db:
             f.write(f"- Reference Genome: {os.path.basename(config.blast_db)}\n")
+        f.write(f"\nFiltered Results:\n")
+        f.write(f"- Total probe sets: {len(probe_sets_json['probe_sets'])}\n")
+        f.write(f"- Selected probe sets: {len(filtered_probe_sets)}\n")
 
     # save dual probes to csv
     output_file = os.path.join(config.output_dir, "dual_probe.csv")
-
     save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=',')
+    
     return probe_sets
 
 
