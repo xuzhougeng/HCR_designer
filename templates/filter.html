@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .page-title {
+        color: #2c3e50;
+        margin-bottom: 10px;
+        font-size: 2em;
+        font-weight: 600;
+    }
+
+    .page-description {
+        color: #7f8c8d;
+        margin-bottom: 30px;
+        font-size: 1.3em;
+        line-height: 1.6;
+        text-align: center;
+    }
+
+    .upload-card {
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        padding: 25px;
+        margin-bottom: 30px;
+    }
+
+    .file-input-container {
+        margin-bottom: 20px;
+    }
+
+    .file-input-label {
+        display: block;
+        margin-bottom: 10px;
+        color: #34495e;
+        font-weight: 500;
+    }
+
+    .file-input {
+        width: 100%;
+        padding: 10px;
+        border: 2px dashed #bdc3c7;
+        border-radius: 5px;
+        background: #f9f9f9;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .file-input:hover {
+        border-color: #3498db;
+        background: #f0f9ff;
+    }
+
+    .file-input-hint {
+        margin-top: 8px;
+        color: #95a5a6;
+        font-size: 0.9em;
+    }
+
+    .submit-btn {
+        background: #3498db;
+        color: white;
+        padding: 12px 25px;
+        border: none;
+        border-radius: 5px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .submit-btn:hover {
+        background: #2980b9;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .results-card {
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        padding: 25px;
+        margin-top: 30px;
+    }
+
+    .results-title {
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-size: 1.5em;
+        font-weight: 600;
+    }
+
+    .results-subtitle {
+        color: #34495e;
+        margin-bottom: 25px;
+        font-size: 1.2em;
+    }
+
+    .results-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-top: 20px;
+    }
+
+    .results-table th {
+        background: #f8f9fa;
+        color: #2c3e50;
+        font-weight: 600;
+        padding: 15px;
+        text-align: left;
+        border-bottom: 2px solid #dfe6e9;
+    }
+
+    .results-table td {
+        padding: 15px;
+        border-bottom: 1px solid #dfe6e9;
+        color: #34495e;
+    }
+
+    .results-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    .badge {
+        padding: 6px 12px;
+        border-radius: 15px;
+        font-weight: 500;
+        font-size: 0.9em;
+    }
+
+    .badge-success {
+        background-color: #27ae60;
+    }
+
+    .badge-danger {
+        background-color: #e74c3c;
+    }
+
+    .detail-btn {
+        background: #00a8ff;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.9em;
+    }
+
+    .detail-btn:hover {
+        background: #0097e6;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.6);
+        backdrop-filter: blur(5px);
+    }
+
+    .modal-content {
+        background-color: #fff;
+        margin: 3% auto;
+        padding: 30px;
+        border-radius: 15px;
+        width: 90%;
+        max-width: 1200px;
+        box-shadow: 0 5px 30px rgba(0,0,0,0.3);
+        animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+        from {
+            transform: translateY(-100px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .close {
+        color: #7f8c8d;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .close:hover {
+        color: #2c3e50;
+        transform: rotate(90deg);
+    }
+
+    .probe-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 25px;
+        margin: 30px 0;
+    }
+
+    .probe-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+
+    .probe-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .probe-card h5 {
+        color: #2c3e50;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+        font-weight: 600;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 8px;
+    }
+
+    .probe-card p {
+        color: #34495e;
+        margin: 8px 0;
+        font-size: 0.95em;
+    }
+
+    .evaluation-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .evaluation-card h5 {
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-size: 1.2em;
+        font-weight: 600;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 8px;
+    }
+
+    .evaluation-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        color: #34495e;
+        font-size: 0.95em;
+    }
+
+    .error-alert {
+        background-color: #fff3f3;
+        border-left: 4px solid #e74c3c;
+        color: #c0392b;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+    }
+
+    /* 添加加载动画相关样式 */
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        backdrop-filter: blur(5px);
+    }
+
+    .loading-spinner {
+        width: 80px;
+        height: 80px;
+        border: 8px solid #f3f3f3;
+        border-top: 8px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+
+    .loading-text {
+        color: #2c3e50;
+        font-size: 1.2em;
+        text-align: center;
+        max-width: 80%;
+        line-height: 1.6;
+    }
+
+    .ai-icon {
+        font-size: 2em;
+        margin-bottom: 15px;
+        color: #3498db;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* 添加表单相关样式 */
+    .form-container {
+        text-align: center;
+    }
+
+    .submit-btn-container {
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    .reasoning-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .reasoning-content {
+        color: #2c3e50;
+        font-size: 1em;
+        line-height: 1.8;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+        background: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        margin-top: 15px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .reasoning-content::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .reasoning-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .reasoning-content::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+    .reasoning-content::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
+
+<div class="container">
+    <h1 class="page-title">AI智能探针筛选</h1>
+    <p class="page-description">基于DeepSeek R1推理模型对探针进行筛选</p>
+
+    {% if error %}
+    <div class="error-alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="upload-card">
+        <form method="POST" enctype="multipart/form-data" id="filterForm" onsubmit="showLoading()">
+            <div class="file-input-container">
+                <label class="file-input-label" for="probe_file">上传探针JSON文件</label>
+                <input type="file" id="probe_file" name="probe_file" accept=".json" class="file-input">
+                <div class="file-input-hint">请上传包含探针信息的JSON文件</div>
+            </div>
+            <div class="submit-btn-container">
+                <button type="submit" class="submit-btn">开始筛选</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 加载动画 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="ai-icon">🤖</div>
+        <div class="loading-spinner"></div>
+        <div class="loading-text">
+            AI模型正在分析探针数据...<br>
+            请稍候，这可能需要几秒钟时间
+        </div>
+    </div>
+
+    {% if results %}
+    <div class="results-card">
+        {% if reasoning_content %}
+        <div class="reasoning-card">
+            <h3 class="results-subtitle">AI分析过程</h3>
+            <div class="reasoning-content">
+                {{ reasoning_content }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <h2 class="results-title">筛选结果</h2>
+        <h3 class="results-subtitle">{{ results.report_title }}</h3>
+        
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>探针组ID</th>
+                    <th>是否保留</th>
+                    <th>原因</th>
+                    <th>详细信息</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for probe_set in results.probe_sets %}
+                <tr>
+                    <td>{{ probe_set.id }}</td>
+                    <td>
+                        {% if probe_set.keep %}
+                        <span class="badge badge-success">是</span>
+                        {% else %}
+                        <span class="badge badge-danger">否</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ probe_set.reason }}</td>
+                    <td>
+                        <button class="detail-btn" onclick="showModal('modal{{ probe_set.id }}')">
+                            查看详情
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 弹出框 -->
+    {% for probe_set in results.probe_sets %}
+    <div id="modal{{ probe_set.id }}" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('modal{{ probe_set.id }}')">&times;</span>
+            <h3 class="results-title">探针组 #{{ probe_set.id }} 详细信息</h3>
+            
+            <div class="probe-grid">
+                <div class="probe-card">
+                    <h5>左探针</h5>
+                    <p>序列: {{ probe_set.left_probe.sequence }}</p>
+                    <p>长度: {{ probe_set.left_probe.length }}</p>
+                    <p>GC含量: {{ probe_set.left_probe.gc_content }}%</p>
+                    <p>Tm值: {{ probe_set.left_probe.tm }}°C</p>
+                </div>
+                <div class="probe-card">
+                    <h5>中探针</h5>
+                    <p>序列: {{ probe_set.middle_probe.sequence }}</p>
+                    <p>长度: {{ probe_set.middle_probe.length }}</p>
+                    <p>GC含量: {{ probe_set.middle_probe.gc_content }}%</p>
+                    <p>Tm值: {{ probe_set.middle_probe.tm }}°C</p>
+                </div>
+                <div class="probe-card">
+                    <h5>右探针</h5>
+                    <p>序列: {{ probe_set.right_probe.sequence }}</p>
+                    <p>长度: {{ probe_set.right_probe.length }}</p>
+                    <p>GC含量: {{ probe_set.right_probe.gc_content }}%</p>
+                    <p>Tm值: {{ probe_set.right_probe.tm }}°C</p>
+                </div>
+            </div>
+
+            <div class="evaluation-card">
+                <h5>评估结果</h5>
+                <div class="evaluation-grid">
+                    <div>总跨度: {{ probe_set.evaluation.total_span }}</div>
+                    <div>平均Tm值: {{ probe_set.evaluation.average_tm }}°C</div>
+                    <div>平均GC含量: {{ probe_set.evaluation.average_gc_content }}%</div>
+                    <div>质量得分: {{ probe_set.evaluation.quality_score }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+function showModal(modalId) {
+    document.getElementById(modalId).style.display = "block";
+    document.body.style.overflow = 'hidden'; // 防止背景滚动
+}
+
+function hideModal(modalId) {
+    document.getElementById(modalId).style.display = "none";
+    document.body.style.overflow = 'auto'; // 恢复背景滚动
+}
+
+// 点击模态框外部时关闭
+window.onclick = function(event) {
+    if (event.target.className === 'modal') {
+        event.target.style.display = "none";
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// 添加加载动画相关代码
+function showLoading() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+// 添加文件验证
+document.getElementById('filterForm').onsubmit = function(e) {
+    const fileInput = document.getElementById('probe_file');
+    if (!fileInput.files.length) {
+        e.preventDefault();
+        alert('请选择要上传的文件');
+        return false;
+    }
+    
+    const fileName = fileInput.files[0].name;
+    if (!fileName.endsWith('.json')) {
+        e.preventDefault();
+        alert('请上传JSON格式的文件');
+        return false;
+    }
+    
+    showLoading();
+    return true;
+}
+</script>
+{% endblock %} 

@@ -4,6 +4,7 @@ from pathlib import Path
 import csv
 import logging
 from ..common.blast_utils import analyze_blast_results
+import json
 
 from .designer import ProbeSet
 
@@ -225,7 +226,7 @@ class ProbeOutputHandler:
             writer.writerow(headers)
             
             for i, probe_set in enumerate(probe_sets, 1):
-                # 写入每个探���的信息
+                # 写入每个探针的信息
                 for primer_type, primer_info in [
                     ('Left', probe_set.left_probe),
                     ('Right', probe_set.right_probe)
@@ -296,13 +297,21 @@ class ProbeOutputHandler:
             scored_probes: 包含(probe_set, score, blast_results_dict)的列表
             output_prefix: 输出文件前缀
         """
+        # 保存文本格式
         output_file = self.output_dir / f"{output_prefix}_detailed.txt"
+        
+        # 创建JSON数据结构
+        json_data = {
+            "report_title": "双探针设计结果报告",
+            "probe_sets": []
+        }
         
         with open(output_file, 'w') as f:
             f.write("双探针设计结果报告\n")
             f.write("=" * 80 + "\n\n")
             
             for i, (probe_set, score, blast_results_dict) in enumerate(scored_probes, 1):
+                # 文本格式输出
                 f.write(f"探针组合 {i}:\n")
                 f.write("-" * 80 + "\n")
                 
@@ -315,6 +324,90 @@ class ProbeOutputHandler:
                 # 写入探针组合的评估信息
                 self._write_probe_set_evaluation(f, probe_set, score)
                 f.write("\n" + "=" * 80 + "\n\n")
+                
+                # 收集JSON数据
+                probe_set_data = {
+                    "id": i,
+                    "left_probe": self._get_primer_json_data(probe_set.left_probe, blast_results_dict['left']),
+                    "right_probe": self._get_primer_json_data(probe_set.right_probe, blast_results_dict['right']),
+                    "evaluation": self._get_evaluation_json_data(probe_set, score)
+                }
+                json_data["probe_sets"].append(probe_set_data)
+        
+        # 保存JSON格式
+        json_output_file = self.output_dir / f"{output_prefix}_detailed.json"
+        with open(json_output_file, 'w') as f:
+            json.dump(json_data, f, indent=2, ensure_ascii=False)
+    
+    def _get_primer_json_data(self, primer_info: Tuple, blast_results: dict) -> dict:
+        """生成探针的JSON数据
+        
+        Args:
+            primer_info: 探针信息元组
+            blast_results: BLAST分析结果
+            
+        Returns:
+            dict: 探针的JSON格式数据
+        """
+        sequence, start, end, tm, gc = primer_info
+        data = {
+            "sequence": sequence,
+            "position": {
+                "start": start + 1,  # 转换为1-based坐标
+                "end": end
+            },
+            "length": len(sequence),
+            "gc_content": f"{gc:.1f}",
+            "tm": f"{tm:.1f}"
+        }
+        
+        if blast_results:
+            data["blast_results"] = {
+                "mismatch_stats": blast_results['mismatch_stats'],
+                "detailed_matches": [
+                    {
+                        "subject_id": subject_id,
+                        "mismatches": mismatches,
+                        "gaps": gaps,
+                        "total_mismatches": mismatches + gaps
+                    }
+                    for subject_id, mismatches, gaps in blast_results['detailed_matches']
+                ]
+            }
+        
+        return data
+    
+    def _get_evaluation_json_data(self, probe_set: ProbeSet, probe_set_score: float = None) -> dict:
+        """生成评估信息的JSON数据
+        
+        Args:
+            probe_set: 探针组合
+            probe_set_score: 探针组合的质量得分（可选）
+            
+        Returns:
+            dict: 评估信息的JSON格式数据
+        """
+        # 计算间隔
+        gap = probe_set.right_probe[1] - probe_set.left_probe[2]
+        
+        # 计算总长度
+        total_length = probe_set.right_probe[2] - probe_set.left_probe[1]
+        
+        # 计算平均Tm和GC
+        avg_tm = (probe_set.left_probe[3] + probe_set.right_probe[3]) / 2
+        avg_gc = (probe_set.left_probe[4] + probe_set.right_probe[4]) / 2
+        
+        data = {
+            "gap": gap,
+            "total_span": total_length,
+            "average_tm": f"{avg_tm:.1f}",
+            "average_gc_content": f"{avg_gc:.1f}"
+        }
+        
+        if probe_set_score is not None:
+            data["quality_score"] = f"{probe_set_score:.1f}"
+        
+        return data
 
     def _write_primer_details_with_cache(self, file, primer_type: str, 
                                        primer_info: Tuple,

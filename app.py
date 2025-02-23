@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from zipfile import ZipFile
 import csv
 import re
+import json
 
 from flask import Flask, request, render_template, send_file, jsonify
 
@@ -63,6 +64,124 @@ def get_available_genomes():
                     'display_name': file.replace('.fasta', '').replace('.fna', '').replace('.fa', '')
                 })
     return genomes
+
+
+def filter_probe_by_llm(probe_data):
+    """
+    目前还有问题，需要修改Prompt
+    """
+    # 构造系统提示词
+    import requests
+
+    DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL")
+    API_KEY = os.getenv("DEEPSEEK_API_KEY")
+    model = os.getenv("DEEPSEEK_MODEL")
+
+    try:
+        # 验证输入数据格式
+        if not isinstance(probe_data, dict) or 'probe_sets' not in probe_data:
+            raise ValueError("输入数据格式错误：需要包含 probe_sets 字段的字典")
+
+        probe_sets = probe_data['probe_sets']
+        if not isinstance(probe_sets, list):
+            raise ValueError("probe_sets 必须是列表格式")
+
+        # 构建用户提示
+        probe_sets_json = json.dumps(probe_sets, indent=2, ensure_ascii=False)
+        
+        user_prompt = f"""你是一个生物信息学专家，请严格按以下规则，对探针组合进行筛选(一个探针组合包含2到3个probe序列)：
+        1. 探针的特异性排序，优先考虑每个探针对中，每个探针错配≤2的组合
+        2. 各个探针组合的间距≥15bp
+        3. 覆盖度最大化
+        最终输出包含每个组合的筛选结果，必须要有两个字典keep和reason（keep字段为True或False，reason字段用中文说明）。如下是JSON格式的输入:\n\n{probe_sets_json}"""
+
+        # API调用
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": user_prompt}
+            ],
+            "stream": False
+        }
+        
+        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        # 解析响应
+        response_json = response.json()
+        if not isinstance(response_json, dict):
+            raise ValueError("API返回的响应不是字典格式")
+            
+        content = response_json.get('choices', [{}])[0].get('message', {}).get('content', '')
+        reasoning_content = response_json.get('choices', [{}])[0].get('message', {}).get('reasoning_content', '')
+        if not content:
+            raise ValueError("API响应中缺少必要的内容")
+            
+        # 从响应内容中提取JSON部分
+        json_start = content.find('[')
+        json_end = content.rfind(']') + 1
+        if json_start == -1 or json_end == 0:
+            raise ValueError("无法从响应内容中提取有效的JSON数据")
+            
+        json_str = content[json_start:json_end]
+        
+        # 解析JSON
+        result = json.loads(json_str)
+        if not isinstance(result, list):
+            raise ValueError("解析后的JSON不是列表格式")
+        
+        # 更新原始数据中的探针结果
+        for probe in probe_sets:
+            if not isinstance(probe, dict):
+                continue
+                
+            probe_id = str(probe.get("id", ""))
+            # 在result中查找匹配的探针
+            filtered = next(
+                (item for item in result if str(item.get("id", "")) == probe_id),
+                None
+            )
+            
+            if filtered:
+                probe["keep"] = filtered.get("keep", False)
+                probe["reason"] = filtered.get("reason", "未知原因")
+            else:
+                probe["keep"] = False
+                probe["reason"] = "未找到对应的筛选结果"
+
+        return probe_data, reasoning_content
+
+    except requests.RequestException as e:
+        print(f"API请求失败: {str(e)}")
+        # 处理API请求错误
+        for probe in probe_data.get('probe_sets', []):
+            if isinstance(probe, dict):
+                probe["keep"] = False
+                probe["reason"] = f"API请求失败: {str(e)}"
+        return probe_data, "API请求失败，无法获取分析过程。"
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON解析错误: {str(e)}")
+        # 处理JSON解析错误
+        for probe in probe_data.get('probe_sets', []):
+            if isinstance(probe, dict):
+                probe["keep"] = False
+                probe["reason"] = f"JSON解析错误: {str(e)}"
+        return probe_data, "JSON解析错误，无法获取分析过程。"
+        
+    except Exception as e:
+        print(f"处理过程出错: {str(e)}")
+        # 处理其他错误
+        for probe in probe_data.get('probe_sets', []):
+            if isinstance(probe, dict):
+                probe["keep"] = False
+                probe["reason"] = f"处理过程出错: {str(e)}"
+        return probe_data, "处理过程出错，无法获取分析过程。"
 
 @app.route('/', methods=['GET'])
 def index():
@@ -874,6 +993,36 @@ def bridge_validate():
             return render_template('bridge_validate.html', error=str(e), **params)
             
     return render_template('bridge_validate.html', **default_params)
+
+@app.route('/filter', methods=['GET', 'POST'])
+def filter_probes():
+    if request.method == 'POST':
+        # 检查是否有文件上传
+        if 'probe_file' not in request.files:
+            return render_template('filter.html', error="请上传文件")
+            
+        file = request.files['probe_file']
+        if file.filename == '':
+            return render_template('filter.html', error="未选择文件")
+            
+        if not file.filename.endswith('.json'):
+            return render_template('filter.html', error="请上传JSON文件")
+            
+        try:
+            # 读取JSON文件
+            content = file.read().decode('utf-8')
+            probe_data = json.loads(content)
+            
+            # 调用过滤函数
+            filtered_data, reasoning_content = filter_probe_by_llm(probe_data)
+            
+            # 返回结果
+            return render_template('filter.html', results=filtered_data, reasoning_content=reasoning_content)
+            
+        except Exception as e:
+            return render_template('filter.html', error=str(e))
+    
+    return render_template('filter.html')
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port="6789", debug=True)
