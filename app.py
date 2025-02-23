@@ -374,7 +374,9 @@ def split_batch():
                 if ref_genome_path:
                     print(ref_genome_path)
                     ref_sequences = load_fasta(ref_genome_path)
-                
+                    # upper all keys
+                    ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
+                                
                 for row in csv_reader:
                     if len(row) >= 3:
                         task_name, bp_id, gene_id = row[:3]
@@ -651,6 +653,8 @@ def triplet_batch():
                 if ref_genome_path:
                     print(ref_genome_path)
                     ref_sequences = load_fasta(ref_genome_path)
+                    # upper all keys
+                    ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
                 
                 for row in csv_reader:
                     if len(row) >= 3:
