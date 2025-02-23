@@ -3,12 +3,12 @@ import uuid
 from Bio import SeqIO
 
 def load_fasta(file_path):
-
-    sequences = {}
-    with gzip.open(file_path, 'rt') as fasta_file:
-        for record in SeqIO.parse(fasta_file, 'fasta'):
-            sequences[record.id] = str(record.seq)
-        
+    opener = gzip.open if file_path.endswith('.gz') else open
+    mode = 'rt' if file_path.endswith('.gz') else 'r'
+    
+    with opener(file_path, mode) as fasta_file:
+        sequences = {record.id: str(record.seq) for record in SeqIO.parse(fasta_file, 'fasta')}
+    
     return sequences
 
 def load_alias(file_path):

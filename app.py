@@ -19,6 +19,9 @@ from scripts.bp_suggestion import BridgeProbeSystem
 from scripts.bp_suggestion import analyze_input_conflicts
 from src.common.sequence_utils import calculate_tm, calculate_gc_content, is_valid_probe, check_poly_n
 
+
+
+
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'fasta', 'fa', 'gz'}
@@ -315,6 +318,7 @@ def split_batch():
 
         # 处理参考基因组/BLAST数据库
         blast_db = None
+        ref_genome_path = None
         if 'ref_genome' in request.files:
             file = request.files['ref_genome']
             if file and allowed_file(file.filename):
@@ -331,10 +335,12 @@ def split_batch():
                     file_path = decompressed_path
                 
                 blast_db = file_path
+                ref_genome_path = file_path
 
         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
             existing_genome = request.form['existing_ref_genome']
             blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            ref_genome_path = blast_db
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -363,6 +369,12 @@ def split_batch():
                 csv_content = batch_file.read().decode('utf-8')
                 csv_reader = csv.reader(StringIO(csv_content))
                 
+                # 如果有参考基因组，先从中提取所有序列
+                ref_sequences = {}
+                if ref_genome_path:
+                    print(ref_genome_path)
+                    ref_sequences = load_fasta(ref_genome_path)
+                
                 for row in csv_reader:
                     if len(row) >= 3:
                         task_name, bp_id, gene_id = row[:3]
@@ -373,15 +385,30 @@ def split_batch():
                         if probe_seq is None:
                             continue
                             
-                        # 获取序列
+                        # 获取序列，按优先级尝试不同来源
+                        sequence = None
+                        
+                        # 1. 首先检查基因别名
                         if gene_id in gene_alias:
                             gene_id = gene_alias[gene_id]
-                            
-                        sequence = None
+                        
+                        # 2. 从CDS字典获取
                         if gene_id in cds_dict:
                             sequence = cds_dict[gene_id]
+                        # 3. 从cDNA字典获取
                         elif gene_id in cdna_dict:
                             sequence = cdna_dict[gene_id]
+                        # 4. 从参考基因组获取
+                        elif gene_id in ref_sequences:
+                            sequence = ref_sequences[gene_id]
+                        # 5. 尝试从参考基因组中模糊匹配
+                        elif ref_sequences:
+                            # 尝试查找包含gene_id的序列ID
+                            for ref_id, ref_seq in ref_sequences.items():
+                                if gene_id in ref_id:
+                                    sequence = ref_seq
+                                    gene_id = ref_id  # 更新为完整的ID
+                                    break
                             
                         if sequence:
                             # 为每个任务创建单独的输出目录
@@ -413,6 +440,8 @@ def split_batch():
                                 bridge_probe=probe_seq,
                                 output_dir=task_dir
                             )
+                        else:
+                            print(f"无法找到基因 {gene_id} 的序列")
                 
                 # 创建ZIP文件
                 zip_filename = f"split_batch_results_{unique_id}.zip"
@@ -566,6 +595,7 @@ def triplet_batch():
 
         # 处理参考基因组/BLAST数据库
         blast_db = None
+        ref_genome_path = None
         if 'ref_genome' in request.files:
             file = request.files['ref_genome']
             if file and allowed_file(file.filename):
@@ -582,10 +612,12 @@ def triplet_batch():
                     file_path = decompressed_path
                 
                 blast_db = file_path
+                ref_genome_path = file_path
 
         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
             existing_genome = request.form['existing_ref_genome']
             blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            ref_genome_path = blast_db
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -614,6 +646,12 @@ def triplet_batch():
                 csv_content = batch_file.read().decode('utf-8')
                 csv_reader = csv.reader(StringIO(csv_content))
                 
+                # 如果有参考基因组，先从中提取所有序列
+                ref_sequences = {}
+                if ref_genome_path:
+                    print(ref_genome_path)
+                    ref_sequences = load_fasta(ref_genome_path)
+                
                 for row in csv_reader:
                     if len(row) >= 3:
                         task_name, bp_id, gene_id = row[:3]
@@ -624,15 +662,30 @@ def triplet_batch():
                         if probe_seq is None:
                             continue
                             
-                        # 获取序列
+                        # 获取序列，按优先级尝试不同来源
+                        sequence = None
+                        
+                        # 1. 首先检查基因别名
                         if gene_id in gene_alias:
                             gene_id = gene_alias[gene_id]
-                            
-                        sequence = None
+                        
+                        # 2. 从CDS字典获取
                         if gene_id in cds_dict:
                             sequence = cds_dict[gene_id]
+                        # 3. 从cDNA字典获取
                         elif gene_id in cdna_dict:
                             sequence = cdna_dict[gene_id]
+                        # 4. 从参考基因组获取
+                        elif gene_id in ref_sequences:
+                            sequence = ref_sequences[gene_id]
+                        # 5. 尝试从参考基因组中模糊匹配
+                        elif ref_sequences:
+                            # 尝试查找包含gene_id的序列ID
+                            for ref_id, ref_seq in ref_sequences.items():
+                                if gene_id in ref_id:
+                                    sequence = ref_seq
+                                    gene_id = ref_id  # 更新为完整的ID
+                                    break
                             
                         if sequence:
                             # 为每个任务创建单独的输出目录
@@ -664,6 +717,8 @@ def triplet_batch():
                                 bridge_probe=probe_seq,
                                 output_dir=task_dir
                             )
+                        else:
+                            print(f"无法找到基因 {gene_id} 的序列")
                 
                 # 创建ZIP文件
                 zip_filename = f"triplet_batch_results_{unique_id}.zip"
