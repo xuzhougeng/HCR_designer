@@ -29,6 +29,9 @@ class TripleProbeConfig:
     min_complementary_length: int = 5
     poly_n: int = 4
     
+    # 筛选参数
+    max_selected: int = 5  # 要选择的探针组合数量
+    
     # 输出设置
     output_dir: Path = field(default=Path("output"))
     
@@ -66,6 +69,7 @@ class TripleProbeConfig:
             "poly_n": self.poly_n,
             "kmer_size": self.kmer_size,
             "min_kmer_count": self.min_kmer_count,
+            "max_selected": self.max_selected,
             "output_dir": str(self.output_dir)
         }
 

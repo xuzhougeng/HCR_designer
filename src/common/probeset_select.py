@@ -1,5 +1,6 @@
 import json
 import copy
+import argparse
 
 def get_probe_intervals(probe_set):
     """
@@ -48,9 +49,12 @@ def find_closest_selected_set(probe_set, selected_sets, probe_intervals_dict):
             return selected_id
     return None
 
-def select_probe_sets(data):
+def select_probe_sets(data, max_selected=5):
     """
     主处理函数：筛选探针组合并添加 keep 和 reason 字段
+    Args:
+        data: 输入的探针数据
+        max_selected: 要选择的探针组合数量，默认为5
     """
     probe_sets = data['probe_sets']
     
@@ -65,7 +69,6 @@ def select_probe_sets(data):
     # 初始化已选择的探针组合和所有已选择的探针区间
     selected_sets = []
     selected_probe_intervals = []
-    max_selected = 5
     
     # 选择满足条件的探针组合
     for probe_set in sorted_probe_sets:
@@ -99,25 +102,21 @@ def select_probe_sets(data):
     
     return data
 
-# 示例使用
-# 假设 data 是提供的 JSON 数据
-# 这里为了演示，定义了一个函数，实际使用时需要加载 JSON 文件或直接赋值
 def main():
-    # 加载数据（此处需要替换为实际的数据加载方式）
-    # 例如：with open('probe_data.json', 'r') as f:
-    #           data = json.load(f)
-    import sys
-    if len(sys.argv) != 2:
-        print("Usage: python probeset_select.py <probe_data.json>")
-        sys.exit(1)
-    with open(sys.argv[1], 'r') as f:
-        data = json.load(f)
-    # 处理数据
-    updated_data = select_probe_sets(data)
+    parser = argparse.ArgumentParser(description='选择探针组合')
+    parser.add_argument('input_file', help='输入的JSON文件路径')
+    parser.add_argument('-n', '--num_probes', type=int, default=5, help='要选择的探针组合数量（默认：5）')
     
-    # 输出结果（可以保存到文件或打印）
-    # 例如：with open('updated_probe_data.json', 'w') as f:
-    #           json.dump(updated_data, f, indent=2)
+    args = parser.parse_args()
+    
+    # 加载数据
+    with open(args.input_file, 'r') as f:
+        data = json.load(f)
+    
+    # 处理数据
+    updated_data = select_probe_sets(data, args.num_probes)
+    
+    # 输出结果
     print(json.dumps(updated_data, indent=2))
 
 if __name__ == "__main__":

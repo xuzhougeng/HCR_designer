@@ -27,6 +27,9 @@ class DualProbeConfig:
     min_complementary_length: int = 5  # 最小互补长度
     poly_n: int = 5  # 最大连续碱基数
 
+    # 筛选参数
+    max_selected: int = 5  # 要选择的探针组合数量
+
     blast_db: str = None
 
     # 输出设置
@@ -62,6 +65,7 @@ class DualProbeConfig:
             "poly_n": self.poly_n,
             "kmer_size": self.kmer_size,
             "min_kmer_count": self.min_kmer_count,
+            "max_selected": self.max_selected,
             "output_dir": str(self.output_dir)
         }
 
