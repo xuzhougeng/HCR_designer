@@ -233,6 +233,7 @@ def split():
         kmer_size = int(request.form.get('kmer_size', 8))
         min_kmer_count = int(request.form.get('min_kmer_count', 2))
         min_complementary_length = int(request.form.get('min_complementary_length', 5))
+        max_selected = int(request.form.get('max_selected', 5))
 
         # 单个处理逻辑
         seq = request.form['seq']
@@ -277,7 +278,8 @@ def split():
             ref_genome=blast_db,
             bridge_probe_id=BP_ID,
             bridge_probe=probe_seq,
-            output_dir=output_dir
+            output_dir=output_dir,
+            max_selected=max_selected
         )
 
         zip_filename = f"split_results_{unique_id}.zip"
@@ -354,6 +356,7 @@ def split_batch():
         kmer_size = int(request.form.get('kmer_size', 8))
         min_kmer_count = int(request.form.get('min_kmer_count', 2))
         min_complementary_length = int(request.form.get('min_complementary_length', 5))
+        default_max_selected = int(request.form.get('max_selected', 5))  # 获取默认的max_selected值
 
         # 批量处理
         if 'batch_file' in request.files:
@@ -378,9 +381,19 @@ def split_batch():
                     ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
                                 
                 for row in csv_reader:
-                    if len(row) >= 3:
+                    if len(row) >= 3:  # 至少需要3列
                         task_name, bp_id, gene_id = row[:3]
                         gene_id = gene_id.upper()
+                        
+                        # 获取max_selected值,如果有第4列就使用第4列的值,否则使用默认值
+                        max_selected = default_max_selected
+                        if len(row) >= 4:
+                            try:
+                                max_selected = int(row[3])
+                                # 确保max_selected在合理范围内
+                                max_selected = max(1, min(10, max_selected))
+                            except (ValueError, TypeError):
+                                max_selected = default_max_selected
                         
                         # 获取probe sequence
                         probe_seq = bridge_seq_dict.get(bp_id, None)
@@ -440,7 +453,8 @@ def split_batch():
                                 ref_genome=blast_db,
                                 bridge_probe_id=bp_id,
                                 bridge_probe=probe_seq,
-                                output_dir=task_dir
+                                output_dir=task_dir,
+                                max_selected=max_selected  # 使用每行指定的max_selected值
                             )
                         else:
                             print(f"无法找到基因 {gene_id} 的序列")
@@ -512,6 +526,7 @@ def triplet():
         kmer_size = int(request.form.get('kmer_size', 8))
         min_kmer_count = int(request.form.get('min_kmer_count', 2))
         min_complementary_length = int(request.form.get('min_complementary_length', 5))
+        max_selected = int(request.form.get('max_selected', 5))
 
         # 原有的单个处理逻辑保持不变
         seq = request.form['seq']
@@ -556,7 +571,8 @@ def triplet():
             ref_genome=blast_db,
             bridge_probe_id=BP_ID,
             bridge_probe=probe_seq,
-            output_dir=output_dir
+            output_dir=output_dir,
+            max_selected=max_selected
         )
         
 
@@ -633,6 +649,7 @@ def triplet_batch():
         kmer_size = int(request.form.get('kmer_size', 8))
         min_kmer_count = int(request.form.get('min_kmer_count', 2))
         min_complementary_length = int(request.form.get('min_complementary_length', 5))
+        default_max_selected = int(request.form.get('max_selected', 5))  # 获取默认的max_selected值
 
         # 批量处理
         if 'batch_file' in request.files:
@@ -657,9 +674,19 @@ def triplet_batch():
                     ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
                 
                 for row in csv_reader:
-                    if len(row) >= 3:
+                    if len(row) >= 3:  # 至少需要3列
                         task_name, bp_id, gene_id = row[:3]
                         gene_id = gene_id.upper()
+                        
+                        # 获取max_selected值,如果有第4列就使用第4列的值,否则使用默认值
+                        max_selected = default_max_selected
+                        if len(row) >= 4:
+                            try:
+                                max_selected = int(row[3])
+                                # 确保max_selected在合理范围内
+                                max_selected = max(1, min(10, max_selected))
+                            except (ValueError, TypeError):
+                                max_selected = default_max_selected
                         
                         # 获取probe sequence
                         probe_seq = bridge_seq_dict.get(bp_id, None)
@@ -719,7 +746,8 @@ def triplet_batch():
                                 ref_genome=blast_db,
                                 bridge_probe_id=bp_id,
                                 bridge_probe=probe_seq,
-                                output_dir=task_dir
+                                output_dir=task_dir,
+                                max_selected=max_selected  # 使用每行指定的max_selected值
                             )
                         else:
                             print(f"无法找到基因 {gene_id} 的序列")
