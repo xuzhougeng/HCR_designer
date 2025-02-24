@@ -448,12 +448,12 @@ class ProbeOutputHandler:
         filtered_data = select_probe_sets(json_data, max_selected)
         
         # 保存筛选后的完整JSON数据
-        json_output_file = self.output_dir / f"{output_prefix}_filtered.json"
+        json_output_file = self.output_dir / f"{output_prefix}.json"
         with open(json_output_file, 'w', encoding='utf-8') as f:
             json.dump(filtered_data, f, indent=2, ensure_ascii=False)
         
         # 生成筛选报告
-        report_file = self.output_dir / f"{output_prefix}_filtered_report.txt"
+        report_file = self.output_dir / f"{output_prefix}_report.txt"
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write("探针组合筛选报告\n")
             f.write("=" * 80 + "\n\n")
@@ -520,7 +520,7 @@ class ProbeOutputHandler:
                     f.write("-" * 40 + "\n")
         
         # 保存筛选后的BED格式
-        bed_file = self.output_dir / f"{output_prefix}_filtered.bed"
+        bed_file = self.output_dir / f"{output_prefix}.bed"
         task_name = output_prefix.split('_filtered')[0]  # 获取原始task_name
         with open(bed_file, 'w') as f:
             for probe_set in filtered_data['probe_sets']:
@@ -539,7 +539,7 @@ class ProbeOutputHandler:
                            f"{probe_set['right_probe']['position']['end']}\tR-{set_id}\t0\t+\n")
         
         # 保存筛选后的CSV格式
-        csv_file = self.output_dir / f"{output_prefix}_filtered.csv"
+        csv_file = self.output_dir / f"{output_prefix}.csv"
         headers = ['Set_ID', 'Primer_Type', 'Sequence', 'Start', 'End', 
                   'Length', 'Tm', 'GC_Content']
         

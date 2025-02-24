@@ -55,14 +55,14 @@
     </div>
 
     <div class="tool-card">
-        <h2>探针数量推荐系统</h2>
-        <p>根据基因的表达量自动推荐每个基因所需的探针数量。</p>
+        <h2>Probe Number Recommendation System</h2>
+        <p>Automatically recommend the number of probes needed for each gene based on expression levels.</p>
         <ul>
-            <li>上传CDS序列文件（FASTA格式）</li>
-            <li>上传表达量文件（两列文本文件：基因ID和count值）</li>
-            <li>上传目标基因列表（单列文本文件）</li>
+            <li>Upload CDS sequence file (FASTA format)</li>
+            <li>Upload expression file (two-column text file: gene ID and count value)</li>
+            <li>Upload target gene list (single-column text file)</li>
         </ul>
-        <a href="{{ url_for('probe_recommend') }}" class="btn">开始设计</a>
+        <a href="{{ url_for('probe_recommend') }}" class="btn">Start Designing</a>
     </div>
 </div>
 

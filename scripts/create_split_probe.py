@@ -168,7 +168,7 @@ def generate_dual_probe(sequence: str,
     output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered", config.max_selected)
     
     # 获取筛选后的探针组合
-    filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered_filtered.json")
+    filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered.json")
     with open(filtered_json_path, 'r') as f:
         filtered_data = json.load(f)
     
@@ -220,6 +220,10 @@ def generate_dual_probe(sequence: str,
     # save dual probes to csv
     output_file = os.path.join(config.output_dir, "dual_probe.csv")
     save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=',')
+    
+    # save filtered dual probes to csv
+    filtered_output_file = os.path.join(config.output_dir, f"{task_name}_filtered_dual.csv")
+    save_dual_probes(dual_probes, filtered_output_file, task_name, BP_ID, delimiter=',')
     
     return probe_sets
 

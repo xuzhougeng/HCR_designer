@@ -71,6 +71,51 @@
         background-color: #e9f5ff;
         border-radius: 8px;
     }
+
+    .example-section {
+        margin-top: 40px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .example-file {
+        margin-bottom: 30px;
+    }
+
+    .example-file h4 {
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+
+    .example-file pre {
+        background-color: #fff;
+        padding: 15px;
+        border-radius: 4px;
+        overflow-x: auto;
+        border: 1px solid #ddd;
+    }
+
+    .probe-rules {
+        margin-top: 30px;
+    }
+
+    .rules-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    .rules-table th,
+    .rules-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .rules-table th {
+        background-color: #f2f2f2;
+    }
 </style>
 {% endblock %}
 
@@ -110,12 +155,96 @@
         <thead>
             <tr>
                 <th>基因ID</th>
+                <th>TPM值</th>
                 <th>推荐探针数量</th>
             </tr>
         </thead>
         <tbody id="resultTableBody">
         </tbody>
     </table>
+</div>
+
+<div class="example-section">
+    <h3>示例数据格式</h3>
+    
+    <div class="example-file">
+        <h4>1. CDS序列文件 (cds.fasta) 示例：</h4>
+        <pre><code>>AT1G01010
+ATGGAGGATCAAGTTGGGTTTGGGTTCCGTCCGAACGACGAGGAGCTCGTTGGTCACTATCTCCGTAACAAAATCGAAGGAAACCTCTATCGTCGCTTTGAGTCGACTCGCCGCCGCTTCTGCTCTCTCTCTCGCTCTCGCTCTCTCCCGATCTCTCCTCTCCACTCTCCGCTCTCTCTCTTCTCTCTCTCTCAAGCTCTC
+>AT1G01020
+ATGGCTTCTACTGGAACTTCTCTTTTACCAATCTTGTTCTTCCATCTCTTCCTCCATTTTCTATCTCCTTCTCCTTCTTCTTGCAGCGACTTTCTTGTCTGCTTTCTTCAATCTTTTGTTGTTGGAGATTCCAACGGCGATTACGATATGGTGGATCTAAACGCTTGCCCTGGTTTGATTCCAAGCTTCGCCGGTGATGTT</code></pre>
+    </div>
+
+    <div class="example-file">
+        <h4>2. 表达量文件 (counts.txt) 示例：</h4>
+        <pre><code>AT1G01010    1523
+AT1G01020    892
+AT1G01030    245
+AT1G01040    1892
+AT1G01050    67</code></pre>
+    </div>
+
+    <div class="example-file">
+        <h4>3. 基因列表文件 (gene_list.txt) 示例：</h4>
+        <pre><code>AT1G01010
+AT1G01020
+AT1G01040</code></pre>
+    </div>
+
+    <div class="example-file">
+        <h4>4. 结果示例：</h4>
+        <pre><code>[
+    {
+        "gene_id": "AT1G01010",
+        "tpm": 125.45,
+        "probe_number": 4
+    },
+    {
+        "gene_id": "AT1G01020",
+        "tpm": 73.52,
+        "probe_number": 4
+    },
+    {
+        "gene_id": "AT1G01040",
+        "tpm": 155.89,
+        "probe_number": 3
+    }
+]</code></pre>
+    </div>
+
+    <div class="probe-rules">
+        <h4>探针数量推荐规则：</h4>
+        <table class="rules-table">
+            <tr>
+                <th>TPM范围</th>
+                <th>推荐探针数量</th>
+            </tr>
+            <tr>
+                <td>0-1</td>
+                <td>10个</td>
+            </tr>
+            <tr>
+                <td>1-10</td>
+                <td>8个</td>
+            </tr>
+            <tr>
+                <td>10-30</td>
+                <td>5个</td>
+            </tr>
+            <tr>
+                <td>30-50</td>
+                <td>5个</td>
+            </tr>
+            <tr>
+                <td>50-150</td>
+                <td>4个</td>
+            </tr>
+            <tr>
+                <td>>150</td>
+                <td>3个</td>
+            </tr>
+        </table>
+    </div>
 </div>
 {% endblock %}
 
@@ -124,21 +253,22 @@
 document.getElementById('recommendForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    // 创建FormData对象
     const formData = new FormData(this);
     
-    // 发送请求到后端
-    fetch('/recommend_probes', {
+    fetch('/probe_recommend', {
         method: 'POST',
         body: formData
     })
     .then(response => response.json())
     .then(data => {
-        // 显示结果区域
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+        
         const resultSection = document.getElementById('resultSection');
         resultSection.style.display = 'block';
         
-        // 清空并填充结果表格
         const tableBody = document.getElementById('resultTableBody');
         tableBody.innerHTML = '';
         
@@ -146,6 +276,7 @@ document.getElementById('recommendForm').addEventListener('submit', function(e) 
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${item.gene_id}</td>
+                <td>${item.tpm}</td>
                 <td>${item.probe_number}</td>
             `;
             tableBody.appendChild(row);
