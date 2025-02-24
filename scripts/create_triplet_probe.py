@@ -14,7 +14,7 @@ complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 def create_config( min_length, max_length, 
                 gc_min, gc_max, tm_min, tm_max, 
                 min_gap, r_m_gap, min_complementary_length, poly_n, kmer_size, min_kmer_count,
-                output_dir, blast_db):
+                output_dir, blast_db, max_selected=5):
     """创建三探针配置对象
     
     Args:
@@ -30,6 +30,7 @@ def create_config( min_length, max_length,
         min_complementary_length: 最小互补长度
         poly_n: 多聚核苷酸长度
         output_dir: 输出文件夹
+        max_selected: 要选择的探针组合数量，默认为5
         
     Returns:
         TripleProbeConfig: 配置对象
@@ -48,7 +49,8 @@ def create_config( min_length, max_length,
                             kmer_size=kmer_size,
                             min_kmer_count=min_kmer_count,
                             output_dir=output_dir,
-                            blast_db=blast_db)
+                            blast_db=blast_db,
+                            max_selected=max_selected)
 
 def save_triplet_probes(triplet_probes, output_file, task_name, BP_ID, delimiter=','):
     """
@@ -175,7 +177,7 @@ def generate_triplet_probe(sequence: str,
     }
     
     # 应用筛选并保存筛选结果
-    output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered")
+    output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered", config.max_selected)
     
     # 获取筛选后的探针组合
     filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered_filtered.json")
@@ -244,7 +246,15 @@ def main( name, sequence, gene_id,
          min_complementary_length, 
          poly_n, 
          kmer_size, min_kmer_count,
-         ref_genome, bridge_probe, bridge_probe_id,output_dir ):
+         ref_genome, bridge_probe, bridge_probe_id,
+         output_dir,
+         max_selected: int = 5):
+    """主函数
+    
+    Args:
+        ...其他参数...
+        max_selected: 要选择的探针组合数量，默认为5
+    """
     blast_db = ref_genome
     config = create_config(
                            min_length=min_length, 
@@ -254,41 +264,53 @@ def main( name, sequence, gene_id,
                            tm_min=tm_min, 
                            tm_max=tm_max, 
                            min_gap=min_gap, 
-                           r_m_gap=2, # default is 2
+                           r_m_gap=0, # default is 2
                            min_complementary_length=min_complementary_length,
                            poly_n=poly_n,
                            kmer_size=kmer_size,
                            min_kmer_count=min_kmer_count,
                            output_dir=output_dir,
-                           blast_db=blast_db
+                           blast_db=blast_db,
+                           max_selected=max_selected
                            )
-    print(f"Running Triplet probe design for gene {name} with bridge probe {gene_id}")
-    generate_triplet_probe(sequence, name, bridge_probe_id, bridge_probe, config)
+    
+    # 设计探针
+    probe_sets = generate_triplet_probe(sequence, name, bridge_probe_id, bridge_probe, config)
+    
+    return probe_sets
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description='HCR引物设计工具')
-    # 必需参数
-    parser.add_argument('--name', required=True, help='任务名称，将用作探针ID的前缀')
+    parser = argparse.ArgumentParser(description='设计三探针')
+    parser.add_argument('--name', required=True, help='任务名称')
     parser.add_argument('--sequence', required=True, help='目标序列')
     parser.add_argument('--gene-id', required=True, help='基因ID')
-    parser.add_argument('--bridge-probe-id', required=True, help='桥接探针ID')
+    parser.add_argument('--min-length', type=int, default=20, help='最小探针长度')
+    parser.add_argument('--max-length', type=int, default=30, help='最大探针长度')
+    parser.add_argument('--gc-min', type=float, default=40, help='最小GC含量')
+    parser.add_argument('--gc-max', type=float, default=60, help='最大GC含量')
+    parser.add_argument('--tm-min', type=float, default=55, help='最小熔解温度')
+    parser.add_argument('--tm-max', type=float, default=65, help='最大熔解温度')
+    parser.add_argument('--min-gap', type=int, default=2, help='探针间最小间隔')
+    parser.add_argument('--min-complementary-length', type=int, default=15, help='最小互补长度')
+    parser.add_argument('--poly-n', type=int, default=4, help='多聚核苷酸长度')
+    parser.add_argument('--kmer-size', type=int, default=10, help='k-mer大小')
+    parser.add_argument('--min-kmer-count', type=int, default=1, help='最小k-mer计数')
+    parser.add_argument('--ref-genome', help='参考基因组路径')
     parser.add_argument('--bridge-probe', required=True, help='桥接探针序列')
-    # 可选参数
-    parser.add_argument('--min-length', type=int, default=15, help='最小引物长度 (default: 15)')
-    parser.add_argument('--max-length', type=int, default=20, help='最大引物长度 (default: 20)')
-    parser.add_argument('--min-gc', type=float, default=40.0, help='最小GC含量百分比 (default: 40.0)')
-    parser.add_argument('--max-gc', type=float, default=60.0, help='最大GC含量百分比 (default: 60.0)')
-    parser.add_argument('--min-tm', type=float, default=47.0, help='最小熔解温度 (default: 47.0)')
-    parser.add_argument('--max-tm', type=float, default=53.0, help='最大熔解温度 (default: 53.0)')
-    parser.add_argument('--min-gap', type=int, default=2, help='探针之间最小间距 (default: 2)')
-    parser.add_argument('--min-complementary-length', type=int, default=5, help='最小互补长度 (default: 5)')
-    parser.add_argument('--poly-n', type=int, default=4, help='多聚核苷酸长度 (default: 4)')
-    parser.add_argument('--kmer-size', type=int, default=8, help='k-mer大小 (default: 8)')
-    parser.add_argument('--min-kmer-count', type=int, default=2, help='最小k-mer计数 (default: 2)')
-    parser.add_argument('--ref-genome', help='参考基因组路径（用于BLAST分析）')
-    parser.add_argument('--output-dir', default='output', help='输出文件夹 (default: output)')
+    parser.add_argument('--bridge-probe-id', required=True, help='桥接探针ID')
+    parser.add_argument('--output-dir', required=True, help='输出目录')
+    parser.add_argument('--max-selected', type=int, default=5, help='要选择的探针组合数量（默认：5）')
+    
     args = parser.parse_args()
-    main(
-        **vars(args)
-    )
+    
+    main(args.name, args.sequence, args.gene_id,
+         args.min_length, args.max_length,
+         args.gc_min, args.gc_max,
+         args.tm_min, args.tm_max,
+         args.min_gap,
+         args.min_complementary_length,
+         args.poly_n,
+         args.kmer_size, args.min_kmer_count,
+         args.ref_genome, args.bridge_probe, args.bridge_probe_id,
+         args.output_dir,
+         args.max_selected)
