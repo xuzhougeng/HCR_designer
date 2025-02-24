@@ -1119,6 +1119,84 @@ def filter_probes():
     
     return render_template('filter.html')
 
+def calculate_tpm(cds_file, counts_file):
+    """计算基因表达量的TPM值
+    
+    Args:
+        cds_file: FASTA格式的CDS序列文件
+        counts_file: 两列的文本文件，第一列是基因ID，第二列是count值
+        
+    Returns:
+        dict: 基因ID到TPM值的映射字典
+    """
+    try:
+        # 1. 读取CDS序列，获取每个基因的长度
+        cds_dict = load_fasta(cds_file)
+        gene_lengths = {gene_id: len(sequence) for gene_id, sequence in cds_dict.items()}
+        
+        # 2. 读取counts文件
+        counts_dict = {}
+        counts_content = counts_file.read().decode('utf-8')
+        for line in counts_content.splitlines():
+            if line.strip():  # 跳过空行
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    gene_id = parts[0]
+                    try:
+                        count = float(parts[1])
+                        counts_dict[gene_id] = count
+                    except ValueError:
+                        continue  # 跳过无法转换为数字的行
+        
+        # 3. 计算每个基因的RPK (Reads Per Kilobase)
+        rpk_dict = {}
+        for gene_id, count in counts_dict.items():
+            if gene_id in gene_lengths:
+                # RPK = reads / (length_kb)
+                rpk = count / (gene_lengths[gene_id] / 1000.0)
+                rpk_dict[gene_id] = rpk
+        
+        # 4. 计算RPK总和
+        sum_rpk = sum(rpk_dict.values())
+        
+        # 5. 计算每个基因的TPM
+        tpm_dict = {}
+        if sum_rpk > 0:  # 避免除以0
+            scaling_factor = 1_000_000.0 / sum_rpk
+            for gene_id, rpk in rpk_dict.items():
+                tpm = rpk * scaling_factor
+                tpm_dict[gene_id] = tpm
+        
+        return tpm_dict
+        
+    except Exception as e:
+        print(f"TPM计算错误: {str(e)}")
+        return {}
+
+def get_recommended_probe_number(tpm):
+    """根据TPM值推荐探针数量
+    
+    TPM范围对应的探针数量：
+    0-1: 10个探针
+    1-10: 8个探针
+    10-30: 5个探针
+    30-50: 5个探针
+    50-150: 4个探针
+    >150: 3个探针
+    """
+    if tpm < 1:
+        return 10
+    elif tpm < 10:
+        return 8
+    elif tpm < 30:
+        return 5
+    elif tpm < 50:
+        return 5
+    elif tpm < 150:
+        return 4
+    else:
+        return 3
+
 @app.route('/probe_recommend', methods=['GET', 'POST'])
 def probe_recommend():
     if request.method == 'POST':
@@ -1135,16 +1213,22 @@ def probe_recommend():
             return jsonify({'error': '请选择所有必需的文件'}), 400
 
         try:
+            # 计算所有基因的TPM值
+            tpm_dict = calculate_tpm(cds_file, counts_file)
+            
             # 读取gene_list文件
             gene_list_content = gene_list_file.read().decode('utf-8')
             gene_list = [line.strip() for line in gene_list_content.splitlines() if line.strip()]
 
-            # TODO: 这里是临时的实现，直接返回每个基因5个探针
+            # 根据TPM值推荐探针数量
             result = []
             for gene_id in gene_list:
+                tpm = tpm_dict.get(gene_id, 0)  # 如果基因不在TPM字典中，默认为0
+                probe_number = get_recommended_probe_number(tpm)
                 result.append({
                     'gene_id': gene_id,
-                    'probe_number': 5
+                    'tpm': round(tpm, 2),  # 保留两位小数
+                    'probe_number': probe_number
                 })
 
             return jsonify(result)
