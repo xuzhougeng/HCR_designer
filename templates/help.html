@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}系统帮助文档{% endblock %}
+
+{% block content %}
+<div class="container help-container">
+    <h1 class="page-title">Probe Generator 帮助中心</h1>
+    
+    <div class="section">
+        <h2>主要功能模块</h2>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <h3>探针设计系统</h3>
+                    <ul>
+                        <li>双探针设计（Split Probe）</li>
+                        <li>三探针设计（Triplet Probe）</li>
+                        <li>桥接探针设计（Bridge Probe）</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <h3>分析验证系统</h3>
+                    <ul>
+                        <li>k-mer冲突检测</li>
+                        <li>BLAST同源分析</li>
+                        <li>序列合规性验证</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <h3>数据管理系统</h3>
+                    <ul>
+                        <li>探针库浏览（Bridge List）</li>
+                        <li>批量处理功能</li>
+                        <li>结果导出（CSV/JSON）</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>使用指南</h2>
+        <div class="guide-steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h4>输入准备</h4>
+                <p>支持多种输入方式：
+                    <ul>
+                        <li>直接输入DNA序列</li>
+                        <li>上传FASTA/CSV文件</li>
+                        <li>使用现有BP_ID查询</li>
+                    </ul>
+                </p>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">2</div>
+                <h4>参数设置</h4>
+                <p>核心参数说明：
+                    <table class="parameter-table">
+                        <tr>
+                            <th>参数</th>
+                            <th>说明</th>
+                            <th>典型值</th>
+                        </tr>
+                        <tr>
+                            <td>探针长度</td>
+                            <td>15-50bp</td>
+                            <td>20-30bp</td>
+                        </tr>
+                        <tr>
+                            <td>GC含量</td>
+                            <td>30%-70%</td>
+                            <td>40%-60%</td>
+                        </tr>
+                        <tr>
+                            <td>Tm值</td>
+                            <td>45-65°C</td>
+                            <td>50-60°C</td>
+                        </tr>
+                    </table>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>常见问题</h2>
+        <div class="faq">
+            <div class="faq-item">
+                <h4>如何选择参考基因组？</h4>
+                <p>系统预装了TAIR10基因组，也可通过「上传参考基因组」功能添加自定义基因组</p>
+            </div>
+            <div class="faq-item">
+                <h4>BLAST分析的作用？</h4>
+                <p>用于检测探针序列在参考基因组中的非特异性结合位点，建议至少设置8-mer长度分析</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="help-section" id="probe-recommend">
+        <h2>探针数量推荐系统</h2>
+        <div class="help-content">
+            <h3>功能介绍</h3>
+            <p>探针数量推荐系统可以根据基因的表达量自动推荐每个基因所需的探针数量。系统会分析基因的表达水平，并为每个基因推荐合适的探针数量。</p>
+
+            <h3>输入文件要求</h3>
+            <ul>
+                <li><strong>CDS序列文件 (cds.fasta)</strong>
+                    <ul>
+                        <li>FASTA格式文件</li>
+                        <li>包含所有目标基因的CDS序列</li>
+                        <li>序列ID需要与counts.txt中的基因ID对应</li>
+                    </ul>
+                </li>
+                <li><strong>表达量文件 (counts.txt)</strong>
+                    <ul>
+                        <li>制表符分隔的两列文本文件</li>
+                        <li>第一列：基因ID</li>
+                        <li>第二列：表达量count值</li>
+                        <li>不需要表头</li>
+                    </ul>
+                </li>
+                <li><strong>基因列表文件 (gene_list.txt)</strong>
+                    <ul>
+                        <li>单列文本文件</li>
+                        <li>每行一个基因ID</li>
+                        <li>基因ID需要与counts.txt中的ID对应</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>输出结果</h3>
+            <ul>
+                <li>系统将返回一个包含两列的结果：
+                    <ul>
+                        <li>基因ID</li>
+                        <li>推荐的探针数量</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>使用建议</h3>
+            <ul>
+                <li>确保所有文件中的基因ID格式一致</li>
+                <li>建议在使用前检查文件格式是否符合要求</li>
+                <li>如果基因没有表达量数据，系统将使用默认的探针数量</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="quick-links">
+        <a href="{{ url_for('bridge_list') }}" class="btn btn-outline-primary">
+            <i class="bi bi-list-ul"></i> 探针库浏览
+        </a>
+        <a href="{{ url_for('bridge_validate') }}" class="btn btn-outline-primary">
+            <i class="bi bi-shield-check"></i> 序列验证
+        </a>
+    </div>
+</div>
+
+<style>
+.help-container {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.feature-card {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 10px;
+    height: 100%;
+}
+
+.parameter-table {
+    width: 100%;
+    background: white;
+    border-collapse: collapse;
+}
+.parameter-table th,
+.parameter-table td {
+    padding: 0.8rem;
+    border: 1px solid #dee2e6;
+}
+
+.guide-steps .step {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+.step-number {
+    width: 40px;
+    height: 40px;
+    background: #3498db;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.quick-links {
+    margin-top: 3rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+</style>
+{% endblock %} 

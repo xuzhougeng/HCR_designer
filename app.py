@@ -190,6 +190,14 @@ def filter_probe_by_llm(probe_data):
 def index():
     return render_template('index.html')
 
+@app.route('/filter', methods=['GET', 'POST'])
+def filter():
+    return render_template('filter.html')
+
+@app.route("/help", methods=['GET'])
+def help():
+    return render_template('help.html')
+
 @app.route('/split', methods=['GET', 'POST'])
 def split():
     if request.method == 'POST':
@@ -1110,6 +1118,41 @@ def filter_probes():
             return render_template('filter.html', error=str(e))
     
     return render_template('filter.html')
+
+@app.route('/probe_recommend', methods=['GET', 'POST'])
+def probe_recommend():
+    if request.method == 'POST':
+        # 检查是否有所需的文件
+        if 'cds_file' not in request.files or 'counts_file' not in request.files or 'gene_list_file' not in request.files:
+            return jsonify({'error': '请上传所有必需的文件'}), 400
+
+        cds_file = request.files['cds_file']
+        counts_file = request.files['counts_file']
+        gene_list_file = request.files['gene_list_file']
+
+        # 检查文件是否被选择
+        if cds_file.filename == '' or counts_file.filename == '' or gene_list_file.filename == '':
+            return jsonify({'error': '请选择所有必需的文件'}), 400
+
+        try:
+            # 读取gene_list文件
+            gene_list_content = gene_list_file.read().decode('utf-8')
+            gene_list = [line.strip() for line in gene_list_content.splitlines() if line.strip()]
+
+            # TODO: 这里是临时的实现，直接返回每个基因5个探针
+            result = []
+            for gene_id in gene_list:
+                result.append({
+                    'gene_id': gene_id,
+                    'probe_number': 5
+                })
+
+            return jsonify(result)
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    return render_template('probe_recommend.html')
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port="6789", debug=True)

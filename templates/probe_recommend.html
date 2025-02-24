@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}探针数量推荐系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-form {
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        border-radius: 8px;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+    }
+    
+    .form-group input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .submit-btn {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .submit-btn:hover {
+        background-color: #45a049;
+    }
+    
+    .result-section {
+        margin-top: 30px;
+        display: none;
+    }
+    
+    .result-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    
+    .result-table th,
+    .result-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    
+    .result-table th {
+        background-color: #f2f2f2;
+    }
+    
+    .instructions {
+        margin: 20px auto;
+        max-width: 800px;
+        padding: 15px;
+        background-color: #e9f5ff;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="instructions">
+    <h2>探针数量推荐系统</h2>
+    <p>请上传以下文件：</p>
+    <ul>
+        <li><strong>CDS序列文件 (cds.fasta)</strong>: 包含目标基因的CDS序列</li>
+        <li><strong>表达量文件 (counts.txt)</strong>: 两列文件，第一列为基因ID，第二列为表达量count</li>
+        <li><strong>基因列表 (gene_list.txt)</strong>: 单列文件，包含需要设计探针的基因ID</li>
+    </ul>
+</div>
+
+<form class="upload-form" id="recommendForm" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="cds_file">CDS序列文件 (FASTA格式):</label>
+        <input type="file" id="cds_file" name="cds_file" accept=".fasta,.fa" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="counts_file">表达量文件 (TXT格式):</label>
+        <input type="file" id="counts_file" name="counts_file" accept=".txt" required>
+    </div>
+    
+    <div class="form-group">
+        <label for="gene_list">基因列表文件 (TXT格式):</label>
+        <input type="file" id="gene_list" name="gene_list" accept=".txt" required>
+    </div>
+    
+    <button type="submit" class="submit-btn">提交分析</button>
+</form>
+
+<div id="resultSection" class="result-section">
+    <h3>推荐探针数量结果：</h3>
+    <table class="result-table">
+        <thead>
+            <tr>
+                <th>基因ID</th>
+                <th>推荐探针数量</th>
+            </tr>
+        </thead>
+        <tbody id="resultTableBody">
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('recommendForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // 创建FormData对象
+    const formData = new FormData(this);
+    
+    // 发送请求到后端
+    fetch('/recommend_probes', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        // 显示结果区域
+        const resultSection = document.getElementById('resultSection');
+        resultSection.style.display = 'block';
+        
+        // 清空并填充结果表格
+        const tableBody = document.getElementById('resultTableBody');
+        tableBody.innerHTML = '';
+        
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.gene_id}</td>
+                <td>${item.probe_number}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    })
+    .catch(error => {
+        alert('提交失败，请重试');
+        console.error('Error:', error);
+    });
+});
+</script>
+{% endblock %} 
