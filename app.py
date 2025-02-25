@@ -392,14 +392,11 @@ def split_batch():
                     if len(row) >= 3:  # 至少需要3列
                         task_name, bp_id, gene_id = row[:3]
                         gene_id = gene_id.upper()
-                        
                         # 获取max_selected值,如果有第4列就使用第4列的值,否则使用默认值
                         max_selected = default_max_selected
                         if len(row) >= 4:
                             try:
                                 max_selected = int(row[3])
-                                # 确保max_selected在合理范围内
-                                max_selected = max(1, min(10, max_selected))
                             except (ValueError, TypeError):
                                 max_selected = default_max_selected
                         
@@ -691,8 +688,6 @@ def triplet_batch():
                         if len(row) >= 4:
                             try:
                                 max_selected = int(row[3])
-                                # 确保max_selected在合理范围内
-                                max_selected = max(1, min(10, max_selected))
                             except (ValueError, TypeError):
                                 max_selected = default_max_selected
                         

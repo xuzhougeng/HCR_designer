@@ -260,8 +260,8 @@ def main( name, sequence, gene_id,
                            kmer_size=kmer_size,
                            min_kmer_count=min_kmer_count,
                            output_dir=output_dir,
-                           blast_db=blast_db
-                           )
+                           blast_db=blast_db,
+                           max_selected=max_selected)
     
     # 设计探针
     probe_sets = generate_dual_probe(sequence, name, bridge_probe_id, bridge_probe, config)
