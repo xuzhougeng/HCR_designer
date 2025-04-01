@@ -59,10 +59,31 @@ def create_blast_db(fasta_path):
     Returns:
     --------
     str: Path to BLAST database
+        
+    Raises:
+    -------
+    ValueError: If sequence validation fails
     """
     # Check if BLAST database files exist
     db_files = [f"{fasta_path}.nhr", f"{fasta_path}.nin", f"{fasta_path}.nsq"]
     if not all(os.path.exists(f) for f in db_files):
+        # Validate sequences before creating database
+        sequences = load_fasta(fasta_path)
+        
+        # Check for duplicate IDs
+        if len(sequences) != len(set(sequences.keys())):
+            raise ValueError("Duplicate sequence IDs found in input file")
+            
+        # Check sequence format
+        for seq_id, seq in sequences.items():
+            # Check if sequence is uppercase
+            if not seq.isupper():
+                raise ValueError(f"Sequence {seq_id} contains lowercase characters")
+                
+            # Check if sequence contains only valid DNA characters
+            if not all(c in 'ATCG' for c in seq):
+                raise ValueError(f"Sequence {seq_id} contains invalid DNA characters")
+        
         # Create BLAST database
         cline = NcbimakeblastdbCommandline(
             dbtype="nucl",

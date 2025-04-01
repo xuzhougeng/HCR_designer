@@ -3,9 +3,15 @@
 {% block title %}Triplet Batch Processing{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mb-4">Triplet Probe 批量设计</h1>
+<div class="container mt-4">
+    <h2>Batch Triplet Probe Design</h2>
     
+    {% if error_message %}
+    <div class="alert alert-danger" role="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
     <div class="action-buttons mb-4">
         <a href="{{ url_for('triplet') }}" class="btn btn-outline-primary">
             返回单样本设计

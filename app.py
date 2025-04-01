@@ -208,29 +208,34 @@ def split():
 
         # 处理参考基因组/BLAST数据库
         blast_db = None
-        if 'ref_genome' in request.files:
-            file = request.files['ref_genome']
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
+        error_message = None
+        try:
+            if 'ref_genome' in request.files:
+                file = request.files['ref_genome']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
 
-                if filename.endswith('.gz'):
-                    decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
-                    with gzip.open(file_path, 'rb') as f_in:
-                        with open(decompressed_path, 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                    os.remove(file_path)
-                    file_path = decompressed_path
-                
+                    if filename.endswith('.gz'):
+                        decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
+                        with gzip.open(file_path, 'rb') as f_in:
+                            with open(decompressed_path, 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                        os.remove(file_path)
+                        file_path = decompressed_path
+                    
+                    # Create BLAST database if needed
+                    blast_db = create_blast_db(file_path)
+
+            if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+                existing_genome = request.form['existing_ref_genome']
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
                 # Create BLAST database if needed
                 blast_db = create_blast_db(file_path)
-
-        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-            existing_genome = request.form['existing_ref_genome']
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-            # Create BLAST database if needed
-            blast_db = create_blast_db(file_path)
+        except ValueError as e:
+            error_message = str(e)
+            return render_template('split.html', error_message=error_message)
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -332,31 +337,36 @@ def split_batch():
         # 处理参考基因组/BLAST数据库
         blast_db = None
         ref_genome_path = None
-        if 'ref_genome' in request.files:
-            file = request.files['ref_genome']
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
+        error_message = None
+        try:
+            if 'ref_genome' in request.files:
+                file = request.files['ref_genome']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
 
-                if filename.endswith('.gz'):
-                    decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
-                    with gzip.open(file_path, 'rb') as f_in:
-                        with open(decompressed_path, 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                    os.remove(file_path)
-                    file_path = decompressed_path
-                
+                    if filename.endswith('.gz'):
+                        decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
+                        with gzip.open(file_path, 'rb') as f_in:
+                            with open(decompressed_path, 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                        os.remove(file_path)
+                        file_path = decompressed_path
+                    
+                    # Create BLAST database if needed
+                    blast_db = create_blast_db(file_path)
+                    ref_genome_path = file_path
+
+            if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+                existing_genome = request.form['existing_ref_genome']
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
                 # Create BLAST database if needed
                 blast_db = create_blast_db(file_path)
-                ref_genome_path = file_path
-
-        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-            existing_genome = request.form['existing_ref_genome']
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-            # Create BLAST database if needed
-            blast_db = create_blast_db(file_path)
-            ref_genome_path = blast_db
+                ref_genome_path = blast_db
+        except ValueError as e:
+            error_message = str(e)
+            return render_template('split_batch.html', error_message=error_message)
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -501,29 +511,34 @@ def triplet():
 
         # 处理参考基因组/BLAST数据库
         blast_db = None
-        if 'ref_genome' in request.files:
-            file = request.files['ref_genome']
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
+        error_message = None
+        try:
+            if 'ref_genome' in request.files:
+                file = request.files['ref_genome']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
 
-                if filename.endswith('.gz'):
-                    decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
-                    with gzip.open(file_path, 'rb') as f_in:
-                        with open(decompressed_path, 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                    os.remove(file_path)
-                    file_path = decompressed_path
-                
+                    if filename.endswith('.gz'):
+                        decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
+                        with gzip.open(file_path, 'rb') as f_in:
+                            with open(decompressed_path, 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                        os.remove(file_path)
+                        file_path = decompressed_path
+                    
+                    # Create BLAST database if needed
+                    blast_db = create_blast_db(file_path)
+
+            if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+                existing_genome = request.form['existing_ref_genome']
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
                 # Create BLAST database if needed
                 blast_db = create_blast_db(file_path)
-
-        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-            existing_genome = request.form['existing_ref_genome']
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-            # Create BLAST database if needed
-            blast_db = create_blast_db(file_path)
+        except ValueError as e:
+            error_message = str(e)
+            return render_template('triplet.html', error_message=error_message)
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -625,31 +640,36 @@ def triplet_batch():
         # 处理参考基因组/BLAST数据库
         blast_db = None
         ref_genome_path = None
-        if 'ref_genome' in request.files:
-            file = request.files['ref_genome']
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
+        error_message = None
+        try:
+            if 'ref_genome' in request.files:
+                file = request.files['ref_genome']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
 
-                if filename.endswith('.gz'):
-                    decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
-                    with gzip.open(file_path, 'rb') as f_in:
-                        with open(decompressed_path, 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                    os.remove(file_path)
-                    file_path = decompressed_path
-                
+                    if filename.endswith('.gz'):
+                        decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
+                        with gzip.open(file_path, 'rb') as f_in:
+                            with open(decompressed_path, 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                        os.remove(file_path)
+                        file_path = decompressed_path
+                    
+                    # Create BLAST database if needed
+                    blast_db = create_blast_db(file_path)
+                    ref_genome_path = file_path
+
+            if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
+                existing_genome = request.form['existing_ref_genome']
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
                 # Create BLAST database if needed
                 blast_db = create_blast_db(file_path)
-                ref_genome_path = file_path
-
-        if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-            existing_genome = request.form['existing_ref_genome']
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-            # Create BLAST database if needed
-            blast_db = create_blast_db(file_path)
-            ref_genome_path = blast_db
+                ref_genome_path = blast_db
+        except ValueError as e:
+            error_message = str(e)
+            return render_template('triplet_batch.html', error_message=error_message)
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
