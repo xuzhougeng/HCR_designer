@@ -126,7 +126,6 @@
     <ul>
         <li><strong>CDS序列文件 (cds.fasta)</strong>: 包含目标基因的CDS序列</li>
         <li><strong>表达量文件 (counts.txt)</strong>: 两列文件，第一列为基因ID，第二列为表达量count</li>
-        <li><strong>基因列表 (gene_list.txt)</strong>: 单列文件，包含需要设计探针的基因ID</li>
     </ul>
 </div>
 
@@ -139,11 +138,6 @@
     <div class="form-group">
         <label for="counts_file">表达量文件 (TXT格式):</label>
         <input type="file" id="counts_file" name="counts_file" accept=".txt" required>
-    </div>
-    
-    <div class="form-group">
-        <label for="gene_list">基因列表文件 (TXT格式):</label>
-        <input type="file" id="gene_list" name="gene_list" accept=".txt" required>
     </div>
     
     <button type="submit" class="submit-btn">提交分析</button>
@@ -185,14 +179,7 @@ AT1G01050    67</code></pre>
     </div>
 
     <div class="example-file">
-        <h4>3. 基因列表文件 (gene_list.txt) 示例：</h4>
-        <pre><code>AT1G01010
-AT1G01020
-AT1G01040</code></pre>
-    </div>
-
-    <div class="example-file">
-        <h4>4. 结果示例：</h4>
+        <h4>3. 结果示例：</h4>
         <pre><code>[
     {
         "gene_id": "AT1G01010",
@@ -253,38 +240,48 @@ AT1G01040</code></pre>
 document.getElementById('recommendForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
+    // 禁用提交按钮并显示加载状态
+    const submitBtn = this.querySelector('.submit-btn');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '分析中...';
+    
     const formData = new FormData(this);
     
     fetch('/probe_recommend', {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert(data.error);
-            return;
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || '提交失败');
+            });
         }
+        return response.blob();
+    })
+    .then(blob => {
+        // 创建下载链接
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'probe_recommend_results.csv';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
         
-        const resultSection = document.getElementById('resultSection');
-        resultSection.style.display = 'block';
-        
-        const tableBody = document.getElementById('resultTableBody');
-        tableBody.innerHTML = '';
-        
-        data.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.gene_id}</td>
-                <td>${item.tpm}</td>
-                <td>${item.probe_number}</td>
-            `;
-            tableBody.appendChild(row);
-        });
+        // 显示成功消息
+        alert('分析完成，结果已开始下载');
     })
     .catch(error => {
-        alert('提交失败，请重试');
+        alert(error.message || '提交失败，请重试');
         console.error('Error:', error);
+    })
+    .finally(() => {
+        // 恢复提交按钮状态
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
     });
 });
 </script>

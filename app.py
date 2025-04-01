@@ -1155,7 +1155,23 @@ def calculate_tpm(cds_file, counts_file):
     """
     try:
         # 1. 读取CDS序列，获取每个基因的长度
-        cds_dict = load_fasta(cds_file)
+        cds_content = cds_file.read().decode('utf-8')
+        cds_dict = {}
+        current_id = None
+        current_seq = []
+        
+        for line in cds_content.splitlines():
+            if line.startswith('>'):
+                if current_id and current_seq:
+                    cds_dict[current_id] = ''.join(current_seq)
+                current_id = line[1:].split()[0]
+                current_seq = []
+            elif line.strip():
+                current_seq.append(line.strip())
+        
+        if current_id and current_seq:
+            cds_dict[current_id] = ''.join(current_seq)
+            
         gene_lengths = {gene_id: len(sequence) for gene_id, sequence in cds_dict.items()}
         
         # 2. 读取counts文件
@@ -1225,29 +1241,35 @@ def get_recommended_probe_number(tpm):
 def probe_recommend():
     if request.method == 'POST':
         # 检查是否有所需的文件
-        if 'cds_file' not in request.files or 'counts_file' not in request.files or 'gene_list_file' not in request.files:
+        if 'cds_file' not in request.files or 'counts_file' not in request.files:
             return jsonify({'error': '请上传所有必需的文件'}), 400
 
         cds_file = request.files['cds_file']
         counts_file = request.files['counts_file']
-        gene_list_file = request.files['gene_list_file']
 
         # 检查文件是否被选择
-        if cds_file.filename == '' or counts_file.filename == '' or gene_list_file.filename == '':
+        if cds_file.filename == '' or counts_file.filename == '':
             return jsonify({'error': '请选择所有必需的文件'}), 400
 
         try:
+            # 保存文件内容到临时变量
+            cds_content = cds_file.read()
+            counts_content = counts_file.read()
+            
+            # 重置文件指针
+            cds_file.seek(0)
+            counts_file.seek(0)
+            
             # 计算所有基因的TPM值
             tpm_dict = calculate_tpm(cds_file, counts_file)
             
-            # 读取gene_list文件
-            gene_list_content = gene_list_file.read().decode('utf-8')
-            gene_list = [line.strip() for line in gene_list_content.splitlines() if line.strip()]
+            # 从TPM字典中获取所有基因ID
+            gene_list = list(tpm_dict.keys())
 
             # 根据TPM值推荐探针数量
             result = []
             for gene_id in gene_list:
-                tpm = tpm_dict.get(gene_id, 0)  # 如果基因不在TPM字典中，默认为0
+                tpm = tpm_dict[gene_id]
                 probe_number = get_recommended_probe_number(tpm)
                 result.append({
                     'gene_id': gene_id,
@@ -1255,7 +1277,18 @@ def probe_recommend():
                     'probe_number': probe_number
                 })
 
-            return jsonify(result)
+            # 生成CSV文件
+            unique_id = generate_unique_id()
+            csv_filename = f"probe_recommend_{unique_id}.csv"
+            csv_path = os.path.join(app.config['UPLOAD_FOLDER'], csv_filename)
+            
+            with open(csv_path, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=['gene_id', 'tpm', 'probe_number'])
+                writer.writeheader()
+                writer.writerows(result)
+
+            # 返回CSV文件
+            return send_file(csv_path, as_attachment=True)
 
         except Exception as e:
             return jsonify({'error': str(e)}), 500
