@@ -10,7 +10,7 @@ import json
 
 from flask import Flask, request, render_template, send_file, jsonify
 
-from scripts.utils import load_alias, load_fasta, generate_unique_id, save_sequence
+from scripts.utils import load_alias, load_fasta, generate_unique_id, save_sequence, create_blast_db
 from scripts.create_triplet_probe import main as create_triplet_probe
 from scripts.create_split_probe import main as create_split_probe
 from scripts.bp_suggestion import design_multiple_probes
@@ -223,11 +223,14 @@ def split():
                     os.remove(file_path)
                     file_path = decompressed_path
                 
-                blast_db = file_path
+                # Create BLAST database if needed
+                blast_db = create_blast_db(file_path)
 
         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
             existing_genome = request.form['existing_ref_genome']
-            blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            # Create BLAST database if needed
+            blast_db = create_blast_db(file_path)
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -344,12 +347,15 @@ def split_batch():
                     os.remove(file_path)
                     file_path = decompressed_path
                 
-                blast_db = file_path
+                # Create BLAST database if needed
+                blast_db = create_blast_db(file_path)
                 ref_genome_path = file_path
 
         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
             existing_genome = request.form['existing_ref_genome']
-            blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            # Create BLAST database if needed
+            blast_db = create_blast_db(file_path)
             ref_genome_path = blast_db
 
         # 获取通用参数
@@ -495,8 +501,6 @@ def triplet():
 
         # 处理参考基因组/BLAST数据库
         blast_db = None
-
-        # Handle file upload for reference genome
         if 'ref_genome' in request.files:
             file = request.files['ref_genome']
             if file and allowed_file(file.filename):
@@ -512,12 +516,14 @@ def triplet():
                     os.remove(file_path)
                     file_path = decompressed_path
                 
-                blast_db = file_path
+                # Create BLAST database if needed
+                blast_db = create_blast_db(file_path)
 
-        # Alternatively, check if an existing genome was selected
         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
             existing_genome = request.form['existing_ref_genome']
-            blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            # Create BLAST database if needed
+            blast_db = create_blast_db(file_path)
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -634,12 +640,15 @@ def triplet_batch():
                     os.remove(file_path)
                     file_path = decompressed_path
                 
-                blast_db = file_path
+                # Create BLAST database if needed
+                blast_db = create_blast_db(file_path)
                 ref_genome_path = file_path
 
         if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
             existing_genome = request.form['existing_ref_genome']
-            blast_db = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
+            # Create BLAST database if needed
+            blast_db = create_blast_db(file_path)
             ref_genome_path = blast_db
 
         # 获取通用参数

@@ -1,6 +1,8 @@
 import gzip
 import uuid
 from Bio import SeqIO
+from Bio.Blast.Applications import NcbimakeblastdbCommandline
+import os
 
 def load_fasta(file_path):
     opener = gzip.open if file_path.endswith('.gz') else open
@@ -45,5 +47,29 @@ def save_sequence(gene, sequence, file_path):
 def generate_unique_id():
     unique_id = uuid.uuid4().hex
     return unique_id
+
+def create_blast_db(fasta_path):
+    """Create BLAST database if it doesn't exist
+    
+    Parameters:
+    -----------
+    fasta_path : str
+        Path to FASTA file
+        
+    Returns:
+    --------
+    str: Path to BLAST database
+    """
+    # Check if BLAST database files exist
+    db_files = [f"{fasta_path}.nhr", f"{fasta_path}.nin", f"{fasta_path}.nsq"]
+    if not all(os.path.exists(f) for f in db_files):
+        # Create BLAST database
+        cline = NcbimakeblastdbCommandline(
+            dbtype="nucl",
+            input_file=fasta_path,
+            out=fasta_path
+        )
+        cline()
+    return fasta_path
 
 

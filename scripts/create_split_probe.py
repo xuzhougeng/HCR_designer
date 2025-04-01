@@ -54,7 +54,7 @@ def create_config( min_length, max_length,
                             blast_db=blast_db,
                             max_selected=max_selected)
 
-def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=','):
+def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=',', probe_ids=None):
     """
     将双探针保存为CSV格式
     
@@ -66,12 +66,21 @@ def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=','):
         输出文件名
     task_name : str
         任务名称，用作探针ID的前缀
+    BP_ID : str
+        探针ID后缀
     delimiter : str, optional
         CSV文件分隔符 (default: ',')
+    probe_ids : list, optional
+        探针ID列表，如果提供则使用这些ID而不是自动生成
     """
     # 从output_file获取基础文件名（不包含扩展名）
     base_name = output_file.rsplit('.', 1)[0]
-    dual_file = f"{base_name}_dual.csv"
+    
+    # 检查base_name是否已经以'_dual'结尾，避免重复
+    if base_name.endswith('_dual'):
+        dual_file = output_file
+    else:
+        dual_file = f"{base_name}_dual.csv"
     
     with open(dual_file, 'w') as f:
         # 写入表头
@@ -80,10 +89,13 @@ def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=','):
         
         # 写入探针序列
         for i, (L, R) in enumerate(dual_probes, 1):
+            # 使用提供的ID或默认自动生成的ID
+            probe_id = probe_ids[i-1] if probe_ids else i
+            
             # 写入L探针
-            f.write(f"{task_name}-{i}-L{delimiter}{L}\n")
+            f.write(f"{task_name}-{probe_id}-L{delimiter}{L}\n")
             # 写入R探针
-            f.write(f"{task_name}-{i}-R-{BP_ID}{delimiter}{R}\n")
+            f.write(f"{task_name}-{probe_id}-R-{BP_ID}{delimiter}{R}\n")
 
 
 def generate_dual_probe(sequence: str, 
@@ -172,12 +184,20 @@ def generate_dual_probe(sequence: str,
     with open(filtered_json_path, 'r') as f:
         filtered_data = json.load(f)
     
-    # 只使用被保留的探针组合
-    filtered_probe_sets = [
-        probe_set for probe_set in probe_sets_json["probe_sets"]
-        if any(fs.get('keep', False) and fs['id'] == probe_set['id'] 
-              for fs in filtered_data['probe_sets'])
-    ]
+    # 收集被保留的探针组合及其原始ID
+    filtered_probe_sets = []
+    filtered_ids = []
+    for fs in filtered_data['probe_sets']:
+        if fs.get('keep', False):
+            # 在原始数据中找到对应的探针组合
+            original_id = fs['id']
+            filtered_ids.append(original_id)
+            
+            # 找到对应的原始probe_set
+            for ps in probe_sets_json["probe_sets"]:
+                if ps['id'] == original_id:
+                    filtered_probe_sets.append(ps)
+                    break
 
     # 获取杂交探针(HCR probe)
     # 随机碱基选择
@@ -186,17 +206,31 @@ def generate_dual_probe(sequence: str,
     # 获取bridge_probe最后两个碱基的互补序列
     bridge_end_complement = ''.join(complement[base] for base in bridge_probe[17:19])
     
-    dual_probes = []
+    # 创建所有探针组合的dual_probes
+    all_dual_probes = []
+    for probe_set in probe_sets_json["probe_sets"]:
+        # 使用所有探针序列
+        L = probe_set['left_probe']['sequence']
+        R = probe_set['right_probe']['sequence']
+        
+        # 构建探针
+        L_probe = L + ANCHOR_SEQ + "CGGTATCAAG"
+        R_probe = 'CTGTTTAAGA' + random_base + bridge_probe[0:17] + bridge_end_complement + R
+        
+        all_dual_probes.append((L_probe, R_probe))
+    
+    # 创建过滤后的探针组合
+    filtered_dual_probes = []
     for probe_set in filtered_probe_sets:
         # 使用筛选后的探针序列
         L = probe_set['left_probe']['sequence']
         R = probe_set['right_probe']['sequence']
         
-        # 构建三个探针
+        # 构建探针
         L_probe = L + ANCHOR_SEQ + "CGGTATCAAG"
         R_probe = 'CTGTTTAAGA' + random_base + bridge_probe[0:17] + bridge_end_complement + R
         
-        dual_probes.append((L_probe, R_probe))
+        filtered_dual_probes.append((L_probe, R_probe))
 
     # 创建 README 文件
     readme_path = os.path.join(config.output_dir, "readme.txt")
@@ -217,13 +251,13 @@ def generate_dual_probe(sequence: str,
         f.write(f"- Total probe sets: {len(probe_sets_json['probe_sets'])}\n")
         f.write(f"- Selected probe sets: {len(filtered_probe_sets)}\n")
 
-    # save dual probes to csv
+    # save all dual probes to csv
     output_file = os.path.join(config.output_dir, "dual_probe.csv")
-    save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=',')
+    save_dual_probes(all_dual_probes, output_file, task_name, BP_ID, delimiter=',')
     
-    # save filtered dual probes to csv
+    # save filtered dual probes to csv，传递原始ID
     filtered_output_file = os.path.join(config.output_dir, f"{task_name}_filtered_dual.csv")
-    save_dual_probes(dual_probes, filtered_output_file, task_name, BP_ID, delimiter=',')
+    save_dual_probes(filtered_dual_probes, filtered_output_file, task_name, BP_ID, delimiter=',', probe_ids=filtered_ids)
     
     return probe_sets
 
