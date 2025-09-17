@@ -1237,6 +1237,157 @@ def get_recommended_probe_number(tpm):
     else:
         return 3
 
+def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filter_invalid=True):
+    """
+    Format FASTA sequences according to specified options
+
+    Args:
+        input_text: FASTA sequence text
+        clean_headers: Remove text after first space in headers
+        uppercase: Convert sequences to uppercase
+        filter_invalid: Remove sequences with non-ATCG bases
+
+    Returns:
+        tuple: (formatted_text, stats_dict)
+    """
+    lines = input_text.strip().split('\n')
+    formatted_lines = []
+    stats = {
+        'original_count': 0,
+        'formatted_count': 0,
+        'removed_count': 0,
+        'headers_cleaned': 0,
+        'removed_sequences': []
+    }
+
+    current_header = None
+    current_sequence = []
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        if line.startswith('>'):
+            # Process previous sequence if exists
+            if current_header is not None:
+                stats['original_count'] += 1
+                sequence = ''.join(current_sequence)
+
+                # Apply formatting options
+                if uppercase:
+                    sequence = sequence.upper()
+
+                # Check for invalid bases if filtering is enabled
+                if filter_invalid:
+                    valid_bases = set('ATCG')
+                    invalid_bases = set(sequence) - valid_bases
+                    if invalid_bases:
+                        stats['removed_count'] += 1
+                        stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid bases: {', '.join(invalid_bases)}"))
+                        current_header = None
+                        current_sequence = []
+                        continue
+
+                # Add formatted sequence
+                formatted_lines.append(current_header)
+                formatted_lines.append(sequence)
+                stats['formatted_count'] += 1
+
+            # Process new header
+            current_header = line
+            if clean_headers and ' ' in line:
+                # Keep only the part before the first space
+                current_header = line.split(' ')[0]
+                stats['headers_cleaned'] += 1
+
+            current_sequence = []
+        else:
+            current_sequence.append(line)
+
+    # Process the last sequence
+    if current_header is not None:
+        stats['original_count'] += 1
+        sequence = ''.join(current_sequence)
+
+        if uppercase:
+            sequence = sequence.upper()
+
+        if filter_invalid:
+            valid_bases = set('ATCG')
+            invalid_bases = set(sequence) - valid_bases
+            if invalid_bases:
+                stats['removed_count'] += 1
+                stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid bases: {', '.join(invalid_bases)}"))
+            else:
+                formatted_lines.append(current_header)
+                formatted_lines.append(sequence)
+                stats['formatted_count'] += 1
+        else:
+            formatted_lines.append(current_header)
+            formatted_lines.append(sequence)
+            stats['formatted_count'] += 1
+
+    return '\n'.join(formatted_lines), stats
+
+@app.route('/formatting', methods=['GET', 'POST'])
+def formatting():
+    if request.method == 'POST':
+        try:
+            # Get processing options
+            clean_headers = 'clean_headers' in request.form
+            uppercase = 'uppercase' in request.form
+            filter_invalid = 'filter_invalid' in request.form
+
+            # Get input from file upload only
+            if 'fasta_file' not in request.files:
+                return jsonify({'error': "请上传文件"}), 400
+
+            file = request.files['fasta_file']
+            if file.filename == '':
+                return jsonify({'error': "未选择文件"}), 400
+
+            if not allowed_file(file.filename):
+                return jsonify({'error': "请上传有效的FASTA文件 (.fasta, .fa, .gz)"}), 400
+
+            # Read file content directly from memory, don't save to disk
+            if file.filename.endswith('.gz'):
+                content = gzip.open(file, 'rt').read()
+            else:
+                content = file.read().decode('utf-8')
+
+            # Format sequences
+            formatted_sequences, stats = format_fasta_sequences(
+                content, clean_headers, uppercase, filter_invalid
+            )
+
+            if not formatted_sequences.strip():
+                return jsonify({'error': "处理后没有有效序列"}), 400
+
+            # Create formatted filename
+            original_name = file.filename.rsplit('.', 1)[0]  # Remove extension
+            if original_name.endswith('.fasta'):
+                original_name = original_name[:-6]  # Remove .fasta
+            formatted_filename = f"{original_name}_formatted.fasta"
+
+            # Return formatted file for download using send_file with BytesIO
+            from io import BytesIO
+            output = BytesIO()
+            output.write(formatted_sequences.encode('utf-8'))
+            output.seek(0)
+
+            return send_file(
+                output,
+                as_attachment=True,
+                download_name=formatted_filename,
+                mimetype='text/plain'
+            )
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    return render_template('formatting.html')
+
 @app.route('/probe_recommend', methods=['GET', 'POST'])
 def probe_recommend():
     if request.method == 'POST':
