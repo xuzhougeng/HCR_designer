@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}Sequence Formatting Tool - Probe Designer{% endblock %}
+
+{% block extra_css %}
+<style>
+    .formatting-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .section {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .input-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .input-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .file-upload-area {
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+
+    .file-upload-area:hover {
+        border-color: #3498db;
+        background-color: #f8f9fa;
+    }
+
+    .file-upload-area.dragover {
+        border-color: #3498db;
+        background-color: #ebf3fd;
+    }
+
+    #fasta_file {
+        display: none;
+    }
+
+    .upload-icon {
+        font-size: 3rem;
+        color: #bdc3c7;
+        margin-bottom: 1rem;
+    }
+
+    .upload-text {
+        color: #7f8c8d;
+        margin-bottom: 0.5rem;
+    }
+
+    .file-info {
+        background: #f8f9fa;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-top: 1rem;
+        display: none;
+    }
+
+    .btn {
+        padding: 0.8rem 2rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .btn-primary {
+        background-color: #3498db;
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background-color: #2980b9;
+    }
+
+    .btn-primary:disabled {
+        background-color: #bdc3c7;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background-color: #95a5a6;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background-color: #7f8c8d;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 4px;
+        margin: 1rem 0;
+    }
+
+    .alert-info {
+        background-color: #d6eaf8;
+        border-left: 4px solid #3498db;
+        color: #1f618d;
+    }
+
+    .alert-success {
+        background-color: #d5f4e6;
+        border-left: 4px solid #27ae60;
+        color: #196f3d;
+    }
+
+    .alert-error {
+        background-color: #fadbd8;
+        border-left: 4px solid #e74c3c;
+        color: #c0392b;
+    }
+
+    .processing-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+
+    .option-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 4px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .option-card.selected {
+        border-color: #3498db;
+        background: #ebf3fd;
+    }
+
+    .option-card:hover {
+        background: #e9ecef;
+    }
+
+    .checkbox {
+        margin-right: 0.5rem;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="formatting-container">
+    <div class="section">
+        <h1><i class="fas fa-edit"></i> Sequence Formatting Tool</h1>
+        <p class="lead">上传FASTA文件进行序列预处理，处理完成后自动下载格式化文件</p>
+
+        <div class="alert alert-info">
+            <strong>功能说明：</strong>
+            <ul>
+                <li>清理序列头部（删除空格后的内容，如 ">AT2G1750 WUS" → ">AT2G1750"）</li>
+                <li>将所有序列转换为大写</li>
+                <li>剔除含有无效碱基的序列（非ATCG字符）</li>
+                <li>处理完成后自动开始下载格式化后的文件</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="section">
+        <form id="formatForm" method="post" enctype="multipart/form-data">
+            <div class="input-group">
+                <label>上传FASTA文件:</label>
+                <div class="file-upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div class="upload-text">
+                        <strong>点击选择文件</strong> 或将文件拖拽到此区域
+                    </div>
+                    <small>支持 .fasta, .fa, .gz 格式文件</small>
+                    <input type="file" name="fasta_file" id="fasta_file" accept=".fasta,.fa,.gz" required>
+                </div>
+                <div class="file-info" id="fileInfo">
+                    <strong>已选择文件:</strong> <span id="fileName"></span><br>
+                    <small>文件大小: <span id="fileSize"></span></small>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>处理选项:</label>
+                <div class="processing-options">
+                    <div class="option-card selected">
+                        <input type="checkbox" name="clean_headers" class="checkbox" checked>
+                        <strong>清理序列头部</strong><br>
+                        <small>删除第一个空格后的文本</small>
+                    </div>
+                    <div class="option-card selected">
+                        <input type="checkbox" name="uppercase" class="checkbox" checked>
+                        <strong>转换为大写</strong><br>
+                        <small>将所有序列转换为大写</small>
+                    </div>
+                    <div class="option-card selected">
+                        <input type="checkbox" name="filter_invalid" class="checkbox" checked>
+                        <strong>过滤无效序列</strong><br>
+                        <small>删除含有非ATCG碱基的序列</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                    <i class="fas fa-cogs"></i> 处理并下载
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="clearForm()">
+                    <i class="fas fa-eraser"></i> 清空
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="spinner"></div>
+        <h3>正在处理文件...</h3>
+        <p>请稍候，文件处理完成后将自动开始下载</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fasta_file');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const submitBtn = document.getElementById('submitBtn');
+    const form = document.getElementById('formatForm');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    // Click to upload
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    // Drag and drop
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            updateFileInfo(files[0]);
+        }
+    });
+
+    // File selection
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            updateFileInfo(e.target.files[0]);
+        }
+    });
+
+    function updateFileInfo(file) {
+        const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
+        fileName.textContent = file.name;
+        fileSize.textContent = `${sizeInMB} MB`;
+        fileInfo.style.display = 'block';
+        submitBtn.disabled = false;
+    }
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (!fileInput.files.length) {
+            showAlert('请选择要处理的文件', 'error');
+            return;
+        }
+
+        // Show loading overlay
+        loadingOverlay.style.display = 'flex';
+        submitBtn.disabled = true;
+
+        // Create FormData and submit
+        const formData = new FormData(form);
+
+        fetch('/formatting', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            loadingOverlay.style.display = 'none';
+            submitBtn.disabled = false;
+
+            if (response.ok) {
+                // Success - download file
+                const disposition = response.headers.get('Content-Disposition');
+                let filename = 'formatted_sequences.fasta';
+                if (disposition) {
+                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                    if (matches != null && matches[1]) {
+                        filename = matches[1].replace(/['"]/g, '');
+                    }
+                }
+
+                return response.blob().then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+
+                    showAlert('文件处理完成并已开始下载！', 'success');
+                    clearForm();
+                });
+            } else {
+                return response.json().then(data => {
+                    throw new Error(data.error || '处理失败');
+                });
+            }
+        })
+        .catch(error => {
+            loadingOverlay.style.display = 'none';
+            submitBtn.disabled = false;
+            showAlert('错误: ' + error.message, 'error');
+        });
+    });
+
+    // Processing option cards
+    document.querySelectorAll('.option-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const checkbox = this.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                this.classList.toggle('selected', checkbox.checked);
+            }
+        });
+    });
+
+    function showAlert(message, type) {
+        // Remove existing alerts
+        const existingAlerts = document.querySelectorAll('.alert-error, .alert-success');
+        existingAlerts.forEach(alert => alert.remove());
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.textContent = message;
+
+        const firstSection = document.querySelector('.section');
+        firstSection.parentNode.insertBefore(alertDiv, firstSection.nextSibling);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+});
+
+function clearForm() {
+    document.getElementById('fasta_file').value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('submitBtn').disabled = true;
+
+    // Reset checkboxes to default
+    const checkboxes = document.querySelectorAll('.option-card input[type="checkbox"]');
+    const cards = document.querySelectorAll('.option-card');
+
+    checkboxes.forEach((checkbox, index) => {
+        checkbox.checked = true; // Default all to checked
+        cards[index].classList.add('selected');
+    });
+}
+</script>
+{% endblock %}
