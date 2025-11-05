@@ -205,7 +205,8 @@
             <ul>
                 <li>清理序列头部（删除空格后的内容，如 ">AT2G1750 WUS" → ">AT2G1750"）</li>
                 <li>将所有序列转换为大写</li>
-                <li>剔除含有无效碱基的序列（非ATCG字符）</li>
+                <li>智能识别序列类型（NT/AA）并过滤无效字符</li>
+                <li>去除基因变体重复（如AT2G17950.1和AT2G17950.10，保留最长序列）</li>
                 <li>处理完成后自动开始下载格式化后的文件</li>
             </ul>
         </div>
@@ -246,8 +247,13 @@
                     </div>
                     <div class="option-card selected">
                         <input type="checkbox" name="filter_invalid" class="checkbox" checked>
-                        <strong>过滤无效序列</strong><br>
-                        <small>删除含有非ATCG碱基的序列</small>
+                        <strong>智能过滤无效序列</strong><br>
+                        <small>自动识别NT/AA序列类型并验证</small>
+                    </div>
+                    <div class="option-card selected">
+                        <input type="checkbox" name="deduplicate" class="checkbox" checked>
+                        <strong>去除基因变体重复</strong><br>
+                        <small>保留基因变体中最长的序列</small>
                     </div>
                 </div>
             </div>

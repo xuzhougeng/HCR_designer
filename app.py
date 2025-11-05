@@ -1237,7 +1237,120 @@ def get_recommended_probe_number(tpm):
     else:
         return 3
 
-def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filter_invalid=True):
+def deduplicate_gene_variants(sequences_dict, stats):
+    """
+    Remove duplicate gene variants, keeping only the longest sequence for each base gene ID.
+    Detects variants with suffixes like .1/.2/.10 or -1/-2/-10
+
+    Args:
+        sequences_dict: Dictionary of {header_id: sequence}
+        stats: Statistics dictionary to update
+
+    Returns:
+        Dictionary with deduplicated sequences
+    """
+    import re
+
+    # Group sequences by base gene ID
+    gene_groups = {}
+
+    for header_id, sequence in sequences_dict.items():
+        # Extract base gene ID by removing variant suffixes
+        # Pattern matches .1, .2, .10, -1, -2, -10, etc.
+        base_gene_match = re.match(r'^(.+?)[\.\-]\d+$', header_id)
+
+        if base_gene_match:
+            base_gene_id = base_gene_match.group(1)
+        else:
+            base_gene_id = header_id
+
+        if base_gene_id not in gene_groups:
+            gene_groups[base_gene_id] = []
+
+        gene_groups[base_gene_id].append((header_id, sequence))
+
+    # Keep only the longest sequence for each gene group
+    deduplicated_dict = {}
+
+    for base_gene_id, variants in gene_groups.items():
+        if len(variants) == 1:
+            # No variants, keep as is
+            header_id, sequence = variants[0]
+            deduplicated_dict[header_id] = sequence
+        else:
+            # Multiple variants, keep the longest
+            longest_variant = max(variants, key=lambda x: len(x[1]))
+            header_id, sequence = longest_variant
+            deduplicated_dict[header_id] = sequence
+
+            # Update statistics
+            removed_variants = [v for v in variants if v != longest_variant]
+            stats['deduplicated_count'] += len(removed_variants)
+            for removed_header, removed_seq in removed_variants:
+                stats['deduplicated_sequences'].append((removed_header, f"Shorter variant of {base_gene_id} (length: {len(removed_seq)} vs {len(sequence)})"))
+
+    return deduplicated_dict
+
+def detect_sequence_type(sequence):
+    """
+    Detect if a sequence is nucleotide (NT) or amino acid (AA)
+
+    Args:
+        sequence: DNA/RNA/protein sequence string
+
+    Returns:
+        'NT' for nucleotide sequences, 'AA' for amino acid sequences
+    """
+    sequence = sequence.upper().strip()
+
+    if len(sequence) == 0:
+        return 'AA'
+
+    # Amino acid specific characters (never found in DNA/RNA)
+    aa_only = set('DEFHIKLMPQRSVWY')  # Removed T, G, N as they can be nucleotides
+
+    # Check for amino acid specific characters - if found, it's definitely protein
+    if any(char in aa_only for char in sequence):
+        return 'AA'
+
+    # Standard nucleotides
+    standard_nt = set('ATCGU')
+
+    # Count standard nucleotides
+    nt_count = sum(1 for char in sequence if char in standard_nt)
+
+    # If >= 70% of sequence is standard nucleotides, consider it NT
+    if nt_count / len(sequence) >= 0.70:
+        return 'NT'
+
+    # Default to AA for ambiguous cases
+    return 'AA'
+
+def validate_sequence(sequence, sequence_type):
+    """
+    Validate sequence based on its detected type
+
+    Args:
+        sequence: The sequence string
+        sequence_type: 'NT' or 'AA'
+
+    Returns:
+        tuple: (is_valid, invalid_characters_set)
+    """
+    sequence = sequence.upper().strip()
+
+    if sequence_type == 'NT':
+        # Valid nucleotide characters (including IUPAC ambiguity codes)
+        valid_nt = set('ATCGURYSWKMBDHVN')
+        invalid_chars = set(sequence) - valid_nt
+    else:  # AA
+        # Valid amino acid characters (including ambiguity codes)
+        valid_aa = set('ACDEFGHIKLMNPQRSTVWYXZ*')
+        invalid_chars = set(sequence) - valid_aa
+
+    return len(invalid_chars) == 0, invalid_chars
+
+def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filter_invalid=True, deduplicate=True):
     """
     Format FASTA sequences according to specified options
 
@@ -1246,10 +1359,13 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
         clean_headers: Remove text after first space in headers
         uppercase: Convert sequences to uppercase
         filter_invalid: Remove sequences with non-ATCG bases
+        deduplicate: Keep only the longest sequence for gene variants (.1/.2/.10, -1/-2/-10)
 
     Returns:
         tuple: (formatted_text, stats_dict)
     """
+    import re
+
     lines = input_text.strip().split('\n')
     formatted_lines = []
     stats = {
@@ -1257,11 +1373,16 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
         'formatted_count': 0,
         'removed_count': 0,
         'headers_cleaned': 0,
-        'removed_sequences': []
+        'removed_sequences': [],
+        'deduplicated_count': 0,
+        'deduplicated_sequences': [],
+        'sequence_types': {'NT': 0, 'AA': 0},
+        'detected_type': None  # Will be set based on majority
     }
 
     current_header = None
     current_sequence = []
+    sequences_dict = {}  # For storing sequences before deduplication
 
     for line in lines:
         line = line.strip()
@@ -1278,20 +1399,23 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
                 if uppercase:
                     sequence = sequence.upper()
 
-                # Check for invalid bases if filtering is enabled
+                # Detect sequence type and validate if filtering is enabled
+                sequence_type = detect_sequence_type(sequence)
+                stats['sequence_types'][sequence_type] += 1
+
                 if filter_invalid:
-                    valid_bases = set('ATCG')
-                    invalid_bases = set(sequence) - valid_bases
-                    if invalid_bases:
+                    is_valid, invalid_chars = validate_sequence(sequence, sequence_type)
+                    if not is_valid:
                         stats['removed_count'] += 1
-                        stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid bases: {', '.join(invalid_bases)}"))
+                        char_type = "amino acids" if sequence_type == 'AA' else "nucleotides"
+                        stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid {char_type}: {', '.join(invalid_chars)} (detected as {sequence_type})"))
                         current_header = None
                         current_sequence = []
                         continue
 
-                # Add formatted sequence
-                formatted_lines.append(current_header)
-                formatted_lines.append(sequence)
+                # Store sequence for potential deduplication
+                header_id = current_header.strip('>')
+                sequences_dict[header_id] = sequence
                 stats['formatted_count'] += 1
 
             # Process new header
@@ -1313,20 +1437,52 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
         if uppercase:
             sequence = sequence.upper()
 
+        # Detect sequence type and validate
+        sequence_type = detect_sequence_type(sequence)
+        stats['sequence_types'][sequence_type] += 1
+
         if filter_invalid:
-            valid_bases = set('ATCG')
-            invalid_bases = set(sequence) - valid_bases
-            if invalid_bases:
+            is_valid, invalid_chars = validate_sequence(sequence, sequence_type)
+            if not is_valid:
                 stats['removed_count'] += 1
-                stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid bases: {', '.join(invalid_bases)}"))
+                char_type = "amino acids" if sequence_type == 'AA' else "nucleotides"
+                stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid {char_type}: {', '.join(invalid_chars)} (detected as {sequence_type})"))
             else:
-                formatted_lines.append(current_header)
-                formatted_lines.append(sequence)
+                header_id = current_header.strip('>')
+                sequences_dict[header_id] = sequence
                 stats['formatted_count'] += 1
         else:
-            formatted_lines.append(current_header)
-            formatted_lines.append(sequence)
+            header_id = current_header.strip('>')
+            sequences_dict[header_id] = sequence
             stats['formatted_count'] += 1
+
+    # Apply deduplication if enabled
+    if deduplicate:
+        sequences_dict = deduplicate_gene_variants(sequences_dict, stats)
+
+    # Generate final formatted output
+    for header_id, sequence in sequences_dict.items():
+        # If deduplication was applied, use the base gene ID without variant suffix
+        if deduplicate:
+            import re
+            base_gene_match = re.match(r'^(.+?)[\.\-]\d+$', header_id)
+            if base_gene_match:
+                output_header = base_gene_match.group(1)
+            else:
+                output_header = header_id
+        else:
+            output_header = header_id
+
+        formatted_lines.append(f'>{output_header}')
+        formatted_lines.append(sequence)
+
+    # Set detected type based on majority
+    if stats['sequence_types']['NT'] > stats['sequence_types']['AA']:
+        stats['detected_type'] = 'NT'
+    elif stats['sequence_types']['AA'] > stats['sequence_types']['NT']:
+        stats['detected_type'] = 'AA'
+    else:
+        stats['detected_type'] = 'Mixed'
 
     return '\n'.join(formatted_lines), stats
 
@@ -1338,6 +1494,7 @@ def formatting():
             clean_headers = 'clean_headers' in request.form
             uppercase = 'uppercase' in request.form
             filter_invalid = 'filter_invalid' in request.form
+            deduplicate = 'deduplicate' in request.form
 
             # Get input from file upload only
             if 'fasta_file' not in request.files:
@@ -1358,7 +1515,7 @@ def formatting():
 
             # Format sequences
             formatted_sequences, stats = format_fasta_sequences(
-                content, clean_headers, uppercase, filter_invalid
+                content, clean_headers, uppercase, filter_invalid, deduplicate
             )
 
             if not formatted_sequences.strip():
