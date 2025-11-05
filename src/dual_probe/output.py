@@ -224,7 +224,7 @@ class ProbeOutputHandler:
         csv_file = self.output_dir / f"{output_prefix}.csv"
 
         headers = ['Set_ID', 'Primer_Type', 'Sequence', 'Start', 'End',
-                  'Length', 'Tm', 'GC_Content', 'Strong_Junction']
+                  'Length', 'Tm', 'GC_Content', 'Strong_Junction(Left only)']
 
         with open(csv_file, 'w', newline='') as f:
             writer = csv.writer(f)
@@ -237,6 +237,12 @@ class ProbeOutputHandler:
                     ('Right', probe_set.right_probe)
                 ]:
                     sequence, start, end, tm, gc = primer_info
+                    # Strong_Junction只对Left探针有意义，Right探针显示"-"
+                    if primer_type == 'Left':
+                        strong_junction_value = "Yes" if probe_set.strong_junction else "No"
+                    else:
+                        strong_junction_value = "-"
+
                     writer.writerow([
                         f"{task_name}_{i}",
                         primer_type,
@@ -246,7 +252,7 @@ class ProbeOutputHandler:
                         len(sequence),
                         f"{tm:.1f}",
                         f"{gc:.1f}",
-                        "Yes" if probe_set.strong_junction else "No"
+                        strong_junction_value
                     ])
 
     def _run_blast_analysis(self, sequence: str, blast_db: str) -> dict:
