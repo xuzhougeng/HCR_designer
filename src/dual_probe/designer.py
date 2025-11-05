@@ -8,13 +8,14 @@ from collections import Counter
 
 from .config import DualProbeConfig
 from ..common.sequence_utils import (
-    calculate_gc_content, 
+    calculate_gc_content,
     check_poly_n,
     has_dimer_issues,
     calculate_tm,
     is_valid_probe,
     calculate_kmer_count,
-    has_low_complexity
+    has_low_complexity,
+    check_left_probe_strong_junction
 )
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ class ProbeSet:
     """探针组合结果类"""
     left_probe: Tuple[str, int, int, float, float]  # 序列,起始位置,结束位置,Tm值,GC含量
     right_probe: Tuple[str, int, int, float, float]
+    strong_junction: bool = True  # Left探针3'端第一个碱基是否是强碱基(G/C)
 
 
 class DualFixedProbeDesigner:
@@ -248,7 +250,10 @@ class DualFixedProbeDesigner:
         for start_pos, probe_seq in probes.items():
             left_seq = probe_seq[:self.config.left_probe_length]
             right_seq = probe_seq[-self.config.right_probe_length:]
-            
+
+            # 检查Left探针3'端前2个碱基是否都是强碱基(G/C)
+            strong_junction = check_left_probe_strong_junction(left_seq)
+
             probe_set = ProbeSet(
                 left_probe=(
                     left_seq,
@@ -263,7 +268,8 @@ class DualFixedProbeDesigner:
                     start_pos + total_length,
                     calculate_tm(right_seq),
                     calculate_gc_content(right_seq)
-                )
+                ),
+                strong_junction=strong_junction
             )
             probe_sets.append(probe_set)
             
@@ -326,8 +332,15 @@ class DualProbeDesigner:
                 logger.debug(f"Found valid probe set:")
                 logger.debug(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
                 logger.debug(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
-                
-                probe_set = ProbeSet(left_result, right_result)
+
+                # 检查Left探针3'端前2个碱基是否都是强碱基(G/C)
+                strong_junction = check_left_probe_strong_junction(left_result[0])
+                if strong_junction:
+                    logger.debug(f"Left probe has strong junction (GC-rich at 3' end)")
+                else:
+                    logger.debug(f"Left probe has weak junction (AT-containing at 3' end)")
+
+                probe_set = ProbeSet(left_result, right_result, strong_junction)
                 probe_sets.append(probe_set)
                 
                 # 更新已使用的位置

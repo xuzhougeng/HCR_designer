@@ -231,6 +231,38 @@ def is_valid_probe(sequence: str,
     if not check_poly_n(sequence, poly_n):
         logger.debug(f"连续N个相同的碱基: {sequence}")
         return False
-    
+
 
     return True
+
+
+def check_left_probe_strong_junction(left_probe_seq: str) -> bool:
+    """
+    检查Left探针3'端第一个碱基是否是强碱基(G/C)
+
+    在双探针系统中，Left探针序列已经过reverse_complement转换，
+    因此探针序列的第一个碱基(索引0)对应靶标上Left探针3'端的碱基。
+
+    Parameters:
+    -----------
+    left_probe_seq : str
+        Left探针序列（已经过reverse_complement转换）
+
+    Returns:
+    --------
+    bool: 如果第一个碱基是强碱基(G或C)则返回True，否则返回False
+
+    Example:
+        >>> check_left_probe_strong_junction("GGCATGCATG")  # G开头
+        True
+        >>> check_left_probe_strong_junction("CGCATGCATG")  # C开头
+        True
+        >>> check_left_probe_strong_junction("AGCATGCATG")  # A开头（弱碱基）
+        False
+    """
+    if len(left_probe_seq) < 1:
+        logger.warning(f"Left探针序列为空: {left_probe_seq}")
+        return False
+
+    # 只检查第一个碱基是否是强碱基(G或C)
+    return left_probe_seq[0] in 'GC'

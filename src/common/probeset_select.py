@@ -157,10 +157,15 @@ def select_probe_sets(data, max_selected=5):
         # 同时考虑质量得分和特异性评估
         quality_score = float(probe_set['evaluation']['quality_score'])
         specificity_score = evaluate_specificity(probe_set)
-        
+
         # 综合得分 = 质量得分 + 特异性得分（两者都是越小越好）
         combined_score = quality_score + specificity_score
-        
+
+        # 如果Left探针3'端具有强碱基连接(第一个碱基是G/C)，降低综合得分以优先选择
+        # strong_junction=True时减5分，使其更容易被选中
+        if probe_set['evaluation'].get('strong_junction', False):
+            combined_score -= 5.0
+
         probe_set_info.append({
             'id': probe_set['id'],
             'start': start,

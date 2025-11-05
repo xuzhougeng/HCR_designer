@@ -191,10 +191,14 @@ class ProbeOutputHandler:
         # 计算平均Tm和GC
         avg_tm = (probe_set.left_probe[3] + probe_set.right_probe[3]) / 2
         avg_gc = (probe_set.left_probe[4] + probe_set.right_probe[4]) / 2
-        
+
         file.write(f"平均Tm值: {avg_tm:.1f}°C\n")
         file.write(f"平均GC含量: {avg_gc:.1f}%\n")
-        
+
+        # 写入强碱基连接信息
+        strong_junction_status = "是" if probe_set.strong_junction else "否"
+        file.write(f"Left探针3'端强碱基连接: {strong_junction_status} (第一个碱基是G/C)\n")
+
         # 如果有探针组合得分，写入得分信息
         if probe_set_score is not None:
             file.write(f"探针组合质量得分: {probe_set_score:.1f} (分数越低越好)\n")
@@ -214,18 +218,18 @@ class ProbeOutputHandler:
                 f.write(f"{task_name}\t{probe_set.right_probe[1]}\t"
                        f"{probe_set.right_probe[2]}\tR-{i}\t0\t+\n")
 
-    def _save_csv_format(self, probe_sets: List[ProbeSet], 
+    def _save_csv_format(self, probe_sets: List[ProbeSet],
                         task_name: str, output_prefix: str):
         """保存CSV格式结果"""
         csv_file = self.output_dir / f"{output_prefix}.csv"
-        
-        headers = ['Set_ID', 'Primer_Type', 'Sequence', 'Start', 'End', 
-                  'Length', 'Tm', 'GC_Content']
-        
+
+        headers = ['Set_ID', 'Primer_Type', 'Sequence', 'Start', 'End',
+                  'Length', 'Tm', 'GC_Content', 'Strong_Junction']
+
         with open(csv_file, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(headers)
-            
+
             for i, probe_set in enumerate(probe_sets, 1):
                 # 写入每个探针的信息
                 for primer_type, primer_info in [
@@ -241,7 +245,8 @@ class ProbeOutputHandler:
                         end,
                         len(sequence),
                         f"{tm:.1f}",
-                        f"{gc:.1f}"
+                        f"{gc:.1f}",
+                        "Yes" if probe_set.strong_junction else "No"
                     ])
 
     def _run_blast_analysis(self, sequence: str, blast_db: str) -> dict:
@@ -402,9 +407,10 @@ class ProbeOutputHandler:
             "gap": gap,
             "total_span": total_length,
             "average_tm": f"{avg_tm:.1f}",
-            "average_gc_content": f"{avg_gc:.1f}"
+            "average_gc_content": f"{avg_gc:.1f}",
+            "strong_junction": probe_set.strong_junction
         }
-        
+
         if probe_set_score is not None:
             data["quality_score"] = f"{probe_set_score:.1f}"
         
