@@ -137,7 +137,6 @@ flowchart TB
   - `config.py`: 配置类
   - `designer.py`: 设计器类
     - `DualProbeDesigner`: 双探针设计器
-    - `DualFixedProbeDesigner`: 固定长度双探针设计器
   - `output.py`: 输出处理
 
 #### 3.2 triple_probe/
