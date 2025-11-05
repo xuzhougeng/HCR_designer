@@ -251,7 +251,7 @@ class DualFixedProbeDesigner:
             left_seq = probe_seq[:self.config.left_probe_length]
             right_seq = probe_seq[-self.config.right_probe_length:]
 
-            # 检查Left探针3'端前2个碱基是否都是强碱基(G/C)
+            # 检查Left探针3'端第一个碱基是否是强碱基(G/C)
             strong_junction = check_left_probe_strong_junction(left_seq)
 
             probe_set = ProbeSet(
@@ -333,7 +333,7 @@ class DualProbeDesigner:
                 logger.debug(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
                 logger.debug(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
 
-                # 检查Left探针3'端前2个碱基是否都是强碱基(G/C)
+                # 检查Left探针3'端第一个碱基是否是强碱基(G/C)
                 strong_junction = check_left_probe_strong_junction(left_result[0])
                 if strong_junction:
                     logger.debug(f"Left probe has strong junction (GC-rich at 3' end)")
