@@ -236,12 +236,18 @@ def is_valid_probe(sequence: str,
     return True
 
 
-def check_left_probe_strong_junction(left_probe_seq: str) -> bool:
+def check_left_probe_gc_junction(left_probe_seq: str) -> bool:
     """
-    检查Left探针3'端第一个碱基是否是强碱基(G/C)
+    检查Left探针连接处是否为G/C碱基（SplintR连接酶抑制位点）
 
-    在双探针系统中，Left探针序列已经过reverse_complement转换，
-    因此探针序列的第一个碱基(索引0)对应靶标上Left探针3'端的碱基。
+    在使用SplintR连接酶的双探针系统中，供体侧（Left探针3'端）连接处
+    如果是dG/C或dC/G碱基对，会部分抑制SplintR酶活性，降低连接效率。
+    因此应优先选择A/T碱基的探针以获得更好的连接效果。
+
+    技术说明：
+    - SplintR连接酶（PBCV-1 DNA连接酶）可催化以互补RNA链为模板的单链DNA连接
+    - 该酶对连接处碱基对有选择性：dC/G和dG/C配对会降低酶活性
+    - Left探针序列经过reverse_complement转换后，序列第一个碱基对应连接处
 
     Parameters:
     -----------
@@ -250,19 +256,21 @@ def check_left_probe_strong_junction(left_probe_seq: str) -> bool:
 
     Returns:
     --------
-    bool: 如果第一个碱基是强碱基(G或C)则返回True，否则返回False
+    bool: 如果连接处为G或C碱基则返回True（表示会抑制SplintR酶活性，不利于连接）
 
     Example:
-        >>> check_left_probe_strong_junction("GGCATGCATG")  # G开头
+        >>> check_left_probe_gc_junction("GGCATGCATG")  # G开头，不利于连接
         True
-        >>> check_left_probe_strong_junction("CGCATGCATG")  # C开头
+        >>> check_left_probe_gc_junction("CGCATGCATG")  # C开头，不利于连接
         True
-        >>> check_left_probe_strong_junction("AGCATGCATG")  # A开头（弱碱基）
+        >>> check_left_probe_gc_junction("AGCATGCATG")  # A开头，有利于连接
+        False
+        >>> check_left_probe_gc_junction("TGCATGCATG")  # T开头，有利于连接
         False
     """
     if len(left_probe_seq) < 1:
         logger.warning(f"Left探针序列为空: {left_probe_seq}")
         return False
 
-    # 只检查第一个碱基是否是强碱基(G或C)
+    # 检查第一个碱基是否是G或C（会抑制SplintR酶活性）
     return left_probe_seq[0] in 'GC'

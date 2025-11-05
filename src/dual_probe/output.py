@@ -195,9 +195,9 @@ class ProbeOutputHandler:
         file.write(f"平均Tm值: {avg_tm:.1f}°C\n")
         file.write(f"平均GC含量: {avg_gc:.1f}%\n")
 
-        # 写入强碱基连接信息
-        strong_junction_status = "是" if probe_set.strong_junction else "否"
-        file.write(f"Left探针3'端强碱基连接: {strong_junction_status} (第一个碱基是G/C)\n")
+        # 写入连接处碱基信息（影响SplintR酶活性）
+        gc_junction_status = "是" if probe_set.has_gc_junction else "否"
+        file.write(f"Left探针连接处含G/C碱基: {gc_junction_status} (G/C会抑制SplintR酶，不利于连接)\n")
 
         # 如果有探针组合得分，写入得分信息
         if probe_set_score is not None:
@@ -224,7 +224,7 @@ class ProbeOutputHandler:
         csv_file = self.output_dir / f"{output_prefix}.csv"
 
         headers = ['Set_ID', 'Primer_Type', 'Sequence', 'Start', 'End',
-                  'Length', 'Tm', 'GC_Content', 'Strong_Junction(Left only)']
+                  'Length', 'Tm', 'GC_Content', 'Has_GC_Junction(Left only)']
 
         with open(csv_file, 'w', newline='') as f:
             writer = csv.writer(f)
@@ -237,11 +237,11 @@ class ProbeOutputHandler:
                     ('Right', probe_set.right_probe)
                 ]:
                     sequence, start, end, tm, gc = primer_info
-                    # Strong_Junction只对Left探针有意义，Right探针显示"-"
+                    # Has_GC_Junction只对Left探针有意义（影响SplintR酶活性），Right探针显示"-"
                     if primer_type == 'Left':
-                        strong_junction_value = "Yes" if probe_set.strong_junction else "No"
+                        gc_junction_value = "Yes" if probe_set.has_gc_junction else "No"
                     else:
-                        strong_junction_value = "-"
+                        gc_junction_value = "-"
 
                     writer.writerow([
                         f"{task_name}_{i}",
@@ -252,7 +252,7 @@ class ProbeOutputHandler:
                         len(sequence),
                         f"{tm:.1f}",
                         f"{gc:.1f}",
-                        strong_junction_value
+                        gc_junction_value
                     ])
 
     def _run_blast_analysis(self, sequence: str, blast_db: str) -> dict:
@@ -414,7 +414,7 @@ class ProbeOutputHandler:
             "total_span": total_length,
             "average_tm": f"{avg_tm:.1f}",
             "average_gc_content": f"{avg_gc:.1f}",
-            "strong_junction": probe_set.strong_junction
+            "has_gc_junction": probe_set.has_gc_junction
         }
 
         if probe_set_score is not None:

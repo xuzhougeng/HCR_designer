@@ -15,7 +15,7 @@ from ..common.sequence_utils import (
     is_valid_probe,
     calculate_kmer_count,
     has_low_complexity,
-    check_left_probe_strong_junction
+    check_left_probe_gc_junction
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class ProbeSet:
     """探针组合结果类"""
     left_probe: Tuple[str, int, int, float, float]  # 序列,起始位置,结束位置,Tm值,GC含量
     right_probe: Tuple[str, int, int, float, float]
-    strong_junction: bool = True  # Left探针3'端第一个碱基是否是强碱基(G/C)
+    has_gc_junction: bool = False  # Left探针连接处是否为G/C碱基（会抑制SplintR酶活性）
 
 
 class DualProbeDesigner:
@@ -152,14 +152,14 @@ class DualProbeDesigner:
                 logger.debug(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
                 logger.debug(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
 
-                # 检查Left探针3'端第一个碱基是否是强碱基(G/C)
-                strong_junction = check_left_probe_strong_junction(left_result[0])
-                if strong_junction:
-                    logger.debug(f"Left probe has strong junction (GC-rich at 3' end)")
+                # 检查Left探针连接处是否为G/C碱基（会抑制SplintR酶）
+                has_gc_junction = check_left_probe_gc_junction(left_result[0])
+                if has_gc_junction:
+                    logger.debug(f"Left probe has G/C at junction (may inhibit SplintR ligation)")
                 else:
-                    logger.debug(f"Left probe has weak junction (AT-containing at 3' end)")
+                    logger.debug(f"Left probe has A/T at junction (favorable for SplintR ligation)")
 
-                probe_set = ProbeSet(left_result, right_result, strong_junction)
+                probe_set = ProbeSet(left_result, right_result, has_gc_junction)
                 probe_sets.append(probe_set)
                 
                 # 更新已使用的位置
