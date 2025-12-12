@@ -29,6 +29,7 @@ class DualProbeConfig:
 
     # 筛选参数
     max_selected: int = 5  # 要选择的探针组合数量
+    gc_junction_penalty: float = 5.0  # Left探针G/C连接处的惩罚分数（分数越高越不利）
 
     blast_db: str = None
 
@@ -66,6 +67,7 @@ class DualProbeConfig:
             "kmer_size": self.kmer_size,
             "min_kmer_count": self.min_kmer_count,
             "max_selected": self.max_selected,
+            "gc_junction_penalty": self.gc_junction_penalty,
             "output_dir": str(self.output_dir)
         }
 

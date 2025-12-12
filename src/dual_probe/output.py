@@ -447,17 +447,18 @@ class ProbeOutputHandler:
             
         file.write("\n")
 
-    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str, max_selected: int = 5):
+    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str, max_selected: int = 5, gc_junction_penalty: float = 5.0):
         """
         基于select_probe_sets对探针组合进行筛选并输出报告
-        
+
         Args:
             json_data: 包含探针组合数据的字典
             output_prefix: 输出文件前缀
             max_selected: 要选择的探针组合数量，默认为5
+            gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
         """
         # 使用select_probe_sets进行筛选
-        filtered_data = select_probe_sets(json_data, max_selected)
+        filtered_data = select_probe_sets(json_data, max_selected, gc_junction_penalty)
         
         # 保存筛选后的完整JSON数据
         json_output_file = self.output_dir / f"{output_prefix}.json"

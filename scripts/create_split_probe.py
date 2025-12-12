@@ -12,13 +12,13 @@ logging.basicConfig(level=logging.INFO)
 complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 ANCHOR_SEQ = "TCTCGTTTTCTGAACTTAGC"
 
-def create_config( min_length, max_length, 
-                gc_min, gc_max, tm_min, tm_max, 
-                min_gap, inner_gap, 
+def create_config( min_length, max_length,
+                gc_min, gc_max, tm_min, tm_max,
+                min_gap, inner_gap,
                 min_complementary_length, poly_n, kmer_size, min_kmer_count,
-                output_dir, blast_db, max_selected=5):
+                output_dir, blast_db, max_selected=5, gc_junction_penalty=5.0):
     """创建双探针配置对象
-    
+
     Args:
         blast_db: 参考基因组路径
         min_length: 最小引物长度
@@ -33,17 +33,18 @@ def create_config( min_length, max_length,
         poly_n: 多聚核苷酸长度
         output_dir: 输出文件夹
         max_selected: 要选择的探针组合数量，默认为5
-        
+        gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
+
     Returns:
         DualProbeConfig: 配置对象
     """
     return DualProbeConfig(
-                            min_length=min_length, 
-                            max_length=max_length, 
-                            gc_min=gc_min, 
-                            gc_max=gc_max, 
-                            tm_min=tm_min, 
-                            tm_max=tm_max, 
+                            min_length=min_length,
+                            max_length=max_length,
+                            gc_min=gc_min,
+                            gc_max=gc_max,
+                            tm_min=tm_min,
+                            tm_max=tm_max,
                             min_gap=min_gap,
                             inner_gap=inner_gap,
                             min_complementary_length=min_complementary_length,
@@ -52,7 +53,8 @@ def create_config( min_length, max_length,
                             min_kmer_count=min_kmer_count,
                             output_dir=output_dir,
                             blast_db=blast_db,
-                            max_selected=max_selected)
+                            max_selected=max_selected,
+                            gc_junction_penalty=gc_junction_penalty)
 
 def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=',', probe_ids=None):
     """
@@ -177,7 +179,7 @@ def generate_dual_probe(sequence: str,
     }
     
     # 应用筛选并保存筛选结果
-    output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered", config.max_selected)
+    output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered", config.max_selected, config.gc_junction_penalty)
     
     # 获取筛选后的探针组合
     filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered.json")
@@ -262,32 +264,34 @@ def generate_dual_probe(sequence: str,
     return probe_sets
 
 
-def main( name, sequence, gene_id, 
-         min_length, max_length, 
-         gc_min, gc_max, 
-         tm_min, tm_max, 
+def main( name, sequence, gene_id,
+         min_length, max_length,
+         gc_min, gc_max,
+         tm_min, tm_max,
          min_gap,
-         min_complementary_length, 
-         poly_n, 
+         min_complementary_length,
+         poly_n,
          kmer_size, min_kmer_count,
          ref_genome, bridge_probe, bridge_probe_id,
          output_dir,
-         max_selected: int = 5):
+         max_selected: int = 5,
+         gc_junction_penalty: float = 5.0):
     """主函数
-    
+
     Args:
         ...其他参数...
         max_selected: 要选择的探针组合数量，默认为5
+        gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
     """
     blast_db = ref_genome
     config = create_config(
-                           min_length=min_length, 
-                           max_length=max_length, 
-                           gc_min=gc_min, 
-                           gc_max=gc_max, 
-                           tm_min=tm_min, 
-                           tm_max=tm_max, 
-                           min_gap=min_gap, 
+                           min_length=min_length,
+                           max_length=max_length,
+                           gc_min=gc_min,
+                           gc_max=gc_max,
+                           tm_min=tm_min,
+                           tm_max=tm_max,
+                           min_gap=min_gap,
                            inner_gap=0, # default is 2
                            min_complementary_length=min_complementary_length,
                            poly_n=poly_n,
@@ -295,7 +299,8 @@ def main( name, sequence, gene_id,
                            min_kmer_count=min_kmer_count,
                            output_dir=output_dir,
                            blast_db=blast_db,
-                           max_selected=max_selected)
+                           max_selected=max_selected,
+                           gc_junction_penalty=gc_junction_penalty)
     
     # 设计探针
     probe_sets = generate_dual_probe(sequence, name, bridge_probe_id, bridge_probe, config)
@@ -323,9 +328,10 @@ if __name__ == "__main__":
     parser.add_argument('--bridge-probe-id', required=True, help='桥接探针ID')
     parser.add_argument('--output-dir', required=True, help='输出目录')
     parser.add_argument('--max-selected', type=int, default=5, help='要选择的探针组合数量（默认：5）')
-    
+    parser.add_argument('--gc-junction-penalty', type=float, default=5.0, help='Left探针G/C连接处的惩罚分数（默认：5.0，建议：20-50以优先选择A/T）')
+
     args = parser.parse_args()
-    
+
     main(args.name, args.sequence, args.gene_id,
          args.min_length, args.max_length,
          args.gc_min, args.gc_max,
@@ -336,4 +342,5 @@ if __name__ == "__main__":
          args.kmer_size, args.min_kmer_count,
          args.ref_genome, args.bridge_probe, args.bridge_probe_id,
          args.output_dir,
-         args.max_selected)
+         args.max_selected,
+         args.gc_junction_penalty)
