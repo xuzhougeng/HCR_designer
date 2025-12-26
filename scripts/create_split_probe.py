@@ -16,7 +16,7 @@ def create_config( min_length, max_length,
                 gc_min, gc_max, tm_min, tm_max,
                 min_gap, inner_gap,
                 min_complementary_length, poly_n, kmer_size, min_kmer_count,
-                output_dir, blast_db, max_selected=5, gc_junction_penalty=5.0):
+                output_dir, blast_db, max_selected=5, gc_junction_penalty=20.0):
     """创建双探针配置对象
 
     Args:
@@ -171,7 +171,8 @@ def generate_dual_probe(sequence: str,
                     "gap": probe_set.right_probe[1] - probe_set.left_probe[2],
                     "total_span": probe_set.right_probe[2] - probe_set.left_probe[1],
                     "average_tm": (probe_set.left_probe[3] + probe_set.right_probe[3]) / 2,
-                    "average_gc_content": (probe_set.left_probe[4] + probe_set.right_probe[4]) / 2
+                    "average_gc_content": (probe_set.left_probe[4] + probe_set.right_probe[4]) / 2,
+                    "has_gc_junction": probe_set.has_gc_junction  # 添加GC junction检测结果
                 }
             }
             for i, probe_set in enumerate(probe_sets)
@@ -275,7 +276,7 @@ def main( name, sequence, gene_id,
          ref_genome, bridge_probe, bridge_probe_id,
          output_dir,
          max_selected: int = 5,
-         gc_junction_penalty: float = 5.0):
+         gc_junction_penalty: float = 20.0):
     """主函数
 
     Args:
@@ -328,7 +329,7 @@ if __name__ == "__main__":
     parser.add_argument('--bridge-probe-id', required=True, help='桥接探针ID')
     parser.add_argument('--output-dir', required=True, help='输出目录')
     parser.add_argument('--max-selected', type=int, default=5, help='要选择的探针组合数量（默认：5）')
-    parser.add_argument('--gc-junction-penalty', type=float, default=5.0, help='Left探针G/C连接处的惩罚分数（默认：5.0，建议：20-50以优先选择A/T）')
+    parser.add_argument('--gc-junction-penalty', type=float, default=20.0, help='Left探针G/C连接处的惩罚分数（默认：20.0，优先选择A/T开头探针）')
 
     args = parser.parse_args()
 

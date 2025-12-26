@@ -29,7 +29,7 @@ class DualProbeConfig:
 
     # 筛选参数
     max_selected: int = 5  # 要选择的探针组合数量
-    gc_junction_penalty: float = 5.0  # Left探针G/C连接处的惩罚分数（分数越高越不利）
+    gc_junction_penalty: float = 20.0  # Left探针G/C连接处的惩罚分数（分数越高越不利，默认20优先选择A/T）
 
     blast_db: str = None
 

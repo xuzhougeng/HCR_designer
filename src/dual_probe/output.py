@@ -447,7 +447,7 @@ class ProbeOutputHandler:
             
         file.write("\n")
 
-    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str, max_selected: int = 5, gc_junction_penalty: float = 5.0):
+    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str, max_selected: int = 5, gc_junction_penalty: float = 20.0):
         """
         基于select_probe_sets对探针组合进行筛选并输出报告
 

@@ -131,29 +131,38 @@ def evaluate_specificity(probe_set):
     
     return specificity_score
 
-def select_probe_sets(data, max_selected=5):
+def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
     """
     主处理函数：筛选探针组合并添加 keep 和 reason 字段
-    优先考虑间隔合适和覆盖度，然后考虑特异性
-    
+
+    策略：
+    1. 硬性过滤：直接排除has_gc_junction=True的探针（前两个碱基都是G/C）
+    2. 优先级：连接质量 > 覆盖率
+    3. 按综合得分排序选择，不追求最大覆盖度
+
     Args:
         data: 输入的探针数据
         max_selected: 要选择的探针组合数量，默认为5
+        gc_junction_penalty: Left探针G/C连接处的惩罚分数（硬性过滤时此参数无效）
     """
     probe_sets = data['probe_sets']
-    
+
     # 提取每个探针组合的探针区间，存储以便后续使用
     probe_intervals_dict = {}
     for probe_set in probe_sets:
         probe_intervals_dict[probe_set['id']] = get_probe_intervals(probe_set)
-    
+
     # 计算每个探针组的位置范围和特异性得分
     probe_set_info = []
     for probe_set in probe_sets:
+        # 硬性过滤：直接排除has_gc_junction=True的探针（前两个碱基都是G/C）
+        if probe_set['evaluation'].get('has_gc_junction', False):
+            continue
+
         start, end = calculate_position_range(probe_set)
         if start is None or end is None:
             continue
-            
+
         # 同时考虑质量得分和特异性评估
         quality_score = float(probe_set['evaluation']['quality_score'])
         specificity_score = evaluate_specificity(probe_set)
@@ -161,10 +170,11 @@ def select_probe_sets(data, max_selected=5):
         # 综合得分 = 质量得分 + 特异性得分（两者都是越小越好）
         combined_score = quality_score + specificity_score
 
-        # 如果Left探针连接处是G/C碱基，会抑制SplintR连接酶活性，增加惩罚分
-        # has_gc_junction=True时加5分，降低其被选中的优先级（得分越高越差）
-        if probe_set['evaluation'].get('has_gc_junction', False):
-            combined_score += 5.0
+        # 软惩罚：如果第一个碱基是G/C（但第二个不是），增加一定惩罚
+        # 这样会优先选择A/T开头的探针，但不会完全排除C/G单碱基开头的
+        left_seq = probe_set['left_probe']['sequence']
+        if len(left_seq) >= 1 and left_seq[0] in 'GC':
+            combined_score += gc_junction_penalty  # 使用可配置的惩罚分数
 
         probe_set_info.append({
             'id': probe_set['id'],
@@ -175,45 +185,26 @@ def select_probe_sets(data, max_selected=5):
             'combined_score': combined_score,
             'probe_set': probe_set
         })
-    
-    # 按位置排序
-    probe_set_info.sort(key=lambda x: x['start'])
-    
-    # 使用动态规划找出最佳组合
-    # 尝试所有可能的起始探针组
+
+    # 按综合得分排序（得分越低越优先）
+    # 优先选择质量最好的探针，不考虑覆盖度
+    probe_set_info.sort(key=lambda x: x['combined_score'])
+
+    # 贪心选择：按得分顺序选择，确保探针间距离足够
     best_selection = []
-    best_coverage_score = 0
-    best_combined_score = float('inf')
-    
-    for start_idx in range(len(probe_set_info)):
-        # 从每个可能的起点开始选择
-        current_selection = []
-        selected_intervals = []
-        
-        # 贪心选择，从当前起点遍历所有探针组
-        for i in range(start_idx, len(probe_set_info)):
-            current_probe_info = probe_set_info[i]
-            current_intervals = probe_intervals_dict[current_probe_info['id']]
-            
-            # 检查是否与已选择的探针组距离太近
-            if not is_set_too_close(current_intervals, selected_intervals):
-                current_selection.append(current_probe_info)
-                selected_intervals.extend(current_intervals)
-                
-                # 如果已经选择了足够数量的探针组，就停止
-                if len(current_selection) >= max_selected:
-                    break
-        
-        # 评估当前选择
-        if len(current_selection) == max_selected:
-            coverage_score = calculate_coverage_score([info['probe_set'] for info in current_selection])
-            combined_score_sum = sum(info['combined_score'] for info in current_selection)
-            
-            # 优先考虑覆盖度，其次考虑综合得分
-            if coverage_score > best_coverage_score or (coverage_score == best_coverage_score and combined_score_sum < best_combined_score):
-                best_selection = current_selection
-                best_coverage_score = coverage_score
-                best_combined_score = combined_score_sum
+    selected_intervals = []
+
+    for probe_info in probe_set_info:
+        current_intervals = probe_intervals_dict[probe_info['id']]
+
+        # 检查是否与已选择的探针组距离太近
+        if not is_set_too_close(current_intervals, selected_intervals):
+            best_selection.append(probe_info)
+            selected_intervals.extend(current_intervals)
+
+            # 如果已经选择了足够数量的探针组，就停止
+            if len(best_selection) >= max_selected:
+                break
     
     # 如果没有找到足够数量的探针组，就使用贪心算法找出最多的探针组
     if not best_selection:
@@ -241,22 +232,27 @@ def select_probe_sets(data, max_selected=5):
     # 确保选择了尽可能多的探针组
     if len(best_selection) < max_selected:
         print(f"Warning: Only {len(best_selection)} probe sets were selected, less than required {max_selected}.")
-    
+
     # 提取选择的探针组ID
     selected_ids = {info['id'] for info in best_selection}
-    
+
     # 为每个探针组合添加 keep 和 reason 字段
     for probe_set in probe_sets:
         probe_id = probe_set['id']
-        if probe_id in selected_ids:
+
+        # 检查是否因GC junction被过滤
+        if probe_set['evaluation'].get('has_gc_junction', False):
+            probe_set['keep'] = False
+            probe_set['reason'] = "Filtered: Left probe starts with GC/CC/CG/GG (inhibits SplintR ligation)."
+        elif probe_id in selected_ids:
             probe_set['keep'] = True
-            probe_set['reason'] = "Selected for optimal coverage and specificity."
+            probe_set['reason'] = "Selected for optimal quality and specificity."
         else:
             probe_set['keep'] = False
             # 查找距离太近的已选择探针组合
             closest_selected_id = find_closest_selected_set(
-                probe_set, 
-                [info['probe_set'] for info in best_selection], 
+                probe_set,
+                [info['probe_set'] for info in best_selection],
                 probe_intervals_dict
             )
             if closest_selected_id is not None:
