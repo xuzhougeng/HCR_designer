@@ -1340,8 +1340,8 @@ def validate_sequence(sequence, sequence_type):
     sequence = sequence.upper().strip()
 
     if sequence_type == 'NT':
-        # Valid nucleotide characters (including IUPAC ambiguity codes)
-        valid_nt = set('ATCGURYSWKMBDHVN')
+        # Valid nucleotide characters (standard bases only, no ambiguity codes)
+        valid_nt = set('ATCGU')
         invalid_chars = set(sequence) - valid_nt
     else:  # AA
         # Valid amino acid characters (including ambiguity codes)
