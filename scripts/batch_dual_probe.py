@@ -17,7 +17,7 @@ R: CTGTTTAAGA + [Bridge Probe] + R
 probe_table_file = "resources/probe_table.txt"
 bridge_seq_dict = {}
 for line in open(probe_table_file):
-    bridge_id, sequence = line.strip().split("\t")
+    bridge_id, sequence = line.strip().split()
     bridge_seq_dict[bridge_id] = sequence
 
 # Load cDNA sequences from TAIR10
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     genes = [gene.strip() for gene in gene_list.split('\n') if gene.strip()]
     
     # 创建基因到BP_ID的映射
-    gene_to_bp_id = {gene: i+1001 for i, gene in enumerate(genes)}
+    gene_to_bp_id = {gene: i + 1101 for i, gene in enumerate(genes)}
     
     # 创建进程池
     num_processes = min(mp.cpu_count(), len(genes))  # 使用CPU核心数或基因数量中的较小值
