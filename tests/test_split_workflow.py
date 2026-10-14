@@ -28,7 +28,9 @@ def fake_design(**kwargs):
         probe[side] = {'sequence': SEQ[:15], 'position': {'start': start, 'end': start + 14},
                        'tm': 50, 'gc_content': 50, 'blast_results': {'private_raw_hsp': 'retained in ZIP'}}
     output = Path(kwargs['output_dir'])
-    (output / (kwargs['name'] + '_filtered.json')).write_text(json.dumps({'probe_sets': [probe]}))
+    (output / (kwargs['name'] + '_filtered.json')).write_text(json.dumps(
+        {'probe_sets': [probe], 'target_policy': kwargs['target_policy'],
+         'search': {'status': 'completed', 'seconds': 1.5, 'reference': 'secret-path', 'executable': 'bin'} if assessed else None}))
     (output / 'dual_probe.csv').write_text('Probe ID,Sequence\n')
 
 
@@ -66,7 +68,7 @@ class GuidedWorkflowTests(unittest.TestCase):
             self.assertIn('结果复核', page.text)
             self.assertIn('name="min_gap" value="2"', page.text)
         template = self.client.get('/split/batch-template.csv')
-        self.assertIn('task_name,BP_ID,gene_id,max_selected', template.data.decode('utf-8-sig'))
+        self.assertIn('task_name,BP_ID,gene_id,max_selected,allowed_ids', template.data.decode('utf-8-sig'))
         template.close()
 
     def test_bojbu_target_comes_from_selected_reference_case_insensitively(self):
@@ -97,6 +99,93 @@ class GuidedWorkflowTests(unittest.TestCase):
         self.assertIn('第 2 行', invalid.json['error'])
         self.assertIn('第 3 行', invalid.json['error'])
         self.assertEqual(len(list((self.root / 'split_results').iterdir())), 1)
+
+    def test_allowed_transcripts_are_validated_against_the_reference(self):
+        prepared = self.prepare(allowed_ids='boother; BOOTHER')
+        self.assertEqual(prepared['tasks'][0]['allowed_ids'], ['BoOther'])
+        prepared = self.prepare(input_mode='batch', batch_text='one,BP_0079,BjuTarget,3,BoOther\ntwo,BP_0079,BoOther,,\n')
+        self.assertEqual([t['allowed_ids'] for t in prepared['tasks']], [['BoOther'], []])
+        for allowed in ['Missing', 'BjuTarget']:
+            response = self.client.post('/split/prepare', data=dict(self.input, allowed_ids=allowed))
+            self.assertEqual(response.status_code, 400, allowed)
+        self.assertEqual(self.client.post('/split/prepare', data=dict(self.input, input_mode='batch',
+            batch_text='one,BP_0079,BjuTarget,3,BoOther,extra\n')).status_code, 400)
+
+    def subgenome_upload(self, name, records):
+        return (io.BytesIO(''.join('>%s\n%s\n' % (key, SEQ) for key in records).encode()), name)
+
+    def test_subgenome_files_are_merged_into_one_reference_and_mapping(self):
+        prepared = self.prepare(reference_mode='subgenome_files', existing_ref_genome='', geneID='BjuA1',
+                                subgenome_files=[self.subgenome_upload('A.fasta', ['BjuA1', 'BjuA2']),
+                                                 self.subgenome_upload('B.fa', ['BjuB1'])])
+        self.assertEqual(prepared['reference']['sequence_count'], 3)
+        self.assertEqual(prepared['reference']['subgenome'],
+                         {'source': '按文件划分', 'annotated': 3, 'unannotated': 0, 'outside_reference': 0,
+                          'subgenome_counts': {'A': 2, 'B': 1}})
+        self.assertEqual(prepared['tasks'][0]['subgenome'], 'A')
+        directory = self.root / 'split_results' / prepared['id']
+        self.assertIn('BjuB1\tB', (directory / 'subgenomes.tsv').read_text())
+        self.assertEqual((directory / 'reference.fasta').read_text().count('>'), 3)
+        self.assertEqual(self.reference.read_text().count('>'), 2)  # the shared library is untouched
+
+    def test_subgenome_file_uploads_reject_duplicate_ids_names_and_single_files(self):
+        for files, field in [
+                ([self.subgenome_upload('A.fasta', ['BjuA1']), self.subgenome_upload('B.fa', ['BjuA1'])], 'subgenome_files'),
+                ([self.subgenome_upload('A.fasta', ['BjuA1']), self.subgenome_upload('A.fa', ['BjuB1'])], 'subgenome_files'),
+                ([self.subgenome_upload('A.fasta', ['BjuA1', 'BjuA2'])], 'subgenome_files'),
+                ([self.subgenome_upload('A.txt', ['BjuA1']), self.subgenome_upload('B.fa', ['BjuB1'])], 'subgenome_files')]:
+            response = self.client.post('/split/prepare', data=dict(
+                self.input, reference_mode='subgenome_files', existing_ref_genome='', geneID='BjuA1',
+                subgenome_files=files))
+            self.assertEqual(response.status_code, 400, files)
+            self.assertEqual(response.json['field'], field)
+        self.assertEqual(len(list((self.root / 'split_results').iterdir())), 0)
+        mixed = self.client.post('/split/prepare', data=dict(
+            self.input, reference_mode='subgenome_files',
+            subgenome_files=[self.subgenome_upload('A.fasta', ['BjuA1']), self.subgenome_upload('B.fa', ['BjuB1'])]))
+        self.assertEqual(mixed.status_code, 400)
+
+    def test_subgenome_mapping_file_is_validated_against_the_reference(self):
+        mapping = b'transcript_id,subgenome\nBjuTarget,A\nBoOther,B\nAbsent,C\n'
+        prepared = self.prepare(subgenome_map=(io.BytesIO(mapping), 'subgenomes.csv'))
+        self.assertEqual(prepared['reference']['subgenome']['subgenome_counts'], {'A': 1, 'B': 1})
+        self.assertEqual(prepared['reference']['subgenome']['outside_reference'], 1)
+        self.assertEqual(prepared['tasks'][0]['subgenome'], 'A')
+        for upload, field in [((io.BytesIO(b'Absent,C\n'), 'subgenomes.csv'), 'subgenome_map'),
+                              ((io.BytesIO(b'BjuTarget\n'), 'subgenomes.csv'), 'subgenome_map'),
+                              ((io.BytesIO(mapping), 'subgenomes.pdf'), 'subgenome_map')]:
+            response = self.client.post('/split/prepare', data=dict(self.input, subgenome_map=upload))
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json['field'], field)
+
+    @patch('scripts.split_workflow.design_split', side_effect=fake_design)
+    def test_subgenome_mode_needs_annotation_and_an_annotated_target(self, design):
+        plain = self.prepare()
+        response = self.client.post(plain['run_url'], json=dict(DEFAULTS, target_mode='subgenome'))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json['field'], 'target_mode')
+        self.assertIn('第一步', response.json['error'])
+        annotated = self.prepare(input_mode='batch', batch_text='one,BP_0079,BjuTarget\ntwo,BP_0079,BoOther\n',
+                                 subgenome_map=(io.BytesIO(b'BjuTarget\tA\n'), 'subgenomes.tsv'))
+        response = self.client.post(annotated['run_url'], json=dict(DEFAULTS, target_mode='subgenome'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('two', response.json['error'])
+        full = self.prepare(subgenome_map=(io.BytesIO(b'BjuTarget\tA\nBoOther\tB\n'), 'subgenomes.tsv'))
+        result = self.client.post(full['run_url'], json=dict(DEFAULTS, target_mode='subgenome', allowed_ids=''))
+        self.assertEqual(result.status_code, 200, result.json)
+        policy = design.call_args.kwargs['target_policy']
+        self.assertEqual(policy['mode'], 'subgenome')
+        self.assertEqual(policy['target_subgenome'], 'A')
+        self.assertTrue(policy['subgenome_map'].endswith('subgenomes.tsv'))
+        self.assertEqual(result.json['tasks'][0]['target_policy'], policy)
+
+    def test_target_mode_parameter_is_validated(self):
+        self.assertEqual(parse_parameters({})['target_mode'], 'species')
+        self.assertEqual(parse_parameters({'target_mode': 'subgenome'})['target_mode'], 'subgenome')
+        self.assertEqual(parse_parameters({'target_mode': 'transcript', 'exclusion_max_mismatches': 2})['exclusion_max_mismatches'], 2)
+        for overrides in [{'target_mode': 'copy'}, {'exclusion_max_mismatches': 4}]:
+            with self.assertRaises(InputError):
+                parse_parameters(overrides)
 
     def test_ambiguous_target_and_duplicate_task_names_are_rejected(self):
         self.reference.write_text('>BjuTarget.1\n' + SEQ + '\n>BjuTarget.2\n' + SEQ + '\n')
@@ -141,7 +230,11 @@ class GuidedWorkflowTests(unittest.TestCase):
         result = response.json
         self.assertEqual(result['tasks'][0]['cross_exact'], 1)
         self.assertEqual(result['tasks'][0]['selected'], 0)
-        self.assertFalse(result['search_exhaustive'])
+        self.assertEqual(result['tasks'][0]['excluded'], 1)
+        self.assertTrue(result['search_exhaustive'])
+        self.assertEqual(result['tasks'][0]['search'], {'status': 'completed', 'seconds': 1.5})
+        self.assertEqual(result['tasks'][0]['target_policy'], {'mode': 'species', 'allowed_ids': [], 'exclusion_max_mismatches': 0})
+        self.assertEqual(design.call_args.kwargs['target_policy'], {'mode': 'species', 'allowed_ids': [], 'exclusion_max_mismatches': 0})
         self.assertNotIn('blast_results', result['tasks'][0]['probe_sets'][0]['left_probe'])
         self.assertEqual(self.client.get(result['result_url']).status_code, 200)
         archive = self.client.get(result['download_url'])
@@ -164,11 +257,14 @@ class GuidedWorkflowTests(unittest.TestCase):
             report = json.loads(z.read('run_summary.json'))
             self.assertEqual(report['tasks'][0]['unassessed'], 1)
             self.assertIsNone(report['reference'])
+            self.assertFalse(report['search_exhaustive'])
         response.close()
-        batch = self.client.post('/split/batch', data=dict(self.input,
-            batch_file=(io.BytesIO(b'one,BP_0079,BjuTarget,2\n'), 'batch.csv')))
+        batch = self.client.post('/split/batch', data=dict(self.input, target_mode='transcript', exclusion_max_mismatches='1',
+            batch_file=(io.BytesIO(b'one,BP_0079,BjuTarget,2,BoOther\n'), 'batch.csv')))
         self.assertEqual(batch.mimetype, 'application/zip')
         self.assertEqual(design.call_args.kwargs['max_selected'], 2)
+        self.assertEqual(design.call_args.kwargs['target_policy'],
+                         {'mode': 'allowlist', 'allowed_ids': ['BoOther'], 'exclusion_max_mismatches': 1})
         batch.close()
 
     def test_changed_reference_and_running_task_fail_without_restarting(self):

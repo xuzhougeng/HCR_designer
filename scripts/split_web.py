@@ -80,6 +80,6 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
 
     @app.get('/split/batch-template.csv')
     def split_batch_template():
-        example = 'task_name,BP_ID,gene_id,max_selected\nABCG13,BP_0079,BjuVA06G01970,5\n'
+        example = 'task_name,BP_ID,gene_id,max_selected,allowed_ids\nABCG13,BP_0079,BjuVA06G01970,5,\n'
         return send_file(io.BytesIO(example.encode('utf-8-sig')), mimetype='text/csv',
                          as_attachment=True, download_name='split_batch_template.csv')

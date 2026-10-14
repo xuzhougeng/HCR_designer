@@ -5,7 +5,7 @@ import csv
 import logging
 import copy
 from ..common.blast_utils import analyze_blast_results
-from ..common.paired_specificity import analyze_probe_sequences, assess_pair
+from ..common.paired_specificity import analyze_probe_sequences, assess_pair, assess_probe_sets, TargetPolicy
 import json
 from ..common.probeset_select import select_probe_sets
 
@@ -22,18 +22,20 @@ class ProbeOutputHandler:
         
     def save_probe_sets(self, probe_sets: List[ProbeSet], 
                        task_name: str, output_prefix: str,
-                       blast_db: str = None, target_gene_id: str = None):
+                       blast_db: str = None, target_gene_id: str = None, target_policy=None):
         """保存探针组合结果，并根据质量得分排序
-        
+
         Args:
             probe_sets: 探针组合列表
             task_name: 任务名称
             output_prefix: 输出文件前缀
-            blast_db: BLAST数据库路径（可选）
-            
+            blast_db: 参考 FASTA 路径（可选；同时用于单臂 BLAST 和完整配对扫描）
+            target_policy: 目标策略（TargetPolicy 或其字典形式），决定允许共同检测的转录本
+
         Returns:
             List[ProbeSet]: 按质量得分排序后的探针组合列表
         """
+        self.target_policy = TargetPolicy.from_dict(target_policy)
         # 如果有BLAST数据库，先计算所有探针的BLAST结果并排序
         if blast_db:
             # 存储所有探针的BLAST结果，避免重复计算
@@ -321,12 +323,15 @@ class ProbeOutputHandler:
         output_file = self.output_dir / f"{output_prefix}_detailed.txt"
         
         # 创建JSON数据结构
+        policy = getattr(self, 'target_policy', None) or TargetPolicy()
         json_data = {
             "report_title": "双探针设计结果报告",
             "coordinate_system": "1-based inclusive",
             "target_gene_id": target_gene_id,
             "reference": str(blast_db) if blast_db else None,
             "specificity_required": bool(blast_db),
+            "target_policy": policy.to_dict(),
+            "search": None,
             "probe_sets": []
         }
         
@@ -356,9 +361,15 @@ class ProbeOutputHandler:
                     "right_probe": self._get_primer_json_data(probe_set.right_probe, blast_results_dict['right']),
                     "evaluation": self._get_evaluation_json_data(probe_set, score)
                 }
-                probe_set_data['specificity'] = assess_pair(probe_set_data, target_gene_id)
                 json_data["probe_sets"].append(probe_set_data)
-        
+        if blast_db:
+            # One exhaustive scan for every candidate; a failed scan raises instead of
+            # leaving candidates marked as free of paired matches.
+            json_data['search'] = assess_probe_sets(json_data['probe_sets'], target_gene_id, blast_db, policy)
+        else:
+            for probe_set_data in json_data['probe_sets']:
+                probe_set_data['specificity'] = assess_pair(probe_set_data, target_gene_id, policy=policy)
+
         # 保存JSON格式
         json_output_file = self.output_dir / f"{output_prefix}_detailed.json"
         with open(json_output_file, 'w') as f:

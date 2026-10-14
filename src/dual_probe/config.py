@@ -32,6 +32,9 @@ class DualProbeConfig:
     gc_junction_penalty: float = 20.0  # Left探针G/C连接处的惩罚分数（分数越高越不利，默认20优先选择A/T）
 
     blast_db: str = None
+    # 目标策略：允许共同检测的转录本集合及非允许配对的排除阈值，见 TargetPolicy
+    target_policy: dict = field(default_factory=lambda: {'mode': 'species', 'allowed_ids': [],
+                                                         'exclusion_max_mismatches': 0})
 
     # 输出设置
     output_dir: Path = field(default=Path("output"))
@@ -68,6 +71,7 @@ class DualProbeConfig:
             "min_kmer_count": self.min_kmer_count,
             "max_selected": self.max_selected,
             "gc_junction_penalty": self.gc_junction_penalty,
+            "target_policy": self.target_policy,
             "output_dir": str(self.output_dir)
         }
 

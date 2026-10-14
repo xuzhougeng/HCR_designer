@@ -18,7 +18,7 @@ def create_config( min_length, max_length,
                 gc_min, gc_max, tm_min, tm_max,
                 min_gap, inner_gap,
                 min_complementary_length, poly_n, kmer_size, min_kmer_count,
-                output_dir, blast_db, max_selected=5, gc_junction_penalty=20.0):
+                output_dir, blast_db, max_selected=5, gc_junction_penalty=20.0, target_policy=None):
     """创建双探针配置对象
 
     Args:
@@ -56,7 +56,9 @@ def create_config( min_length, max_length,
                             output_dir=output_dir,
                             blast_db=blast_db,
                             max_selected=max_selected,
-                            gc_junction_penalty=gc_junction_penalty)
+                            gc_junction_penalty=gc_junction_penalty,
+                            target_policy=target_policy or {'mode': 'species', 'allowed_ids': [],
+                                                            'exclusion_max_mismatches': 0})
 
 def save_dual_probes(dual_probes, output_file, task_name, BP_ID, delimiter=',', probe_ids=None):
     """
@@ -144,7 +146,8 @@ def generate_dual_probe(sequence: str,
     
     # 保存原始探针组合结果
     probe_sets = output_handler.save_probe_sets(
-        probe_sets, task_name, "dual_probe", config.blast_db, target_gene_id=target_gene_id)
+        probe_sets, task_name, "dual_probe", config.blast_db, target_gene_id=target_gene_id,
+        target_policy=config.target_policy)
     
     # 将探针组合转换为JSON格式用于筛选
     # Preserve the exact serialized evidence, scores and 1-based coordinates.
@@ -222,13 +225,14 @@ def generate_dual_probe(sequence: str,
         f.write(f"- Gap meaning: unoccupied bases between selected probe sets\n")
         f.write(f"- Inner Gap: {config.inner_gap} bp\n")
         f.write(f"- Target Gene ID: {target_gene_id or 'not provided'}\n")
+        f.write(f"- Target policy: {json.dumps(config.target_policy)}\n")
         f.write(f"- Minimum Complementary Length: {config.min_complementary_length} bp\n")
         f.write(f"- K-mer Size: {config.kmer_size}\n")
         f.write(f"- Minimum K-mer Count: {config.min_kmer_count}\n")
         if config.blast_db:
             f.write(f"- Reference Genome: {os.path.basename(config.blast_db)}\n")
-            f.write("- Specificity: same-transcript full-arm pairs; cross-species exact pairs excluded.\n")
-            f.write("- Search: BLAST-seeded, ungapped, <=3 substitutions per arm; not exhaustive for near matches.\n")
+            f.write("- Specificity: same-transcript full-arm pairs; non-allowed pairs within the policy threshold excluded.\n")
+            f.write("- Search: exhaustive ungapped scan, <=3 substitutions per arm, sense strand; insertions/deletions not checked.\n")
             f.write("- Selected does not mean experimentally validated.\n")
         f.write(f"\nFiltered Results:\n")
         f.write(f"- Total probe sets: {len(probe_sets_json['probe_sets'])}\n")
@@ -256,7 +260,8 @@ def main( name, sequence, gene_id,
          ref_genome, bridge_probe, bridge_probe_id,
          output_dir,
          max_selected: int = 5,
-         gc_junction_penalty: float = 20.0):
+         gc_junction_penalty: float = 20.0,
+         target_policy: dict = None):
     """主函数
 
     Args:
@@ -264,6 +269,7 @@ def main( name, sequence, gene_id,
         max_selected: 要选择的探针组合数量，默认为5
         gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
     """
+    # The reference FASTA feeds both the single-arm BLAST evidence and the exhaustive pair scan.
     blast_db = create_blast_db(ref_genome) if ref_genome else None
     config = create_config(
                            min_length=min_length,
@@ -281,7 +287,8 @@ def main( name, sequence, gene_id,
                            output_dir=output_dir,
                            blast_db=blast_db,
                            max_selected=max_selected,
-                           gc_junction_penalty=gc_junction_penalty)
+                           gc_junction_penalty=gc_junction_penalty,
+                           target_policy=target_policy)
     
     # 设计探针
     probe_sets = generate_dual_probe(sequence, name, bridge_probe_id, bridge_probe, config,

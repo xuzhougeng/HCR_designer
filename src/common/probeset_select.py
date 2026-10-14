@@ -9,6 +9,17 @@ if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.common.paired_specificity import paired_specificity_score, specificity_rejection
 
+REJECTION_REASONS = {
+    'specificity_not_evaluated': 'Not selected: paired specificity evidence is missing or incomplete.',
+    'no_exact_on_target_pair': 'Not selected: no exact pair was found on the intended target.',
+    'cross_species_exact_pair': 'Excluded: an adjacent full-length exact pair exists in another species.',
+    'cross_species_near_pair': 'Excluded: a near-exact pair in another species is within the policy threshold.',
+    'unclassified_exact_pair': 'Excluded: an exact pair exists on a non-target transcript with unclassified species.',
+    'unclassified_near_pair': 'Excluded: a near-exact pair on an unclassified transcript is within the policy threshold.',
+    'same_species_exact_pair': 'Excluded: an exact pair exists on a non-allowed transcript of the target species.',
+    'same_species_near_pair': 'Excluded: a near-exact pair on a non-allowed same-species transcript is within the policy threshold.',
+}
+
 def get_probe_intervals(probe_set):
     """
     获取探针组合中所有探针的区间（start, end）
@@ -269,12 +280,8 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0, min_distan
         if probe_id in rejections:
             probe_set['keep'] = False
             probe_set['reason_code'] = rejections[probe_id]
-            probe_set['reason'] = {
-                'specificity_not_evaluated': 'Not selected: paired specificity evidence is missing or incomplete.',
-                'no_exact_on_target_pair': 'Not selected: no exact pair was found on the intended target.',
-                'cross_species_exact_pair': 'Excluded: an adjacent full-length exact pair exists in another species.',
-                'unclassified_exact_pair': 'Excluded: an exact pair exists on a non-target transcript with unclassified species.'
-            }[rejections[probe_id]]
+            probe_set['reason'] = REJECTION_REASONS.get(
+                rejections[probe_id], f'Excluded by the target policy: {rejections[probe_id]}.')
         elif probe_set['evaluation'].get('has_gc_junction', False):
             probe_set['keep'] = False
             probe_set['reason_code'] = 'gc_junction'

@@ -113,85 +113,58 @@ class DualProbeDesigner:
         """
         sequence_length = len(sequence)
         probe_sets = []
-        used_positions = set()
 
         repeat_kmers = calculate_kmer_count(sequence, self.config.kmer_size, self.config.min_kmer_count)
         self.kmer_list = list(repeat_kmers)
-        
-        
-        pos = 0
-        logger.debug(f"Searching for probe set starting at position {pos}")
-        while pos < (sequence_length - 3 * self.config.min_length):
+
+        # Candidate generation enumerates every left start whose pair can still fit
+        # (two arms plus the inner gap); spacing between selected pairs is decided
+        # later by probeset_select, so candidates may overlap each other here.
+        last_start = sequence_length - (2 * self.config.min_length + self.config.inner_gap)
+        for pos in range(0, last_start + 1):
             logger.debug(f"Searching for probe set starting at position {pos}")
-            
-            # 寻找左引物
-            logger.debug(f"Searching for left probe starting at position {pos}")
-            left_result = self._find_next_valid_probe(
-                sequence, pos, sequence_length, used_positions
-            )
+            left_result = self._find_next_valid_probe(sequence, pos, sequence_length, must_start_at=pos)
             if not left_result:
-                pos += 1
                 continue
-                
-            # 寻找右引物（与中间引物之间保持固定的gap）
-            right_start = left_result[2] + self.config.inner_gap # 右引物起始位置 = 左引物结束位置 + 内部间隔
-            if right_start >= sequence_length - self.config.min_length:
-                pos += 1
+
+            # 右引物起始位置 = 左引物结束位置 + 内部间隔
+            right_start = left_result[2] + self.config.inner_gap
+            if right_start > sequence_length - self.config.min_length:
                 continue
-                
-            right_result = self._find_next_valid_probe(
-                sequence, right_start, sequence_length, used_positions
-            )
+            right_result = self._find_next_valid_probe(sequence, right_start, sequence_length, must_start_at=right_start)
             if not right_result:
-                pos += 1
                 continue
-                
+
             # 检查两个引物的兼容性
-            if self._check_probe_compatibility(left_result, right_result):
-                logger.debug(f"Found valid probe set:")
-                logger.debug(f"Left probe: {left_result[0]}, Tm: {left_result[3]:.1f}")
-                logger.debug(f"Right probe: {right_result[0]}, Tm: {right_result[3]:.1f}")
+            if not self._check_probe_compatibility(left_result, right_result):
+                continue
+            logger.debug(f"Found valid probe set: L {left_result[0]} (Tm {left_result[3]:.1f}), "
+                         f"R {right_result[0]} (Tm {right_result[3]:.1f})")
+            # 检查Left探针连接处是否为G/C碱基（会抑制SplintR酶）
+            has_gc_junction = check_left_probe_gc_junction(left_result[0])
+            probe_sets.append(ProbeSet(left_result, right_result, has_gc_junction))
 
-                # 检查Left探针连接处是否为G/C碱基（会抑制SplintR酶）
-                has_gc_junction = check_left_probe_gc_junction(left_result[0])
-                if has_gc_junction:
-                    logger.debug(f"Left probe has G/C at junction (may inhibit SplintR ligation)")
-                else:
-                    logger.debug(f"Left probe has A/T at junction (favorable for SplintR ligation)")
-
-                probe_set = ProbeSet(left_result, right_result, has_gc_junction)
-                probe_sets.append(probe_set)
-                
-                # 更新已使用的位置
-                for result in [left_result, right_result]:
-                    for i in range(result[1], result[2]):
-                        used_positions.add(i)
-                
-                # 从左引物后继续搜索
-                pos = left_result[2]
-            else:
-                pos += 1
-                
         return probe_sets
     
 
     
-    def _find_next_valid_probe(self, sequence: str, start_pos: int, 
-                              end_pos: int, used_positions: set,
+    def _find_next_valid_probe(self, sequence: str, start_pos: int,
+                              end_pos: int, used_positions: set = None,
                               must_start_at: int = None) -> Optional[Tuple]:
         """在指定范围内找到第一个有效的引物
-        
+
         Parameters:
         -----------
         start_pos : int
             起始位置
         end_pos : int
             结束位置
-        used_pos : set
-            已使用的位置集合
+        used_positions : set, optional
+            已使用的位置集合；候选生成阶段不再占用位置，默认为空
         must_start_at : int, optional
             必须从这个位置开始（用于确保Middle紧接Left）
         """
+        used_positions = used_positions or set()
         # 如果指定了必须的起始位置，就只检查从这个位置开始的引物
         if must_start_at is not None:
             logger.debug(f"Must start at position {must_start_at}")

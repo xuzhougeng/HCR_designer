@@ -1,10 +1,12 @@
 """Full-arm, same-transcript checks for dual probes.
 
-BLAST supplies seeds, not a proof that all substitution matches were found.
-We extend ungapped HSPs to the full query and verify against the saved FASTA.
+Paired evidence comes from the exhaustive scanner in ``paired_scan``: every
+sense-strand, ungapped site where both arms match with at most
+``MAX_SUBSTITUTIONS`` substitutions each, at the designed gap. Single-arm BLAST
+results are kept only as ranking evidence; they do not decide exclusions.
 All public coordinates are 1-based inclusive in the sense transcript direction.
 """
-from collections import Counter, defaultdict
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 import os
@@ -12,10 +14,15 @@ import subprocess
 import tempfile
 
 from .blast_runtime import blast_executable
+from .paired_scan import scan_pairs, METHOD as SCAN_METHOD
+from .reference_annotation import load_subgenome_map
 
 
-METHOD = 'BLAST-seeded, full-arm ungapped verification; substitution search is not exhaustive'
+METHOD = SCAN_METHOD
 MAX_SUBSTITUTIONS = 3
+ARM_METHOD = 'BLAST-seeded, full-arm ungapped verification; single-arm ranking evidence only, not exhaustive'
+RELATIONS = ('target', 'allowed', 'same_species_other', 'cross_species', 'unknown_species')
+POLICY_MODES = ('species', 'transcript', 'allowlist', 'subgenome')
 
 
 def reverse_complement(sequence):
@@ -29,6 +36,101 @@ def infer_species(identifier):
     if identifier.startswith('bo'):
         return 'Bo'
     return None
+
+
+class TargetPolicy:
+    """Which transcripts may be co-detected, and how close a non-allowed pair may be.
+
+    ``species``: the historical rule; other transcripts of the target species are
+    ranked but never excluded. ``transcript``: only the target transcript is
+    allowed. ``allowlist``: the target plus ``allowed_ids`` are allowed. ``subgenome``:
+    the target, every transcript that ``subgenome_map`` puts in the target's own
+    subgenome, and any extra ``allowed_ids`` are allowed; a transcript the file does
+    not annotate is never allowed by membership. In the last three modes every other
+    transcript, same species or not, is a non-target. A non-allowed pair whose worse
+    arm has at most ``exclusion_max_mismatches`` substitutions is excluded.
+    """
+    def __init__(self, mode='species', allowed_ids=(), exclusion_max_mismatches=0,
+                 subgenome_map=None, target_subgenome=None):
+        if mode not in POLICY_MODES:
+            raise ValueError(f'Unknown target policy mode: {mode}')
+        if not 0 <= int(exclusion_max_mismatches) <= MAX_SUBSTITUTIONS:
+            raise ValueError('exclusion_max_mismatches must be between 0 and MAX_SUBSTITUTIONS')
+        self.mode = mode
+        self.allowed_ids = sorted({str(i).strip() for i in allowed_ids if str(i).strip()})
+        self._allowed = {i.casefold() for i in self.allowed_ids}
+        if mode == 'allowlist' and not self._allowed:
+            raise ValueError('allowlist mode needs at least one allowed transcript ID')
+        if mode in ('species', 'transcript') and self._allowed:
+            raise ValueError('allowed transcript IDs require allowlist or subgenome mode')
+        if mode == 'subgenome':
+            if not subgenome_map:
+                raise ValueError('subgenome mode needs a subgenome annotation file')
+        elif subgenome_map or target_subgenome:
+            raise ValueError('a subgenome annotation requires subgenome mode')
+        self.subgenome_map = str(subgenome_map) if subgenome_map else None
+        self.target_subgenome = str(target_subgenome) if target_subgenome else None
+        self.exclusion_max_mismatches = int(exclusion_max_mismatches)
+        self._resolved = {}
+
+    @classmethod
+    def from_dict(cls, data):
+        if data is None:
+            return cls()
+        if isinstance(data, TargetPolicy):
+            return data
+        return cls(data.get('mode', 'species'), data.get('allowed_ids', ()),
+                   data.get('exclusion_max_mismatches', 0), data.get('subgenome_map'),
+                   data.get('target_subgenome'))
+
+    def to_dict(self):
+        result = {'mode': self.mode, 'allowed_ids': list(self.allowed_ids),
+                  'exclusion_max_mismatches': self.exclusion_max_mismatches}
+        if self.mode == 'subgenome':
+            result['subgenome_map'] = self.subgenome_map
+            result['target_subgenome'] = self.target_subgenome
+        return result
+
+    @property
+    def annotation(self):
+        """The loaded subgenome file, or ``None`` outside subgenome mode."""
+        return load_subgenome_map(self.subgenome_map) if self.subgenome_map else None
+
+    def resolve_target(self, target_gene_id):
+        """The target's own subgenome; a target the file does not annotate is an error."""
+        if self.mode != 'subgenome':
+            return None
+        key = (target_gene_id or '').casefold()
+        if key not in self._resolved:
+            label = self.target_subgenome or self.annotation.of(target_gene_id)
+            if not label:
+                raise ValueError(f'{target_gene_id} has no subgenome in {self.subgenome_map}; '
+                                 'subgenome mode cannot define its allowed set')
+            self._resolved[key] = label
+        return self._resolved[key]
+
+    def subgenome_of(self, subject):
+        annotation = self.annotation
+        return annotation.of(subject) if annotation else None
+
+    def relation(self, subject, target_gene_id, target_species):
+        if subject.casefold() == target_gene_id.casefold():
+            return 'target'
+        if subject.casefold() in self._allowed:
+            return 'allowed'
+        if self.mode == 'subgenome':
+            label = self.subgenome_of(subject)
+            if label and label == self.resolve_target(target_gene_id):
+                return 'allowed'
+        other = infer_species(subject)
+        if target_species and other:
+            return 'same_species_other' if target_species == other else 'cross_species'
+        return 'unknown_species'
+
+    def non_allowed_relations(self):
+        if self.mode == 'species':
+            return ('cross_species', 'unknown_species')
+        return ('cross_species', 'unknown_species', 'same_species_other')
 
 
 @lru_cache(maxsize=1)
@@ -62,7 +164,7 @@ def load_reference(path):
 
 
 def parse_seed_hits(output, queries, reference, max_substitutions=MAX_SUBSTITUTIONS):
-    """Recover full-length hits from HSP coordinates, including clipped ends."""
+    """Recover full-length single-arm hits from HSP coordinates, including clipped ends."""
     hits = {key: {} for key in queries}
     for line in output.splitlines():
         if not line.strip():
@@ -111,7 +213,7 @@ def parse_seed_hits(output, queries, reference, max_substitutions=MAX_SUBSTITUTI
 
 
 def analyze_probe_sequences(probe_sequences, reference_path, num_threads=4):
-    """Batch BLAST all distinct targeting arms; errors propagate to the caller."""
+    """Batch BLAST all distinct targeting arms for single-arm ranking evidence; errors propagate."""
     sequences = list(dict.fromkeys(probe_sequences))
     if any(len(s) < 7 or set(s) - set('ACGT') for s in sequences):
         raise ValueError('Targeting probes must contain A/C/G/T only and be at least 7 nt')
@@ -131,7 +233,7 @@ def analyze_probe_sequences(probe_sequences, reference_path, num_threads=4):
         result = subprocess.run(command, text=True, capture_output=True, check=True)
         hits = parse_seed_hits(result.stdout, queries, reference)
     return {sequence: {
-        'status': 'completed', 'method': METHOD,
+        'status': 'completed', 'method': ARM_METHOD,
         'query_orientation': 'reverse_complement_of_targeting_probe',
         'max_substitutions': MAX_SUBSTITUTIONS,
         'mismatch_stats': dict(Counter(h['mismatches'] for h in hits[f'q{i}'])),
@@ -139,68 +241,75 @@ def analyze_probe_sequences(probe_sequences, reference_path, num_threads=4):
     } for i, sequence in enumerate(sequences)}
 
 
-def assess_pair(probe_set, target_gene_id, target_species=None):
-    """Join complete arm hits by transcript, orientation and the designed gap."""
-    species = target_species or infer_species(target_gene_id)
-    result = {'status': 'not_evaluated', 'method': METHOD,
-              'target_gene_id': target_gene_id, 'target_species': species,
-              'classification_scope': 'species' if species else 'transcript',
-              'paired_matches': [], 'counts': {}, 'on_target_exact': False}
-    if not target_gene_id:
-        result['status'] = 'missing_target_id'
-        return result
+def pair_geometry(probe_set):
+    """Transcript-strand targets and gap of a dual probe; validates coordinates."""
     arms = [probe_set[name] for name in ('left_probe', 'right_probe')]
-    if any(a.get('blast_results', {}).get('status') != 'completed' for a in arms):
-        return result
-    gap = arms[1]['position']['start'] - arms[0]['position']['end'] - 1
-    if gap < 0:
-        raise ValueError('Dual probe coordinates must be 1-based, ordered and non-overlapping')
     for arm in arms:
         if arm['position']['end'] - arm['position']['start'] + 1 != len(arm['sequence']):
             raise ValueError('Probe coordinate span differs from its sequence length')
-    result['gap'] = gap
-    right_index = defaultdict(list)
-    def usable(hit):
-        return (hit.get('subject_strand') == '+' and hit.get('query_coverage') == 1.0
-                and hit.get('gaps') == 0 and hit.get('query_start') == 1
-                and hit.get('query_end') == hit.get('query_length'))
-    for hit in arms[1]['blast_results']['detailed_matches']:
-        if usable(hit):
-            right_index[(hit['subject_id'], hit['subject_start'])].append(hit)
-    seen = set()
-    for left in arms[0]['blast_results']['detailed_matches']:
-        if not usable(left):
-            continue
-        for right in right_index[(left['subject_id'], left['subject_end'] + gap + 1)]:
-            subject = left['subject_id']
-            identity = (subject, left['subject_start'], right['subject_start'])
-            if identity in seen:
-                continue
-            seen.add(identity)
-            other_species = infer_species(subject)
-            if subject.casefold() == target_gene_id.casefold():
-                relation = 'target'
-            elif species and other_species:
-                relation = 'same_species_other' if species == other_species else 'cross_species'
-            else:
-                relation = 'unknown_species'
-            result['paired_matches'].append({
-                'subject_id': subject, 'relation': relation,
-                'subject_species': other_species, 'strand': '+', 'gap': gap,
-                'left_start': left['subject_start'], 'left_end': left['subject_end'],
-                'right_start': right['subject_start'], 'right_end': right['subject_end'],
-                'left_mismatches': left['mismatches'], 'right_mismatches': right['mismatches'],
-                'left_mismatch_positions_probe_5to3': left['mismatch_positions_probe_5to3'],
-                'right_mismatch_positions_probe_5to3': right['mismatch_positions_probe_5to3']})
-    for relation in ('target', 'same_species_other', 'cross_species', 'unknown_species'):
+    gap = arms[1]['position']['start'] - arms[0]['position']['end'] - 1
+    if gap < 0:
+        raise ValueError('Dual probe coordinates must be 1-based, ordered and non-overlapping')
+    return reverse_complement(arms[0]['sequence']), reverse_complement(arms[1]['sequence']), gap
+
+
+def assess_pair(probe_set, target_gene_id, hits=None, policy=None, search=None, target_species=None):
+    """Classify the exhaustive paired hits of one candidate under a target policy.
+
+    ``hits`` are the scanner records for this pair's geometry; ``None`` means the
+    scan was not run, which is reported as ``not_evaluated`` rather than as clean.
+    """
+    policy = TargetPolicy.from_dict(policy)
+    species = target_species or infer_species(target_gene_id)
+    result = {'status': 'not_evaluated', 'method': METHOD,
+              'target_gene_id': target_gene_id, 'target_species': species,
+              'policy': policy.to_dict(),
+              'classification_scope': 'species' if species else 'transcript',
+              'search': search, 'paired_matches': [], 'counts': {}, 'on_target_exact': False}
+    if not target_gene_id:
+        result['status'] = 'missing_target_id'
+        return result
+    result['gap'] = pair_geometry(probe_set)[2]
+    if policy.mode == 'subgenome':
+        # Resolve per target: one policy object may serve several targets.
+        result['target_subgenome'] = policy.resolve_target(target_gene_id)
+        result['policy'] = dict(policy.to_dict(), target_subgenome=result['target_subgenome'])
+    if hits is None or not search or search.get('status') != 'completed':
+        return result
+    for hit in hits:
+        if hit.get('strand') != '+' or hit.get('gap') != result['gap']:
+            raise ValueError('Scanner hit does not match the candidate geometry')
+        record = dict(hit, relation=policy.relation(hit['subject_id'], target_gene_id, species),
+                      subject_species=infer_species(hit['subject_id']))
+        if policy.mode == 'subgenome':
+            record['subject_subgenome'] = policy.subgenome_of(hit['subject_id'])
+        result['paired_matches'].append(record)
+    bounds = range(search.get('max_substitutions_per_arm', MAX_SUBSTITUTIONS) + 1)
+    for relation in RELATIONS:
         matches = [h for h in result['paired_matches'] if h['relation'] == relation]
-        # Counts are unique transcripts at each cumulative mismatch bound.
+        # Counts are unique transcripts at each cumulative per-arm mismatch bound.
         result['counts'][relation] = [len({h['subject_id'] for h in matches
                                          if max(h['left_mismatches'], h['right_mismatches']) <= bound})
-                                      for bound in range(MAX_SUBSTITUTIONS + 1)]
+                                      for bound in bounds]
     result['on_target_exact'] = result['counts']['target'][0] > 0
     result['status'] = 'completed'
+    result['rejection'] = specificity_rejection(result)
     return result
+
+
+def assess_probe_sets(probe_sets, target_gene_id, reference_path, policy=None,
+                      max_substitutions=MAX_SUBSTITUTIONS, timeout=None):
+    """Scan every candidate once and attach ``specificity`` to each; scan failures propagate."""
+    policy = TargetPolicy.from_dict(policy)
+    geometries = [pair_geometry(p) for p in probe_sets]
+    hits, run_info = scan_pairs(geometries, reference_path, max_substitutions, timeout=timeout)
+    for probe_set, geometry in zip(probe_sets, geometries):
+        probe_set['specificity'] = assess_pair(probe_set, target_gene_id, hits[geometry], policy, run_info)
+    return run_info
+
+
+REJECTION_LABELS = {'cross_species': 'cross_species', 'unknown_species': 'unclassified',
+                    'same_species_other': 'same_species'}
 
 
 def specificity_rejection(assessment):
@@ -209,10 +318,12 @@ def specificity_rejection(assessment):
         return 'specificity_not_evaluated'
     if not assessment.get('on_target_exact'):
         return 'no_exact_on_target_pair'
-    if assessment['counts']['cross_species'][0]:
-        return 'cross_species_exact_pair'
-    if assessment['counts']['unknown_species'][0]:
-        return 'unclassified_exact_pair'
+    policy = TargetPolicy.from_dict(assessment.get('policy'))
+    for relation in policy.non_allowed_relations():
+        offending = [max(h['left_mismatches'], h['right_mismatches'])
+                     for h in assessment['paired_matches'] if h['relation'] == relation]
+        if offending and min(offending) <= policy.exclusion_max_mismatches:
+            return f'{REJECTION_LABELS[relation]}_{"exact" if min(offending) == 0 else "near"}_pair'
     return None
 
 
@@ -225,7 +336,7 @@ def paired_specificity_score(assessment):
                'unknown_species': (100, 20, 6, 2)}
     score = 0.0
     for relation, values in weights.items():
-        counts = assessment['counts'][relation]
+        counts = assessment['counts'].get(relation, [])
         previous = 0
         for cumulative, weight in zip(counts, values):
             score += (cumulative - previous) * weight

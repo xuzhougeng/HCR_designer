@@ -8,7 +8,11 @@
   let mode = config.mode, step = 1, prepared = null, result = config.result, busy = false;
   const reasons = {
     cross_species_exact_pair: '另一物种存在双臂完全配对',
+    cross_species_near_pair: '另一物种存在阈值内的近似配对',
     unclassified_exact_pair: '未知物种的非目标转录本存在完全配对',
+    unclassified_near_pair: '未知物种的非目标转录本存在阈值内的近似配对',
+    same_species_exact_pair: '同物种非允许转录本存在完全配对',
+    same_species_near_pair: '同物种非允许转录本存在阈值内的近似配对',
     specificity_not_evaluated: '配对特异性证据缺失或不完整',
     no_exact_on_target_pair: '未找到目标转录本上的双臂完全配对',
     gc_junction: 'L 臂连接位点未满足当前筛选规则',
@@ -16,7 +20,8 @@
     selection_limit_or_rank: '排序后未进入本次保留数量',
     selected: '按当前规则保留，仍需进一步复核'
   };
-  const relations = {target:'目标转录本',same_species_other:'同物种其他转录本',cross_species:'跨物种',unknown_species:'物种未知'};
+  const relations = {target:'目标转录本',allowed:'允许共同检测',same_species_other:'同物种其他转录本',cross_species:'跨物种',unknown_species:'物种未知'};
+  const modes = {species:'物种模式',transcript:'严格模式',allowlist:'允许集合',subgenome:'亚基因组模式'};
   function element(tag, text, className) {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -47,8 +52,13 @@
     const refMode = field('reference_mode').value;
     byId('existing-reference-field').hidden = refMode !== 'existing';
     byId('upload-reference-field').hidden = refMode !== 'upload';
+    byId('subgenome-files-field').hidden = refMode !== 'subgenome_files';
+    byId('subgenome-map-field').hidden = refMode !== 'existing' && refMode !== 'upload';
+    byId('subgenome-note').hidden = refMode === 'none';
     field('existing_ref_genome').disabled = busy || refMode !== 'existing';
     field('ref_genome').disabled = busy || refMode !== 'upload';
+    field('subgenome_files').disabled = busy || refMode !== 'subgenome_files';
+    field('subgenome_map').disabled = busy || (refMode !== 'existing' && refMode !== 'upload');
     const bridge = field('bp_id').value.trim().toUpperCase();
     byId('bridge-sequence').textContent = config.bridges[bridge] || '编号不在当前桥接探针库中';
     byId('reference-note').textContent = refMode === 'none'
@@ -78,7 +88,13 @@
   function referenceText(reference) {
     if (!reference) return '未指定参考库 · 特异性未评估';
     const species = Object.entries(reference.species_counts).map(([key, value]) => key + ' ' + value.toLocaleString()).join(' / ');
-    return reference.name + ' · ' + reference.sequence_count.toLocaleString() + ' 条序列\n' + species;
+    let text = reference.name + ' · ' + reference.sequence_count.toLocaleString() + ' 条序列\n' + species;
+    const sub = reference.subgenome;
+    if (sub) {
+      const counts = Object.entries(sub.subgenome_counts).map(([key, value]) => key + ' ' + value.toLocaleString()).join(' / ');
+      text += '\n亚基因组（' + sub.source + '）：' + counts + ' · 未标注 ' + (sub.unannotated || 0).toLocaleString() + ' 条';
+    }
+    return text;
   }
   function renderPrepared() {
     byId('reference-summary').textContent = referenceText(prepared.reference);
@@ -86,7 +102,9 @@
     prepared.tasks.forEach(task => {
       const row = element('tr');
       [task.name, task.gene_id || '未指定', task.sequence_length + ' nt', task.bridge_id,
-        task.max_selected === null ? '默认 ' + field('max_selected').value + ' 对' : task.max_selected + ' 对'].forEach(value => row.append(element('td', value)));
+        task.max_selected === null ? '默认 ' + field('max_selected').value + ' 对' : task.max_selected + ' 对',
+        task.subgenome || '未标注',
+        (task.allowed_ids || []).length ? task.allowed_ids.join('; ') : '无（按目标判定模式）'].forEach(value => row.append(element('td', value)));
       body.append(row);
     });
   }
@@ -99,6 +117,8 @@
     const refMode = field('reference_mode').value;
     if (refMode !== 'existing') data.delete('existing_ref_genome');
     if (refMode !== 'upload') data.delete('ref_genome');
+    if (refMode !== 'subgenome_files') data.delete('subgenome_files');
+    if (refMode !== 'existing' && refMode !== 'upload') data.delete('subgenome_map');
     setBusy(true, '正在核对目标、桥接探针和参考序列……大文件首次检查可能需要一些时间。');
     let error;
     try {
@@ -141,10 +161,11 @@
   }
   const assessed = p => p.specificity?.status === 'completed';
   const crossExact = p => (p.specificity?.counts?.cross_species?.[0] || 0) > 0;
+  const policyExcluded = p => /_(exact|near)_pair$/.test(p.reason_code || '');
   function status(p) {
     if (!assessed(p)) return [p.keep ? '未评估 · 按质量保留' : '特异性未评估', 'unknown'];
     if (p.keep) return ['保留待复核', ''];
-    return [p.reason_code === 'cross_species_exact_pair' ? '跨物种匹配 · 排除' : '未保留', 'excluded'];
+    return [policyExcluded(p) ? '按目标策略排除' : '未保留', 'excluded'];
   }
   function crossText(p) {
     if (!assessed(p)) return '未评估';
@@ -157,20 +178,24 @@
     byId('result-subtitle').textContent = result.tasks.length + ' 个任务完成 · ' + new Date(result.completed_at).toLocaleString('zh-CN');
     byId('download-results').href = result.download_url;
     const stats = byId('result-stats');stats.replaceChildren();
-    [['原始候选','candidates'],['跨物种完全配对','cross_exact'],['保留待复核','selected'],['特异性未评估','unassessed']].forEach(([label,key]) => {
+    [['原始候选','candidates'],['跨物种完全配对','cross_exact'],['按目标策略排除','excluded'],['保留待复核','selected'],['特异性未评估','unassessed']].forEach(([label,key]) => {
       const card = element('div',undefined,'result-stat');
       card.append(element('span',label),element('strong',result.tasks.reduce((sum,t) => sum+t[key],0)+' 对'));stats.append(card);
     });
-    byId('result-limit').textContent = result.reference
-      ? '当前为 BLAST 近似检索，可能漏检带错配的配对，且未进行插入缺失复核。候选保留和“未检出”均不等于特异性合格。'
-      : '本次未指定参考库，未进行特异性评估。保留候选仅反映质量筛选，不能用于判断物种特异性。';
+    byId('result-limit').textContent = !result.reference
+      ? '本次未指定参考库，未进行特异性评估。保留候选仅反映质量筛选，不能用于判断物种特异性。'
+      : result.search_exhaustive
+        ? '双臂配对已在“正向转录本、无缺口、每臂最多 3 个替换”的范围内完整检出；插入缺失未复核。候选保留和“未检出”均不等于特异性合格。'
+        : '本次有任务未完成完整配对扫描，相关候选标记为未评估；未进行插入缺失复核。候选保留和“未检出”均不等于特异性合格。';
     const settings = byId('run-settings-content');settings.replaceChildren(element('div',referenceText(result.reference)));
     if (result.reference) settings.append(element('code','参考 SHA256：'+result.reference.sha256));
     const p = result.parameters;
     settings.append(element('div','臂长 '+p.min_length+'–'+p.max_length+' nt · Tm '+p.min_tm+'–'+p.max_tm+' °C · GC '+p.min_gc+'–'+p.max_gc+'%'));
     settings.append(element('div','默认最多 '+p.max_selected+' 对/基因 · 组合间距 '+p.min_gap+' nt · 臂内间隔 0 nt'));
     settings.append(element('div','连续同碱基阈值 '+p.poly_n+' · 互补长度 '+p.min_complementary_length+' nt · 重复片段 '+p.kmer_size+' nt / '+p.min_kmer_count+' 次 · 连接位点惩罚 '+p.gc_junction_penalty));
-    settings.append(element('div',result.tasks.map(t => t.name+'：最多 '+t.max_selected+' 对，实际 '+t.selected+' 对').join('；')));
+    settings.append(element('div','目标判定模式 '+(modes[p.target_mode] || p.target_mode)+' · 非允许配对排除阈值 每臂 ≤ '+p.exclusion_max_mismatches+' 错配'));
+    if (p.target_mode === 'subgenome') settings.append(element('div','各任务允许的亚基因组：'+result.tasks.map(t => t.name+' → '+(t.target_policy?.target_subgenome || t.subgenome || '未标注')).join('；')));
+    settings.append(element('div',result.tasks.map(t => t.name+'：'+(modes[t.target_policy?.mode] || '')+((t.target_policy?.allowed_ids || []).length ? '（'+t.target_policy.allowed_ids.join('; ')+'）' : '')+'，最多 '+t.max_selected+' 对，实际 '+t.selected+' 对'+(t.search?.seconds !== undefined ? '，扫描 '+t.search.seconds+' s' : '')).join('；')));
     const tasks = byId('result-task');tasks.replaceChildren();
     result.tasks.forEach((task,i) => {const o = element('option',task.name+' · '+task.gene_id);o.value = i;tasks.append(o);});
     renderCandidates();
@@ -179,7 +204,7 @@
     if (!result) return;
     const task = result.tasks[Number(byId('result-task').value) || 0];
     const filter = byId('result-filter').value;
-    const probes = task.probe_sets.filter(p => filter === 'all' || (filter === 'keep' && p.keep) || (filter === 'cross' && crossExact(p)) || (filter === 'unassessed' && !assessed(p)));
+    const probes = task.probe_sets.filter(p => filter === 'all' || (filter === 'keep' && p.keep) || (filter === 'cross' && crossExact(p)) || (filter === 'excluded' && policyExcluded(p)) || (filter === 'unassessed' && !assessed(p)));
     const body = byId('candidate-rows');body.replaceChildren();byId('pair-evidence').hidden = true;
     byId('visible-count').textContent = '显示 '+probes.length+' / '+task.candidates+' 对';
     byId('empty-results').hidden = probes.length > 0;
@@ -209,7 +234,7 @@
       : '本对探针未完成配对特异性评估，没有可用的配对结论。';
     matches.forEach(hit => {
       const row = element('tr');
-      [hit.subject_id,relations[hit.relation] || hit.relation,
+      [hit.subject_id,(relations[hit.relation] || hit.relation) + (hit.subject_subgenome ? ' · ' + hit.subject_subgenome : ''),
         hit.left_start+'–'+hit.left_end+' / '+hit.left_mismatches+' 错配',
         hit.right_start+'–'+hit.right_end+' / '+hit.right_mismatches+' 错配',
         hit.strand+' / '+hit.gap+' nt'].forEach(v => row.append(element('td',v)));body.append(row);
@@ -225,7 +250,7 @@
   root.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click',() => {showMessage('');setStep(1);}));
   byId('fill-example').addEventListener('click',() => {
     field('name').value = 'ABCG13_demo';field('geneID').value = 'BjuVA06G01970';field('bp_id').value = 'BP_0079';field('sequenceType').value = 'reference';
-    field('batch_file').value = '';field('batch_text').value = 'task_name,BP_ID,gene_id,max_selected\nABCG13,BP_0079,BjuVA06G01970,5';
+    field('batch_file').value = '';field('batch_text').value = 'task_name,BP_ID,gene_id,max_selected,allowed_ids\nABCG13,BP_0079,BjuVA06G01970,5,';field('allowed_ids').value = '';field('subgenome_map').value = '';field('subgenome_files').value = '';
     if (config.default_reference) {field('reference_mode').value = 'existing';field('existing_ref_genome').value = config.default_reference;}
     invalidate();
   });
