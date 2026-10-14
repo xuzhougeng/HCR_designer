@@ -16,3 +16,5 @@ output
 .DS_Store
 nohup.out
 outputs
+.venv/
+.tools/

@@ -3,7 +3,9 @@ from typing import List, Tuple
 from pathlib import Path
 import csv
 import logging
+import copy
 from ..common.blast_utils import analyze_blast_results
+from ..common.paired_specificity import analyze_probe_sequences, assess_pair
 import json
 from ..common.probeset_select import select_probe_sets
 
@@ -14,12 +16,13 @@ logger = logging.getLogger(__name__)
 class ProbeOutputHandler:
     """探针输出处理器"""
     def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
+        self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.probe_data = None
         
     def save_probe_sets(self, probe_sets: List[ProbeSet], 
                        task_name: str, output_prefix: str,
-                       blast_db: str = None):
+                       blast_db: str = None, target_gene_id: str = None):
         """保存探针组合结果，并根据质量得分排序
         
         Args:
@@ -34,7 +37,9 @@ class ProbeOutputHandler:
         # 如果有BLAST数据库，先计算所有探针的BLAST结果并排序
         if blast_db:
             # 存储所有探针的BLAST结果，避免重复计算
-            blast_cache = {}
+            blast_cache = analyze_probe_sequences(
+                [sequence for p in probe_sets for sequence in (p.left_probe[0], p.right_probe[0])],
+                blast_db)
             scored_probes = []
             
             for probe_set in probe_sets:
@@ -42,10 +47,6 @@ class ProbeOutputHandler:
                 left_seq = probe_set.left_probe[0]
                 right_seq = probe_set.right_probe[0]
                 
-                if left_seq not in blast_cache:
-                    blast_cache[left_seq] = self._run_blast_analysis(left_seq, blast_db)
-                if right_seq not in blast_cache:
-                    blast_cache[right_seq] = self._run_blast_analysis(right_seq, blast_db)
                 
                 # 计算探针组合得分
                 blast_results_dict = {
@@ -59,13 +60,15 @@ class ProbeOutputHandler:
             scored_probes.sort(key=lambda x: x[1])
             
             # 保存详细结果
-            self._save_detailed_results_with_cache(scored_probes, output_prefix)
+            self._save_detailed_results_with_cache(scored_probes, output_prefix, target_gene_id, blast_db)
             
             # 更新排序后的probe_sets
             probe_sets = [p[0] for p in scored_probes]
         else:
             # 如果没有BLAST数据库，直接保存结果
-            self._save_detailed_results(probe_sets, output_prefix, None)
+            empty = {'status': 'not_run', 'mismatch_stats': {}, 'detailed_matches': []}
+            scored_probes = [(p, 0.0, {'left': empty, 'right': empty}) for p in probe_sets]
+            self._save_detailed_results_with_cache(scored_probes, output_prefix, target_gene_id, None)
         
         # 保存其他格式
         self._save_bed_format(probe_sets, task_name, output_prefix)
@@ -298,11 +301,16 @@ class ProbeOutputHandler:
         file.write("\nDetailed Matches:\n")
         file.write("Subject ID\tMismatches\tGaps\tTotal Mismatches\n")
         file.write("-" * 70 + "\n")
-        for subject_id, mismatches, gaps in detailed_matches:
+        for match in detailed_matches:
+            if isinstance(match, dict):
+                subject_id, mismatches, gaps = match['subject_id'], match['mismatches'], match['gaps']
+            else:
+                subject_id, mismatches, gaps = match
             total = mismatches + gaps
             file.write(f"{subject_id}\t{mismatches}\t{gaps}\t{total}\n")
 
-    def _save_detailed_results_with_cache(self, scored_probes: List[Tuple], output_prefix: str):
+    def _save_detailed_results_with_cache(self, scored_probes: List[Tuple], output_prefix: str,
+                                          target_gene_id=None, blast_db=None):
         """使用缓存的BLAST结果保存详细信息
         
         Args:
@@ -315,6 +323,10 @@ class ProbeOutputHandler:
         # 创建JSON数据结构
         json_data = {
             "report_title": "双探针设计结果报告",
+            "coordinate_system": "1-based inclusive",
+            "target_gene_id": target_gene_id,
+            "reference": str(blast_db) if blast_db else None,
+            "specificity_required": bool(blast_db),
             "probe_sets": []
         }
         
@@ -344,12 +356,14 @@ class ProbeOutputHandler:
                     "right_probe": self._get_primer_json_data(probe_set.right_probe, blast_results_dict['right']),
                     "evaluation": self._get_evaluation_json_data(probe_set, score)
                 }
+                probe_set_data['specificity'] = assess_pair(probe_set_data, target_gene_id)
                 json_data["probe_sets"].append(probe_set_data)
         
         # 保存JSON格式
         json_output_file = self.output_dir / f"{output_prefix}_detailed.json"
         with open(json_output_file, 'w') as f:
             json.dump(json_data, f, indent=2, ensure_ascii=False)
+        self.probe_data = json_data
     
     def _get_primer_json_data(self, primer_info: Tuple, blast_results: dict) -> dict:
         """生成探针的JSON数据
@@ -374,18 +388,7 @@ class ProbeOutputHandler:
         }
         
         if blast_results:
-            data["blast_results"] = {
-                "mismatch_stats": blast_results['mismatch_stats'],
-                "detailed_matches": [
-                    {
-                        "subject_id": subject_id,
-                        "mismatches": mismatches,
-                        "gaps": gaps,
-                        "total_mismatches": mismatches + gaps
-                    }
-                    for subject_id, mismatches, gaps in blast_results['detailed_matches']
-                ]
-            }
+            data["blast_results"] = copy.deepcopy(blast_results)
         
         return data
     
@@ -418,7 +421,7 @@ class ProbeOutputHandler:
         }
 
         if probe_set_score is not None:
-            data["quality_score"] = f"{probe_set_score:.1f}"
+            data["quality_score"] = float(probe_set_score)
         
         return data
 
@@ -447,7 +450,8 @@ class ProbeOutputHandler:
             
         file.write("\n")
 
-    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str, max_selected: int = 5, gc_junction_penalty: float = 20.0):
+    def save_filtered_probe_sets(self, json_data: dict, output_prefix: str, max_selected: int = 5,
+                                 gc_junction_penalty: float = 20.0, min_distance: int = 15):
         """
         基于select_probe_sets对探针组合进行筛选并输出报告
 
@@ -458,7 +462,7 @@ class ProbeOutputHandler:
             gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
         """
         # 使用select_probe_sets进行筛选
-        filtered_data = select_probe_sets(json_data, max_selected, gc_junction_penalty)
+        filtered_data = select_probe_sets(json_data, max_selected, gc_junction_penalty, min_distance)
         
         # 保存筛选后的完整JSON数据
         json_output_file = self.output_dir / f"{output_prefix}.json"

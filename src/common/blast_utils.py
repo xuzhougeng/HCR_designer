@@ -3,6 +3,7 @@ from Bio.Blast.Applications import NcbiblastnCommandline
 from Bio.Blast import NCBIXML
 import tempfile
 import os
+from .blast_runtime import blast_executable
 
 def analyze_blast_results(sequence, db_path):
     """
@@ -34,6 +35,7 @@ def analyze_blast_results(sequence, db_path):
     try:
         # 运行BLAST
         output = NcbiblastnCommandline(
+            cmd=blast_executable('blastn'),
             query=query_file,
             db=db_path,
             outfmt="6 qseqid sseqid qstart qend sstart send nident length mismatch gapopen qseq sseq",
@@ -104,6 +106,7 @@ def get_detailed_blast_results(sequence, db_path):
 
     # 设置BLAST参数
     blastn_cline = NcbiblastnCommandline(
+        cmd=blast_executable('blastn'),
         query=query_file,
         db=db_path,
         outfmt="6 qseqid sseqid qstart qend sstart send nident length mismatch gapopen qseq sseq",

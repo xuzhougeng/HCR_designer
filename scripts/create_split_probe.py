@@ -5,6 +5,8 @@ from datetime import datetime
 import logging
 import argparse
 import json
+import copy
+from scripts.utils import create_blast_db
 # set logging level info
 logging.basicConfig(level=logging.INFO)
 
@@ -104,7 +106,7 @@ def generate_dual_probe(sequence: str,
     task_name:str, 
     BP_ID:str, 
     bridge_probe: str, 
-    config: DualProbeConfig):
+    config: DualProbeConfig, target_gene_id: str = None):
     """
     为序列创建DualProbe探针, 用于HCR
 
@@ -141,46 +143,18 @@ def generate_dual_probe(sequence: str,
     output_handler = ProbeOutputHandler(config.output_dir)
     
     # 保存原始探针组合结果
-    probe_sets = output_handler.save_probe_sets(probe_sets, task_name, "dual_probe", config.blast_db)
+    probe_sets = output_handler.save_probe_sets(
+        probe_sets, task_name, "dual_probe", config.blast_db, target_gene_id=target_gene_id)
     
     # 将探针组合转换为JSON格式用于筛选
-    probe_sets_json = {
-        "probe_sets": [
-            {
-                "id": i + 1,
-                "left_probe": {
-                    "sequence": probe_set.left_probe[0],
-                    "position": {
-                        "start": probe_set.left_probe[1],
-                        "end": probe_set.left_probe[2]
-                    },
-                    "tm": probe_set.left_probe[3],
-                    "gc_content": probe_set.left_probe[4]
-                },
-                "right_probe": {
-                    "sequence": probe_set.right_probe[0],
-                    "position": {
-                        "start": probe_set.right_probe[1],
-                        "end": probe_set.right_probe[2]
-                    },
-                    "tm": probe_set.right_probe[3],
-                    "gc_content": probe_set.right_probe[4]
-                },
-                "evaluation": {
-                    "quality_score": i,  # 这里使用索引作为临时得分
-                    "gap": probe_set.right_probe[1] - probe_set.left_probe[2],
-                    "total_span": probe_set.right_probe[2] - probe_set.left_probe[1],
-                    "average_tm": (probe_set.left_probe[3] + probe_set.right_probe[3]) / 2,
-                    "average_gc_content": (probe_set.left_probe[4] + probe_set.right_probe[4]) / 2,
-                    "has_gc_junction": probe_set.has_gc_junction  # 添加GC junction检测结果
-                }
-            }
-            for i, probe_set in enumerate(probe_sets)
-        ]
-    }
+    # Preserve the exact serialized evidence, scores and 1-based coordinates.
+    # Rebuilding this dictionary previously discarded BLAST and used rank as score.
+    probe_sets_json = copy.deepcopy(output_handler.probe_data)
     
     # 应用筛选并保存筛选结果
-    output_handler.save_filtered_probe_sets(probe_sets_json, f"{task_name}_filtered", config.max_selected, config.gc_junction_penalty)
+    output_handler.save_filtered_probe_sets(
+        probe_sets_json, f"{task_name}_filtered", config.max_selected,
+        config.gc_junction_penalty, min_distance=config.min_gap)
     
     # 获取筛选后的探针组合
     filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered.json")
@@ -245,11 +219,17 @@ def generate_dual_probe(sequence: str,
         f.write(f"- GC Content: {config.gc_min}%-{config.gc_max}%\n")
         f.write(f"- Melting Temperature: {config.tm_min}°C-{config.tm_max}°C\n")
         f.write(f"- Minimum Gap: {config.min_gap} bp\n")
+        f.write(f"- Gap meaning: unoccupied bases between selected probe sets\n")
+        f.write(f"- Inner Gap: {config.inner_gap} bp\n")
+        f.write(f"- Target Gene ID: {target_gene_id or 'not provided'}\n")
         f.write(f"- Minimum Complementary Length: {config.min_complementary_length} bp\n")
         f.write(f"- K-mer Size: {config.kmer_size}\n")
         f.write(f"- Minimum K-mer Count: {config.min_kmer_count}\n")
         if config.blast_db:
             f.write(f"- Reference Genome: {os.path.basename(config.blast_db)}\n")
+            f.write("- Specificity: same-transcript full-arm pairs; cross-species exact pairs excluded.\n")
+            f.write("- Search: BLAST-seeded, ungapped, <=3 substitutions per arm; not exhaustive for near matches.\n")
+            f.write("- Selected does not mean experimentally validated.\n")
         f.write(f"\nFiltered Results:\n")
         f.write(f"- Total probe sets: {len(probe_sets_json['probe_sets'])}\n")
         f.write(f"- Selected probe sets: {len(filtered_probe_sets)}\n")
@@ -284,7 +264,7 @@ def main( name, sequence, gene_id,
         max_selected: 要选择的探针组合数量，默认为5
         gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
     """
-    blast_db = ref_genome
+    blast_db = create_blast_db(ref_genome) if ref_genome else None
     config = create_config(
                            min_length=min_length,
                            max_length=max_length,
@@ -304,7 +284,8 @@ def main( name, sequence, gene_id,
                            gc_junction_penalty=gc_junction_penalty)
     
     # 设计探针
-    probe_sets = generate_dual_probe(sequence, name, bridge_probe_id, bridge_probe, config)
+    probe_sets = generate_dual_probe(sequence, name, bridge_probe_id, bridge_probe, config,
+                                     target_gene_id=gene_id)
     
     return probe_sets
 

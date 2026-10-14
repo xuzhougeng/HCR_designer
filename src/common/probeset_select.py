@@ -2,6 +2,12 @@ import json
 import copy
 import argparse
 from collections import defaultdict
+if __package__ in (None, ''):
+    # Preserve the existing direct-script CLI as well as package imports.
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.common.paired_specificity import paired_specificity_score, specificity_rejection
 
 def get_probe_intervals(probe_set):
     """
@@ -37,7 +43,7 @@ def is_set_too_close(new_intervals, selected_probe_intervals, min_distance=15):
                 return True
     return False
 
-def find_closest_selected_set(probe_set, selected_sets, probe_intervals_dict):
+def find_closest_selected_set(probe_set, selected_sets, probe_intervals_dict, min_distance=15):
     """
     找到与给定探针组合距离太近的已选择探针组合
     返回第一个发现的太近的探针组合的 id
@@ -46,7 +52,7 @@ def find_closest_selected_set(probe_set, selected_sets, probe_intervals_dict):
     for selected_set in selected_sets:
         selected_id = selected_set['id']
         selected_intervals = probe_intervals_dict[selected_id]
-        if is_set_too_close(new_intervals, selected_intervals):
+        if is_set_too_close(new_intervals, selected_intervals, min_distance):
             return selected_id
     return None
 
@@ -110,42 +116,55 @@ def calculate_coverage_score(selected_probe_sets):
 def evaluate_specificity(probe_set):
     """
     评估探针组的特异性
-    基于探针的脱靶情况（mismatch_stats）
-    返回特异性得分（越小越好）
+    优先使用同一转录本上的双臂配对结果，旧格式使用单臂统计。
+    返回用于排序的得分（越小越好）；缺少评估时返回 None。
     """
+    if 'specificity' in probe_set:
+        return paired_specificity_score(probe_set['specificity'])
     specificity_score = 0
     
     for probe_key in ['left_probe', 'middle_probe', 'right_probe']:
         probe = probe_set.get(probe_key)
-        if not probe or 'blast_results' not in probe or 'mismatch_stats' not in probe['blast_results']:
+        if not probe:
             continue
+        if 'blast_results' not in probe or not probe['blast_results'].get('mismatch_stats'):
+            return None
         
         mismatch_stats = probe['blast_results']['mismatch_stats']
         
         # 对完全匹配的脱靶位置进行更严格的惩罚
-        exact_matches = int(mismatch_stats.get("0", 0))
-        one_mismatch = int(mismatch_stats.get("1", 0))
+        exact_matches = int(mismatch_stats.get("0", mismatch_stats.get(0, 0)))
+        one_mismatch = int(mismatch_stats.get("1", mismatch_stats.get(1, 0)))
         
         # 完全匹配的脱靶权重要高
         specificity_score += exact_matches * 10 + one_mismatch * 2
     
     return specificity_score
 
-def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
+def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0, min_distance=15):
     """
     主处理函数：筛选探针组合并添加 keep 和 reason 字段
 
     策略：
-    1. 硬性过滤：直接排除has_gc_junction=True的探针（前两个碱基都是G/C）
-    2. 优先级：连接质量 > 覆盖率
-    3. 按综合得分排序选择，不追求最大覆盖度
+    1. 要求特异性检查时，排除证据缺失、无目标完全配对及跨物种完全配对。
+    2. 保留原有连接位点过滤，按实际质量分数与配对特异性分数排序。
+    3. 按指定间距贪心选择，不保证最大覆盖度。
 
     Args:
         data: 输入的探针数据
         max_selected: 要选择的探针组合数量，默认为5
         gc_junction_penalty: Left探针G/C连接处的惩罚分数（硬性过滤时此参数无效）
+        min_distance: 两个已选组合的臂之间至少保留的未占用碱基数
     """
+    if max_selected < 0 or min_distance < 0:
+        raise ValueError('max_selected and min_distance must be non-negative')
     probe_sets = data['probe_sets']
+    if len({p['id'] for p in probe_sets}) != len(probe_sets):
+        raise ValueError('Probe set IDs must be unique')
+    rejections = {}
+    data['selection_parameters'] = {'max_selected': max_selected,
+                                    'min_distance': min_distance,
+                                    'gc_junction_penalty': gc_junction_penalty}
 
     # 提取每个探针组合的探针区间，存储以便后续使用
     probe_intervals_dict = {}
@@ -156,6 +175,13 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
     probe_set_info = []
     for probe_set in probe_sets:
         # 硬性过滤：直接排除has_gc_junction=True的探针（前两个碱基都是G/C）
+        specificity_score = evaluate_specificity(probe_set)
+        probe_set['evaluation']['specificity_score'] = specificity_score
+        if data.get('specificity_required'):
+            rejection = specificity_rejection(probe_set.get('specificity'))
+            if rejection:
+                rejections[probe_set['id']] = rejection
+                continue
         if probe_set['evaluation'].get('has_gc_junction', False):
             continue
 
@@ -164,11 +190,10 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
             continue
 
         # 同时考虑质量得分和特异性评估
-        quality_score = float(probe_set['evaluation']['quality_score'])
-        specificity_score = evaluate_specificity(probe_set)
+        quality_score = float(probe_set['evaluation'].get('quality_score') or 0)
 
         # 综合得分 = 质量得分 + 特异性得分（两者都是越小越好）
-        combined_score = quality_score + specificity_score
+        combined_score = quality_score + (specificity_score or 0)
 
         # 软惩罚：如果第一个碱基是G/C（但第二个不是），增加一定惩罚
         # 这样会优先选择A/T开头的探针，但不会完全排除C/G单碱基开头的
@@ -194,11 +219,11 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
     best_selection = []
     selected_intervals = []
 
-    for probe_info in probe_set_info:
+    for probe_info in (probe_set_info if max_selected else []):
         current_intervals = probe_intervals_dict[probe_info['id']]
 
         # 检查是否与已选择的探针组距离太近
-        if not is_set_too_close(current_intervals, selected_intervals):
+        if not is_set_too_close(current_intervals, selected_intervals, min_distance):
             best_selection.append(probe_info)
             selected_intervals.extend(current_intervals)
 
@@ -207,7 +232,7 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
                 break
     
     # 如果没有找到足够数量的探针组，就使用贪心算法找出最多的探针组
-    if not best_selection:
+    if not best_selection and max_selected:
         # 按质量分数排序
         sorted_probe_sets = sorted(probe_set_info, key=lambda x: x['combined_score'])
         
@@ -219,7 +244,7 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
         for probe_info in sorted_probe_sets:
             current_intervals = probe_intervals_dict[probe_info['id']]
             # 检查新探针组合是否与已选择的探针组合距离太近
-            if not is_set_too_close(current_intervals, selected_probe_intervals):
+            if not is_set_too_close(current_intervals, selected_probe_intervals, min_distance):
                 selected_sets.append(probe_info)
                 selected_probe_intervals.extend(current_intervals)
                 
@@ -240,25 +265,40 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0):
     for probe_set in probe_sets:
         probe_id = probe_set['id']
 
-        # 检查是否因GC junction被过滤
-        if probe_set['evaluation'].get('has_gc_junction', False):
+        # 特异性排除优先于质量和距离，避免把明确的跨物种匹配隐藏为其他原因。
+        if probe_id in rejections:
             probe_set['keep'] = False
+            probe_set['reason_code'] = rejections[probe_id]
+            probe_set['reason'] = {
+                'specificity_not_evaluated': 'Not selected: paired specificity evidence is missing or incomplete.',
+                'no_exact_on_target_pair': 'Not selected: no exact pair was found on the intended target.',
+                'cross_species_exact_pair': 'Excluded: an adjacent full-length exact pair exists in another species.',
+                'unclassified_exact_pair': 'Excluded: an exact pair exists on a non-target transcript with unclassified species.'
+            }[rejections[probe_id]]
+        elif probe_set['evaluation'].get('has_gc_junction', False):
+            probe_set['keep'] = False
+            probe_set['reason_code'] = 'gc_junction'
             probe_set['reason'] = "Filtered: Left probe starts with GC/CC/CG/GG (inhibits SplintR ligation)."
         elif probe_id in selected_ids:
             probe_set['keep'] = True
-            probe_set['reason'] = "Selected for optimal quality and specificity."
+            probe_set['reason_code'] = 'selected'
+            probe_set['reason'] = ("Selected by quality and observed paired-match ranking; experimental specificity is unverified."
+                                   if probe_set.get('specificity', {}).get('status') == 'completed'
+                                   else "Selected by quality; paired specificity was not evaluated.")
         else:
             probe_set['keep'] = False
             # 查找距离太近的已选择探针组合
             closest_selected_id = find_closest_selected_set(
                 probe_set,
                 [info['probe_set'] for info in best_selection],
-                probe_intervals_dict
+                probe_intervals_dict, min_distance
             )
             if closest_selected_id is not None:
+                probe_set['reason_code'] = 'too_close'
                 probe_set['reason'] = f"Too close to selected set {closest_selected_id}."
             else:
-                probe_set['reason'] = "Not selected due to lower specificity or suboptimal coverage."
+                probe_set['reason_code'] = 'selection_limit_or_rank'
+                probe_set['reason'] = "Not selected within the requested count after ranking."
     
     return data
 
@@ -266,6 +306,7 @@ def main():
     parser = argparse.ArgumentParser(description='选择探针组合')
     parser.add_argument('input_file', help='输入的JSON文件路径')
     parser.add_argument('-n', '--num_probes', type=int, default=5, help='要选择的探针组合数量（默认：5）')
+    parser.add_argument('--min-distance', type=int, default=15, help='已选组合之间的最少空闲碱基数（默认：15）')
     
     args = parser.parse_args()
     
@@ -274,7 +315,7 @@ def main():
         data = json.load(f)
     
     # 处理数据
-    updated_data = select_probe_sets(data, args.num_probes)
+    updated_data = select_probe_sets(data, args.num_probes, min_distance=args.min_distance)
     
     # 输出结果
     print(json.dumps(updated_data, indent=2))

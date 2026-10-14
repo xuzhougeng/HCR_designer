@@ -2,6 +2,7 @@ import gzip
 import uuid
 from Bio import SeqIO
 from Bio.Blast.Applications import NcbimakeblastdbCommandline
+from src.common.blast_runtime import blast_executable
 import os
 
 def load_fasta(file_path):
@@ -86,9 +87,11 @@ def create_blast_db(fasta_path):
         
         # Create BLAST database
         cline = NcbimakeblastdbCommandline(
+            cmd=blast_executable('makeblastdb'),
             dbtype="nucl",
             input_file=fasta_path,
-            out=fasta_path
+            out=fasta_path,
+            parse_seqids=True
         )
         cline()
     return fasta_path

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block language %}zh-CN{% endblock %}
+{% block title %}双探针设计 · Probe Designer{% endblock %}
+{% block body_class %}guided-page{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='split-wizard.css') }}">{% endblock %}
+{% block navigation %}
+<header class="wizard-header">
+  <a class="wizard-brand" href="{{ url_for('index') }}">Probe Designer</a>
+  <nav aria-label="工具导航"><a href="{{ url_for('split') }}" aria-current="page">双探针设计</a><a href="{{ url_for('triplet') }}">三探针设计</a><a href="{{ url_for('bridge_list') }}">桥接探针库</a><a href="{{ url_for('help') }}">帮助</a></nav>
+</header>
+{% endblock %}
+{% block content %}
+<main id="split-workspace" class="split-workspace">
+  <div class="wizard-title"><div><p class="eyebrow">序列输入 · 配对检查 · 候选复核</p><h1>双探针设计</h1></div><span class="workflow-label">分步引导</span></div>
+  <nav class="wizard-steps" aria-label="设计步骤">
+    <button type="button" data-step="1" aria-current="step"><span>1</span><div>序列与参考<small>确认目标和比对范围</small></div></button>
+    <button type="button" data-step="2" disabled><span>2</span><div>参数与检查<small>确认本次设计条件</small></div></button>
+    <button type="button" data-step="3" disabled><span>3</span><div>结果复核<small>查看依据与下载结果</small></div></button>
+  </nav>
+  <noscript><div class="wizard-alert error">分步页面需要启用 JavaScript。</div></noscript>
+  <div id="workflow-message" class="wizard-alert" role="status" aria-live="polite" hidden></div>
+  <form id="split-form" enctype="multipart/form-data" novalidate>
+    <section id="step-1" class="wizard-panel" aria-labelledby="input-heading">
+      <div class="section-heading"><div><h2 id="input-heading">准备设计输入</h2><p>先核对目标转录本，再设置设计参数。</p></div><div class="mode-toggle" aria-label="输入数量"><button type="button" data-mode="single" aria-pressed="true">单条</button><button type="button" data-mode="batch" aria-pressed="false">批量</button></div></div>
+      <input type="hidden" name="input_mode" value="{{ config.mode }}">
+      <div class="input-grid">
+        <section class="input-card">
+          <div class="card-heading"><h3>目标序列</h3><button type="button" class="text-button" id="fill-example">填入 Bo/Bju 示例</button></div>
+          <div id="single-fields">
+            <label class="field">任务名称<input name="name" id="task-name" maxlength="80" placeholder="例如：ABCG13_demo" autocomplete="off"><small>用于本次结果文件和探针编号；编号不与历史设计对应</small></label>
+            <div class="field-grid">
+              <label class="field">目标转录本编号<input name="geneID" id="gene-id" placeholder="例如：BjuVA06G01970" autocomplete="off"><small>使用参考库时必填，粘贴序列时也需保留</small></label>
+              <label class="field">桥接探针编号<input name="bp_id" id="bridge-id" value="BP_1101" autocomplete="off" spellcheck="false"><small>BP_0001–1000 或 BP_1101–2578</small></label>
+            </div>
+            <div class="bridge-preview"><span>对应桥接序列 · 5′ → 3′</span><code id="bridge-sequence"></code></div>
+            <label class="field">目标序列来源<select name="sequenceType" id="sequence-source"><option value="reference">从所选参考库提取</option><option value="custom">直接粘贴序列</option><option value="cdna">内置 TAIR cDNA</option><option value="cds">内置 TAIR CDS</option></select></label>
+            <label class="field" id="paste-field" hidden>目标序列<textarea name="seq" id="sequence-text" rows="5" spellcheck="false" placeholder="粘贴纯 A/T/C/G 序列或单条 FASTA"></textarea><small>更换输入方式不会隐藏目标编号或覆盖粘贴内容</small></label>
+          </div>
+          <div id="batch-fields" hidden>
+            <p class="field-hint">每行一个任务，支持有表头或无表头的 UTF-8 CSV。第 4 列可覆盖默认保留数量。</p>
+            <a class="text-link" href="{{ url_for('split_batch_template') }}">下载 CSV 模板</a>
+            <label class="field">上传 CSV<input type="file" name="batch_file" id="batch-file" accept=".csv,text/csv"></label>
+            <label class="field">或粘贴表格内容<textarea name="batch_text" id="batch-text" rows="6" spellcheck="false" placeholder="task_name,BP_ID,gene_id,max_selected&#10;ABCG13,BP_0079,BjuVA06G01970,5"></textarea></label>
+            <p class="field-hint">目标优先从所选参考库提取；不指定参考库时使用内置 TAIR cDNA。每行错误会明确列出，不会跳过任务。</p>
+          </div>
+        </section>
+        <section class="input-card reference-card">
+          <h3>参考与特异性检查</h3>
+          <label class="field">参考库来源<select name="reference_mode" id="reference-mode"><option value="existing">已有参考库</option><option value="upload">上传参考 FASTA</option><option value="none">不做特异性检查</option></select></label>
+          <label class="field" id="existing-reference-field">选择参考库<select name="existing_ref_genome" id="existing-reference"><option value="">请选择参考序列</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}</option>{% endfor %}</select></label>
+          <label class="field" id="upload-reference-field" hidden>上传参考序列<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"><small>支持 FASTA 或 gzip 压缩文件；只需上传一次</small></label>
+          <div class="reference-note" id="reference-note">参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。</div>
+          <div class="scope-note"><h4>结果如何理解</h4><p>跨物种双臂完全匹配会被排除。近似匹配保留证据，供进一步复核。</p><p>候选保留不代表已经通过实验特异性验证。</p></div>
+        </section>
+      </div>
+      <footer class="wizard-actions"><span>先检查编号、桥接探针和参考序列</span><button type="button" class="wizard-button primary" id="prepare-button">检查输入并继续 <span aria-hidden="true">→</span></button></footer>
+    </section>
+    <section id="step-2" class="wizard-panel" aria-labelledby="parameter-heading" hidden>
+      <div class="section-heading"><div><h2 id="parameter-heading">确认参数与任务</h2><p>任务已通过输入检查。下面的设置将用于本次计算。</p></div><span class="ready-label">输入已核对</span></div>
+      <div id="reference-summary" class="verified-reference"></div>
+      <div class="table-scroll"><table class="wizard-table"><thead><tr><th>任务</th><th>目标编号</th><th>长度</th><th>桥接编号</th><th>最多保留</th></tr></thead><tbody id="prepared-tasks"></tbody></table></div>
+      <div class="parameter-area">
+        <h3>常用参数</h3>
+        <div class="field-grid">
+          <label class="field">每个基因最多保留（对）<input type="number" name="max_selected" value="5" min="1" max="10" step="1" data-parameter><small>不足时保留实际数量；CSV 第 4 列优先</small></label>
+          <label class="field">已选组合之间的间距（nt）<input type="number" name="min_gap" value="2" min="0" max="10000" step="1" data-parameter><small>同一对 L/R 两臂间隔固定为 0 nt</small></label>
+        </div>
+        <details class="advanced-parameters"><summary>高级参数 <span>臂长、Tm、GC 与序列复杂度</span></summary>
+          <div class="field-grid">
+            {% for name, label, minimum, maximum, step in [('min_length','最小臂长（nt）',15,20,1),('max_length','最大臂长（nt）',15,50,1),('min_tm','最低 Tm（°C）',0,100,0.1),('max_tm','最高 Tm（°C）',0,100,0.1),('min_gc','最低 GC（%）',0,100,0.1),('max_gc','最高 GC（%）',0,100,0.1),('poly_n','连续同碱基阈值',2,20,1),('min_complementary_length','互补长度（nt）',4,15,1),('kmer_size','重复片段长度（nt）',6,10,1),('min_kmer_count','重复次数阈值',2,20,1),('gc_junction_penalty','连接位点排序惩罚',0,1000,0.1)] %}
+            <label class="field">{{ label }}<input type="number" name="{{ name }}" value="{{ config.defaults[name] }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}" data-parameter></label>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+      <div class="wizard-alert notice">本次检索基于 BLAST，不保证找全带错配的近似匹配，也不包含插入缺失复核。结果用于筛选候选，不能直接视为可合成清单。</div>
+      <footer class="wizard-actions"><button type="button" class="wizard-button" data-back>← 返回修改输入</button><button type="button" class="wizard-button primary" id="run-button">开始设计并复核</button></footer>
+    </section>
+  </form>
+  <section id="step-3" class="wizard-panel" aria-labelledby="results-heading" hidden>
+    <div class="section-heading"><div><h2 id="results-heading">设计结果</h2><p id="result-subtitle"></p></div><div class="result-actions"><a class="wizard-button" href="{{ url_for('split') }}">新建设计</a><a class="wizard-button primary" id="download-results">下载完整结果 ZIP</a></div></div>
+    <div class="result-stats" id="result-stats"></div>
+    <div class="wizard-alert notice" id="result-limit"></div>
+    <details class="run-settings"><summary>查看本次参数与参考信息</summary><div id="run-settings-content"></div></details>
+    <div class="result-toolbar"><label class="field">任务<select id="result-task"></select></label><label class="field">显示范围<select id="result-filter"><option value="all">全部候选</option><option value="keep">保留待复核</option><option value="cross">跨物种完全匹配</option><option value="unassessed">未完成特异性评估</option></select></label><span id="visible-count" aria-live="polite"></span></div>
+    <div class="table-scroll"><table class="wizard-table candidate-table"><thead><tr><th>本次探针对</th><th>筛选状态</th><th>跨物种配对</th><th>原因</th><th>证据</th></tr></thead><tbody id="candidate-rows"></tbody></table></div>
+    <p id="empty-results" class="empty-state" hidden></p>
+    <section id="pair-evidence" class="evidence-panel" hidden aria-live="polite"><div class="section-heading"><div><h3 id="evidence-heading"></h3><p>坐标采用 1-based inclusive；靶向臂序列为 5′ → 3′。</p></div><button type="button" class="text-button" id="close-evidence">收起详情</button></div><div id="evidence-arms" class="field-grid"></div><div id="evidence-summary"></div><div class="table-scroll"><table class="wizard-table"><thead><tr><th>参考转录本</th><th>关系</th><th>L 坐标 / 错配</th><th>R 坐标 / 错配</th><th>方向 / 间隔</th></tr></thead><tbody id="evidence-matches"></tbody></table></div></section>
+  </section>
+</main>
+<script type="application/json" id="split-config">{{ config|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='split-wizard.js') }}" defer></script>{% endblock %}

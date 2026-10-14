@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{% block language %}en{% endblock %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -67,7 +67,8 @@
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
+    {% block navigation %}
     <nav class="nav">
         <a href="{{ url_for('index') }}" class="nav-link">Home</a>
         
@@ -96,6 +97,7 @@
         <a href="{{ url_for('formatting') }}" class="nav-link">Formatting</a>
         <a href="{{ url_for('help') }}" class="nav-link">Help</a>
     </nav>
+    {% endblock %}
     
     <div class="container">
         {% block content %}{% endblock %}
