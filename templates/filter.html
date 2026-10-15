@@ -1,47 +1,47 @@
 {% extends "base.html" %}
-{% block title %}AI 筛选 · Probe Designer{% endblock %}
-{% block eyebrow %}序列工具 · 实验功能{% endblock %}
-{% block heading %}AI 筛选{% endblock %}
-{% block lede %}把三探针设计输出的 JSON 交给大语言模型，按错配数、组合间距和覆盖度给出保留建议，并展示模型的推理过程。{% endblock %}
+{% block title %}{{ _("AI 筛选 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("序列工具 · 实验功能") }}{% endblock %}
+{% block heading %}{{ _("AI 筛选") }}{% endblock %}
+{% block lede %}{{ _("把三探针设计输出的 JSON 交给大语言模型，按错配数、组合间距和覆盖度给出保留建议，并展示模型的推理过程。") }}{% endblock %}
 
 {% block content %}
-<div class="alert notice">实验功能：依赖服务器上配置的 DEEPSEEK_API_URL、DEEPSEEK_API_KEY 和 DEEPSEEK_MODEL，探针数据会发送到该接口。模型建议不能替代配对特异性检查，只读取三探针结果格式。</div>
+<div class="alert notice">{{ _("实验功能：依赖服务器上配置的 DEEPSEEK_API_URL、DEEPSEEK_API_KEY 和 DEEPSEEK_MODEL，探针数据会发送到该接口。模型建议不能替代配对特异性检查，只读取三探针结果格式。") }}</div>
 
 <form method="post" enctype="multipart/form-data" class="panel" id="filter-form">
   <div class="split">
     <label class="dropzone" data-dropzone tabindex="0">
       <svg aria-hidden="true"><use href="#i-upload"/></svg>
-      <strong data-file-label>点击选择或拖入三探针结果 JSON</strong>
-      <span class="hint">三探针结果 ZIP 中的 *_filtered.json</span>
+      <strong data-file-label>{{ _("点击选择或拖入三探针结果 JSON") }}</strong>
+      <span class="hint">{{ _("三探针结果 ZIP 中的 *_filtered.json") }}</span>
       <input type="file" name="probe_file" id="probe-file" accept=".json,application/json">
     </label>
     <ul class="note-list">
-      <li>优先保留每个探针错配 ≤ 2 的组合。</li>
-      <li>各组合之间间距 ≥ 15 bp。</li>
-      <li>在满足以上条件时尽量提高覆盖度。</li>
-      <li>模型调用通常需要几十秒，期间请保持本页打开。</li>
+      <li>{{ _("优先保留每个探针错配 ≤ 2 的组合。") }}</li>
+      <li>{{ _("各组合之间间距 ≥ 15 bp。") }}</li>
+      <li>{{ _("在满足以上条件时尽量提高覆盖度。") }}</li>
+      <li>{{ _("模型调用通常需要几十秒，期间请保持本页打开。") }}</li>
     </ul>
   </div>
-  <div class="actions"><span id="filter-hint">文件只用于本次请求</span><div><button type="submit" class="btn primary" id="submit-button">开始筛选</button></div></div>
+  <div class="actions"><span id="filter-hint">{{ _("文件只用于本次请求") }}</span><div><button type="submit" class="btn primary" id="submit-button">{{ _("开始筛选") }}</button></div></div>
 </form>
 
-{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error|message }}</div>{% endif %}
 
 {% if results %}
 {% set kept = results.probe_sets|selectattr('keep')|list|length %}
 <section class="panel">
-  <div class="panel-head"><div><h2>{{ results.report_title or '筛选结果' }}</h2><p>{{ results.probe_sets|length }} 组 · 建议保留 {{ kept }} 组</p></div></div>
+  <div class="panel-head"><div><h2>{{ results.report_title or _("筛选结果") }}</h2><p>{{ results.probe_sets|length }} {{ _("组 · 建议保留") }} {{ kept }} {{ _("组") }}</p></div></div>
   {% if reasoning_content %}
-  <details class="disclosure" style="margin-bottom:16px"><summary>模型推理过程</summary><div class="prose" style="white-space:pre-wrap;max-height:360px;overflow:auto;font-size:13px;color:var(--muted)">{{ reasoning_content }}</div></details>
+  <details class="disclosure" style="margin-bottom:16px"><summary>{{ _("模型推理过程") }}</summary><div class="prose" style="white-space:pre-wrap;max-height:360px;overflow:auto;font-size:13px;color:var(--muted)">{{ reasoning_content }}</div></details>
   {% endif %}
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>组合</th><th>建议</th><th>原因</th><th>详情</th></tr></thead>
+      <thead><tr><th>{{ _("组合") }}</th><th>{{ _("建议") }}</th><th>{{ _("原因") }}</th><th>{{ _("详情") }}</th></tr></thead>
       <tbody>
       {% for probe_set in results.probe_sets %}
         <tr>
           <td><code>#{{ probe_set.id }}</code></td>
-          <td><span class="chip {{ 'ok' if probe_set.keep else 'bad' }}">{{ '保留' if probe_set.keep else '舍弃' }}</span></td>
+          <td><span class="chip {{ 'ok' if probe_set.keep else 'bad' }}">{{ _("保留") if probe_set.keep else _("舍弃") }}</span></td>
           <td>{{ probe_set.reason }}</td>
           <td>
             <details><summary class="text-button">L / M / R</summary>
@@ -50,7 +50,7 @@
                 {% set arm = probe_set[key] %}
                 {% if arm %}<dt>{{ label }}</dt><dd><code class="seq">{{ arm.sequence }}</code><br><span class="hint">{{ arm.length }} nt · GC {{ arm.gc_content }}% · Tm {{ arm.tm }} °C</span></dd>{% endif %}
                 {% endfor %}
-                {% if probe_set.evaluation %}<dt>评估</dt><dd class="hint">跨度 {{ probe_set.evaluation.total_span }} · 平均 Tm {{ probe_set.evaluation.average_tm }} °C · 平均 GC {{ probe_set.evaluation.average_gc_content }}% · 质量分 {{ probe_set.evaluation.quality_score }}</dd>{% endif %}
+                {% if probe_set.evaluation %}<dt>{{ _("评估") }}</dt><dd class="hint">{{ _("跨度") }} {{ probe_set.evaluation.total_span }} {{ _("· 平均 Tm") }} {{ probe_set.evaluation.average_tm }} {{ _("°C · 平均 GC") }} {{ probe_set.evaluation.average_gc_content }}{{ _("% · 质量分") }} {{ probe_set.evaluation.quality_score }}</dd>{% endif %}
               </dl>
             </details>
           </td>
@@ -70,12 +70,12 @@ document.getElementById('filter-form').addEventListener('submit', event => {
   const hint = document.getElementById('filter-hint');
   if (!file || !file.name.toLowerCase().endsWith('.json')) {
     event.preventDefault();
-    hint.textContent = '请先选择 .json 文件。';
+    hint.textContent = HCR.t("请先选择 .json 文件。");
     hint.style.color = 'var(--bad)';
     return;
   }
   document.getElementById('submit-button').disabled = true;
-  hint.textContent = '模型正在分析 ' + file.name + '……';
+  hint.textContent = HCR.t("模型正在分析 ") + file.name + '……';
 });
 </script>
 {% endblock %}

@@ -1,21 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Probe Designer · HCR 探针设计工作台{% endblock %}
+{% block title %}{{ _("Probe Designer · HCR 探针设计工作台") }}{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">{% endblock %}
 
 {% block content %}
 <section class="hero" aria-labelledby="hero-title">
   <div class="hero-copy">
     <span class="hero-tag">HCR in situ · probe design workbench</span>
-    <h1 id="hero-title">从转录本到可复核的探针清单</h1>
-    <p>设计双探针与三探针，管理桥接探针库，预处理参考序列。每个候选都保留筛选原因与配对证据，便于下单前逐对复核。</p>
+    <h1 id="hero-title">{{ _("从转录本到可复核的探针清单") }}</h1>
+    <p>{{ _("设计双探针与三探针，管理桥接探针库，预处理参考序列。每个候选都保留筛选原因与配对证据，便于下单前逐对复核。") }}</p>
     <div class="hero-cta">
-      <a class="btn primary" href="{{ url_for('split') }}">开始双探针设计</a>
-      <a class="btn" href="{{ url_for('bridge_list') }}">浏览桥接探针库</a>
+      <a class="btn primary" href="{{ url_for('split') }}">{{ _("开始双探针设计") }}</a>
+      <a class="btn" href="{{ url_for('bridge_list') }}">{{ _("浏览桥接探针库") }}</a>
     </div>
   </div>
-  <figure class="hero-figure" aria-label="示意图：L、R 两臂相邻结合在 mRNA 上，桥接探针连接两臂的延伸端，并启动 HCR 发夹链式扩增产生荧光信号">
+  <figure class="hero-figure" aria-label="{{ _("示意图：L、R 两臂相邻结合在 mRNA 上，桥接探针连接两臂的延伸端，并启动 HCR 发夹链式扩增产生荧光信号") }}">
     <svg viewBox="0 0 520 290" role="img">
-      <title>双探针、桥接探针与 HCR 扩增示意</title>
+      <title>{{ _("双探针、桥接探针与 HCR 扩增示意") }}</title>
       <!-- mRNA backbone with base ticks -->
       <line x1="20" y1="240" x2="500" y2="240" stroke="var(--h-rna)" stroke-width="2.5" stroke-linecap="round"/>
       <line x1="20" y1="245" x2="500" y2="245" stroke="var(--h-rna)" stroke-width="6" stroke-dasharray="1 5" opacity=".55"/>
@@ -45,59 +45,59 @@
       <!-- labels -->
       <text x="20" y="232">mRNA</text>
       <text x="20" y="266">5′</text><text x="500" y="266" text-anchor="end">3′</text>
-      <text class="lbl-l" x="197" y="266" text-anchor="middle">L 臂</text>
-      <text class="lbl-r" x="299" y="266" text-anchor="middle">R 臂</text>
-      <text x="248" y="282" text-anchor="middle">两臂间隔 0 nt</text>
-      <text class="lbl-b" x="184" y="150" text-anchor="end">桥接探针 BP</text>
-      <text class="lbl-g" x="472" y="66" text-anchor="end">HCR 发夹链式扩增 → 荧光</text>
+      <text class="lbl-l" x="197" y="266" text-anchor="middle">{{ _("L 臂") }}</text>
+      <text class="lbl-r" x="299" y="266" text-anchor="middle">{{ _("R 臂") }}</text>
+      <text x="248" y="282" text-anchor="middle">{{ _("两臂间隔 0 nt") }}</text>
+      <text class="lbl-b" x="184" y="150" text-anchor="end">{{ _("桥接探针 BP") }}</text>
+      <text class="lbl-g" x="472" y="66" text-anchor="end">{{ _("HCR 发夹链式扩增 → 荧光") }}</text>
     </svg>
   </figure>
 </section>
 
-<section class="spec" aria-label="当前服务器数据">
-  <div><span>桥接探针库</span><strong>{{ '{:,}'.format(bridge_count) }} 条</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
-  <div><span>可用参考库</span><strong>{{ genomes|length }} 个</strong>{% set names = genomes|map(attribute='display_name')|sort|list %}
-  <small>{% if not genomes %}尚未添加，可在设计时上传{% elif 'bol_bju_cdna' in names %}含 bol_bju_cdna{% if names|length > 1 %} 等{% endif %}{% else %}{{ names[:2]|join(' · ') }}{% if names|length > 2 %} 等{% endif %}{% endif %}</small></div>
-  <div><span>双臂配对扫描</span><strong>每臂 ≤ 3</strong><small>替换错配 · 正向转录本 · 无缺口</small></div>
-  <div><span>坐标约定</span><strong>1-based</strong><small>inclusive · 序列 5′ → 3′</small></div>
+<section class="spec" aria-label="{{ _("当前服务器数据") }}">
+  <div><span>{{ _("桥接探针库") }}</span><strong>{{ '{:,}'.format(bridge_count) }} {{ _("条") }}</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
+  <div><span>{{ _("可用参考库") }}</span><strong>{{ genomes|length }} {{ _("个") }}</strong>{% set names = genomes|map(attribute='display_name')|sort|list %}
+  <small>{% if not genomes %}{{ _("尚未添加，可在设计时上传") }}{% elif 'bol_bju_cdna' in names %}{{ _("含 bol_bju_cdna") }}{% if names|length > 1 %} {{ _("等") }}{% endif %}{% else %}{{ names[:2]|join(' · ') }}{% if names|length > 2 %} {{ _("等") }}{% endif %}{% endif %}</small></div>
+  <div><span>{{ _("双臂配对扫描") }}</span><strong>{{ _("每臂 ≤ 3") }}</strong><small>{{ _("替换错配 · 正向转录本 · 无缺口") }}</small></div>
+  <div><span>{{ _("坐标约定") }}</span><strong>1-based</strong><small>{{ _("inclusive · 序列 5′ → 3′") }}</small></div>
 </section>
 
 <section aria-labelledby="pipeline-title">
-  <div class="section-title"><h2 id="pipeline-title">双探针设计流程</h2><p>三步向导，结果附带每一对的证据</p></div>
+  <div class="section-title"><h2 id="pipeline-title">{{ _("双探针设计流程") }}</h2><p>{{ _("三步向导，结果附带每一对的证据") }}</p></div>
   <ol class="pipeline">
-    <li><strong>目标序列</strong><span>从参考库提取或直接粘贴，核对编号与桥接探针</span></li>
-    <li><strong>候选生成</strong><span>臂长、Tm、GC、连续同碱基与重复片段过滤</span></li>
-    <li><strong>配对扫描</strong><span>在参考库中查找两臂同时命中的位置与错配</span></li>
-    <li><strong>策略筛选</strong><span>物种、严格、允许集合或亚基因组模式</span></li>
-    <li><strong>复核导出</strong><span>逐对证据、筛选原因与完整结果 ZIP</span></li>
+    <li><strong>{{ _("目标序列") }}</strong><span>{{ _("从参考库提取或直接粘贴，核对编号与桥接探针") }}</span></li>
+    <li><strong>{{ _("候选生成") }}</strong><span>{{ _("臂长、Tm、GC、连续同碱基与重复片段过滤") }}</span></li>
+    <li><strong>{{ _("配对扫描") }}</strong><span>{{ _("在参考库中查找两臂同时命中的位置与错配") }}</span></li>
+    <li><strong>{{ _("策略筛选") }}</strong><span>{{ _("物种、严格、允许集合或亚基因组模式") }}</span></li>
+    <li><strong>{{ _("复核导出") }}</strong><span>{{ _("逐对证据、筛选原因与完整结果 ZIP") }}</span></li>
   </ol>
 </section>
 
 <section aria-labelledby="tools-title">
-  <div class="section-title"><h2 id="tools-title">全部工具</h2><p>左侧导航可随时切换</p></div>
+  <div class="section-title"><h2 id="tools-title">{{ _("全部工具") }}</h2><p>{{ _("左侧导航可随时切换") }}</p></div>
   <div class="tool-index">
     <div class="tool-group">
-      <h3>设计</h3>
-      <a class="tool" href="{{ url_for('split') }}"><svg aria-hidden="true"><use href="#i-split"/></svg><strong>双探针设计</strong><span>L/R 两臂配对，单条与批量共用一个向导，逐对给出配对证据和筛选原因。</span></a>
-      <a class="tool" href="{{ url_for('triplet') }}"><svg aria-hidden="true"><use href="#i-triplet"/></svg><strong>三探针设计 <span class="chip warn">旧规则</span></strong><span>L/M/R 三段组合，单条或 CSV 批量；特异性仍按单臂 BLAST 判定。</span></a>
+      <h3>{{ _("设计") }}</h3>
+      <a class="tool" href="{{ url_for('split') }}"><svg aria-hidden="true"><use href="#i-split"/></svg><strong>{{ _("双探针设计") }}</strong><span>{{ _("L/R 两臂配对，单条与批量共用一个向导，逐对给出配对证据和筛选原因。") }}</span></a>
+      <a class="tool" href="{{ url_for('triplet') }}"><svg aria-hidden="true"><use href="#i-triplet"/></svg><strong>{{ _("三探针设计") }} <span class="chip warn">{{ _("旧规则") }}</span></strong><span>{{ _("L/M/R 三段组合，单条或 CSV 批量；特异性仍按单臂 BLAST 判定。") }}</span></a>
     </div>
     <div class="tool-group">
-      <h3>桥接探针库</h3>
-      <a class="tool" href="{{ url_for('bridge_list') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>浏览探针库</strong><span>{{ '{:,}'.format(bridge_count) }} 条桥接序列及长度、Tm、GC，可搜索、复制与导出。</span></a>
-      <a class="tool" href="{{ url_for('bridge_query') }}"><svg aria-hidden="true"><use href="#i-conflict"/></svg><strong>冲突检查</strong><span>按 BP_ID、新序列或多条输入互查 k-mer 重叠。</span></a>
-      <a class="tool" href="{{ url_for('bridge') }}"><svg aria-hidden="true"><use href="#i-plus"/></svg><strong>推荐新探针</strong><span>挑选与已用探针没有 k-mer 冲突的新桥接探针。</span></a>
-      <a class="tool" href="{{ url_for('bridge_validate') }}"><svg aria-hidden="true"><use href="#i-check"/></svg><strong>合规验证</strong><span>按长度、GC、Tm 与连续碱基规则检查一批序列。</span></a>
+      <h3>{{ _("桥接探针库") }}</h3>
+      <a class="tool" href="{{ url_for('bridge_list') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>{{ _("浏览探针库") }}</strong><span>{{ '{:,}'.format(bridge_count) }} {{ _("条桥接序列及长度、Tm、GC，可搜索、复制与导出。") }}</span></a>
+      <a class="tool" href="{{ url_for('bridge_query') }}"><svg aria-hidden="true"><use href="#i-conflict"/></svg><strong>{{ _("冲突检查") }}</strong><span>{{ _("按 BP_ID、新序列或多条输入互查 k-mer 重叠。") }}</span></a>
+      <a class="tool" href="{{ url_for('bridge') }}"><svg aria-hidden="true"><use href="#i-plus"/></svg><strong>{{ _("推荐新探针") }}</strong><span>{{ _("挑选与已用探针没有 k-mer 冲突的新桥接探针。") }}</span></a>
+      <a class="tool" href="{{ url_for('bridge_validate') }}"><svg aria-hidden="true"><use href="#i-check"/></svg><strong>{{ _("合规验证") }}</strong><span>{{ _("按长度、GC、Tm 与连续碱基规则检查一批序列。") }}</span></a>
     </div>
     <div class="tool-group">
-      <h3>序列工具</h3>
-      <a class="tool" href="{{ url_for('formatting') }}"><svg aria-hidden="true"><use href="#i-format"/></svg><strong>FASTA 格式化</strong><span>清理标题、统一大写、过滤无效序列、去除转录本变体重复。</span></a>
-      <a class="tool" href="{{ url_for('subgenomes') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>亚基因组编号</strong><span>按 FASTA 文件或编号特征生成亚基因组归属 CSV。</span></a>
-      <a class="tool" href="{{ url_for('references') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>参考库管理</strong><span>上传共享参考、配置多倍体并按 SHA-256 避免重复。</span></a>
-      <a class="tool" href="{{ url_for('probe_recommend') }}"><svg aria-hidden="true"><use href="#i-bars"/></svg><strong>探针数量推荐</strong><span>由 CDS 与 counts 计算 TPM，按表达量推荐每个基因的探针数。</span></a>
-      <a class="tool" href="{{ url_for('filter') }}"><svg aria-hidden="true"><use href="#i-chip"/></svg><strong>AI 筛选 <span class="chip warn">实验</span></strong><span>用大语言模型对三探针结果 JSON 做二次筛选。</span></a>
+      <h3>{{ _("序列工具") }}</h3>
+      <a class="tool" href="{{ url_for('formatting') }}"><svg aria-hidden="true"><use href="#i-format"/></svg><strong>{{ _("FASTA 格式化") }}</strong><span>{{ _("清理标题、统一大写、过滤无效序列、去除转录本变体重复。") }}</span></a>
+      <a class="tool" href="{{ url_for('subgenomes') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>{{ _("亚基因组编号") }}</strong><span>{{ _("按 FASTA 文件或编号特征生成亚基因组归属 CSV。") }}</span></a>
+      <a class="tool" href="{{ url_for('references') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>{{ _("参考库管理") }}</strong><span>{{ _("上传共享参考、配置多倍体并按 SHA-256 避免重复。") }}</span></a>
+      <a class="tool" href="{{ url_for('probe_recommend') }}"><svg aria-hidden="true"><use href="#i-bars"/></svg><strong>{{ _("探针数量推荐") }}</strong><span>{{ _("由 CDS 与 counts 计算 TPM，按表达量推荐每个基因的探针数。") }}</span></a>
+      <a class="tool" href="{{ url_for('filter') }}"><svg aria-hidden="true"><use href="#i-chip"/></svg><strong>{{ _("AI 筛选") }} <span class="chip warn">{{ _("实验") }}</span></strong><span>{{ _("用大语言模型对三探针结果 JSON 做二次筛选。") }}</span></a>
     </div>
   </div>
 </section>
 
-<div class="alert notice">结果解读：双臂配对扫描不含插入缺失；“当前检索未检出”和“保留待复核”都不等于特异性已验证。三探针尚未迁移到双臂配对判定。</div>
+<div class="alert notice">{{ _("结果解读：双臂配对扫描不含插入缺失；“当前检索未检出”和“保留待复核”都不等于特异性已验证。三探针尚未迁移到双臂配对判定。") }}</div>
 {% endblock %}

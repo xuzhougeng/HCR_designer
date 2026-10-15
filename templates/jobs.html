@@ -1,40 +1,40 @@
 {% extends "base.html" %}
-{% block title %}任务记录 · Probe Designer{% endblock %}
-{% block eyebrow %}设计{% endblock %}
-{% block heading %}任务记录{% endblock %}
-{% block lede %}所有提交到后台的双探针设计。任务一次只算一个，按提交顺序排队；关闭页面不影响计算。{% endblock %}
-{% block head_actions %}<a class="btn primary" href="{{ url_for('split') }}">新建双探针设计</a>{% endblock %}
+{% block title %}{{ _("任务记录 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("设计") }}{% endblock %}
+{% block heading %}{{ _("任务记录") }}{% endblock %}
+{% block lede %}{{ _("所有提交到后台的双探针设计。任务一次只算一个，按提交顺序排队；关闭页面不影响计算。") }}{% endblock %}
+{% block head_actions %}<a class="btn primary" href="{{ url_for('split') }}">{{ _("新建双探针设计") }}</a>{% endblock %}
 
 {% block content %}
 <div class="stats" id="job-stats"></div>
 <section class="panel">
   <div class="toolbar">
-    <div class="seg" role="group" aria-label="按状态筛选">
-      <button type="button" data-filter="all" aria-pressed="true">全部</button>
-      <button type="button" data-filter="live" aria-pressed="false">进行中</button>
-      <button type="button" data-filter="completed" aria-pressed="false">已完成</button>
-      <button type="button" data-filter="problem" aria-pressed="false">失败或中断</button>
+    <div class="seg" role="group" aria-label="{{ _("按状态筛选") }}">
+      <button type="button" data-filter="all" aria-pressed="true">{{ _("全部") }}</button>
+      <button type="button" data-filter="live" aria-pressed="false">{{ _("进行中") }}</button>
+      <button type="button" data-filter="completed" aria-pressed="false">{{ _("已完成") }}</button>
+      <button type="button" data-filter="problem" aria-pressed="false">{{ _("失败或中断") }}</button>
     </div>
-    <label class="field">搜索<input type="search" id="job-search" placeholder="任务名称或基因编号" autocomplete="off"></label>
+    <label class="field">{{ _("搜索") }}<input type="search" id="job-search" placeholder="{{ _("任务名称或基因编号") }}" autocomplete="off"></label>
     <span class="count" id="job-count"></span>
   </div>
   <div class="table-wrap">
     <table class="table" style="min-width:860px">
-      <thead><tr><th>任务</th><th>目标</th><th>状态</th><th>结果</th><th>提交时间</th><th>用时</th><th></th></tr></thead>
+      <thead><tr><th>{{ _("任务") }}</th><th>{{ _("目标") }}</th><th>{{ _("状态") }}</th><th>{{ _("结果") }}</th><th>{{ _("提交时间") }}</th><th>{{ _("用时") }}</th><th></th></tr></thead>
       <tbody id="job-rows"></tbody>
     </table>
   </div>
-  <p class="empty" id="job-empty" hidden>还没有提交过任务。<a href="{{ url_for('split') }}">开始一次双探针设计</a></p>
+  <p class="empty" id="job-empty" hidden>{{ _("还没有提交过任务。") }}<a href="{{ url_for('split') }}">{{ _("开始一次双探针设计") }}</a></p>
 </section>
-<p class="hint">仅显示已提交计算的任务；只做了输入检查、未提交的任务不在此列。服务重启时未完成的任务会标记为“已中断”，可在任务页按原参数重新运行。</p>
-<p class="hint">分析结果保留 3 个月，到期后定期清理。请及时下载需要长期保存的 ZIP 文件。</p>
-<script type="application/json" id="jobs-data">{{ jobs|tojson }}</script>
+<p class="hint">{{ _("仅显示已提交计算的任务；只做了输入检查、未提交的任务不在此列。服务重启时未完成的任务会标记为“已中断”，可在任务页按原参数重新运行。") }}</p>
+<p class="hint">{{ _("分析结果保留 3 个月，到期后定期清理。请及时下载需要长期保存的 ZIP 文件。") }}</p>
+<script type="application/json" id="jobs-data">{{ jobs|localized_status|tojson }}</script>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (() => {
-  const STATE = {queued: ['排队中', 'info'], running: ['计算中', 'info'], completed: ['已完成', 'ok'], failed: ['失败', 'bad'], interrupted: ['已中断', 'warn']};
+  const STATE = {queued: [HCR.t("排队中"), 'info'], running: [HCR.t("计算中"), 'info'], completed: [HCR.t("已完成"), 'ok'], failed: [HCR.t("失败"), 'bad'], interrupted: [HCR.t("已中断"), 'warn']};
   let jobs = JSON.parse(document.getElementById('jobs-data').textContent), filter = 'all';
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
   const live = job => job.status === 'queued' || job.status === 'running';
@@ -42,7 +42,7 @@
     const start = Date.parse(job.started_at), end = job.completed_at ? Date.parse(job.completed_at) : (live(job) ? Date.now() : NaN);
     if (!start || !end) return '—';
     const s = Math.round((end - start) / 1000);
-    return s >= 60 ? Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒' : s + ' 秒';
+    return s >= 60 ? Math.floor(s / 60) + HCR.t(" 分 ") + (s % 60) + HCR.t(" 秒") : s + HCR.t(" 秒");
   };
   function render() {
     const query = document.getElementById('job-search').value.trim().toLowerCase();
@@ -50,32 +50,32 @@
       || (filter === 'problem' && (job.status === 'failed' || job.status === 'interrupted')))
       .filter(job => !query || job.tasks.some(t => (t.name + ' ' + t.gene_id).toLowerCase().includes(query)));
     const stats = document.getElementById('job-stats');
-    stats.replaceChildren(...[['全部任务', jobs.length], ['进行中', jobs.filter(live).length], ['已完成', jobs.filter(j => j.status === 'completed').length],
-      ['失败或中断', jobs.filter(j => j.status === 'failed' || j.status === 'interrupted').length]].map(([label, value]) => {
+    stats.replaceChildren(...[[HCR.t("全部任务"), jobs.length], [HCR.t("进行中"), jobs.filter(live).length], [HCR.t("已完成"), jobs.filter(j => j.status === 'completed').length],
+      [HCR.t("失败或中断"), jobs.filter(j => j.status === 'failed' || j.status === 'interrupted').length]].map(([label, value]) => {
         const tile = el('div', null, 'stat'); tile.append(el('span', label), el('strong', value)); return tile; }));
     const body = document.getElementById('job-rows'); body.replaceChildren();
     rows.forEach(job => {
       const row = el('tr');
-      const name = el('td'); const link = el('a', job.tasks[0].name + (job.tasks.length > 1 ? ' 等 ' + job.tasks.length + ' 个' : ''));
-      link.href = job.result_url; name.append(link, el('div', (job.mode === 'batch' ? '批量' : '单条') + ' · ' + (job.reference || '无参考库'), 'hint'));
+      const name = el('td'); const link = el('a', job.tasks[0].name + (job.tasks.length > 1 ? HCR.t(" 等 ") + job.tasks.length + HCR.t(" 个") : ''));
+      link.href = job.result_url; name.append(link, el('div', (job.mode === 'batch' ? HCR.t("批量") : HCR.t("单条")) + ' · ' + (job.reference || HCR.t("无参考库")), 'hint'));
       const genes = el('td', job.tasks.slice(0, 3).map(t => t.gene_id).join('、') + (job.tasks.length > 3 ? ' …' : ''), 'seq');
       const [label, cls] = STATE[job.status] || [job.status, ''];
       const state = el('td'); state.append(el('span', label, 'chip ' + cls));
-      if (job.status === 'running' && job.progress) state.append(el('div', (job.progress.task_total > 1 ? job.progress.task_index + '/' + job.progress.task_total + ' · ' : '') + job.progress.label, 'hint'));
-      if (job.status === 'queued' && job.queue_position) state.append(el('div', '前面 ' + job.queue_position + ' 个', 'hint'));
+      if (job.status === 'running' && job.progress) state.append(el('div', (job.progress.task_total > 1 ? job.progress.task_index + '/' + job.progress.task_total + ' · ' : '') + HCR.t(job.progress.label), 'hint'));
+      if (job.status === 'queued' && job.queue_position) state.append(el('div', HCR.t("前面 ") + job.queue_position + HCR.t(" 个"), 'hint'));
       if (job.error) state.append(el('div', job.error, 'hint'));
       const summary = job.summary;
-      const result = el('td', summary ? '保留 ' + summary.selected + ' / 候选 ' + summary.candidates : '—', 'num');
-      if (summary && summary.cross_exact) result.append(el('div', '跨物种完全配对 ' + summary.cross_exact, 'hint'));
-      const when = el('td', new Date(job.queued_at || job.created_at).toLocaleString('zh-CN'), 'num');
+      const result = el('td', summary ? HCR.t("保留 ") + summary.selected + HCR.t(" / 候选 ") + summary.candidates : '—', 'num');
+      if (summary && summary.cross_exact) result.append(el('div', HCR.t("跨物种完全配对 ") + summary.cross_exact, 'hint'));
+      const when = el('td', new Date(job.queued_at || job.created_at).toLocaleString(HCR.locale), 'num');
       const actions = el('td'); const box = el('div', null, 'row-actions'); box.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
-      const open = el('a', job.status === 'completed' ? '查看结果' : '查看进度', 'btn small'); open.href = job.result_url; box.append(open);
+      const open = el('a', job.status === 'completed' ? HCR.t("查看结果") : HCR.t("查看进度"), 'btn small'); open.href = job.result_url; box.append(open);
       if (job.status === 'completed') { const zip = el('a', 'ZIP', 'btn small'); zip.href = job.download_url; box.append(zip); }
       actions.append(box);
       row.append(name, genes, state, result, when, el('td', duration(job), 'num'), actions);
       body.append(row);
     });
-    document.getElementById('job-count').textContent = '显示 ' + rows.length + ' / ' + jobs.length;
+    document.getElementById('job-count').textContent = HCR.t("显示 ") + rows.length + ' / ' + jobs.length;
     document.getElementById('job-empty').hidden = jobs.length > 0;
   }
   document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {

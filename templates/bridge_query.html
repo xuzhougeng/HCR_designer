@@ -1,33 +1,33 @@
 {% extends "base.html" %}
 {% from "partials/bridge.html" import conflict_modes, kmer_cell, kmer_field %}
-{% block title %}冲突检查 · Probe Designer{% endblock %}
-{% block eyebrow %}桥接探针库 · 冲突检查{% endblock %}
-{% block heading %}冲突检查{% endblock %}
-{% block lede %}查看一条已有桥接探针与库中其他探针共享的 k-mer，避免同一实验中混用相互干扰的探针。{% endblock %}
+{% block title %}{{ _("冲突检查 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("桥接探针库 · 冲突检查") }}{% endblock %}
+{% block heading %}{{ _("冲突检查") }}{% endblock %}
+{% block lede %}{{ _("查看一条已有桥接探针与库中其他探针共享的 k-mer，避免同一实验中混用相互干扰的探针。") }}{% endblock %}
 {% block head_actions %}{{ conflict_modes('bp_id') }}{% endblock %}
 
 {% block content %}
 <form method="post" class="panel">
   <div class="grid-3">
-    <label class="field">桥接探针编号<input name="bp_id" value="{{ query_bp_id or bp_id or '' }}" placeholder="例如：BP_0079" required autocomplete="off" spellcheck="false"></label>
+    <label class="field">{{ _("桥接探针编号") }}<input name="bp_id" value="{{ query_bp_id or bp_id or '' }}" placeholder="{{ _("例如：BP_0079") }}" required autocomplete="off" spellcheck="false"></label>
     {{ kmer_field(kmer) }}
-    <div class="field"><span>&nbsp;</span><button type="submit" class="btn primary">查询冲突</button></div>
+    <div class="field"><span>&nbsp;</span><button type="submit" class="btn primary">{{ _("查询冲突") }}</button></div>
   </div>
 </form>
 
-{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error|message }}</div>{% endif %}
 
 {% if query_bp_id and query_sequence %}
 <section class="panel">
   <div class="panel-head">
     <div><h2>{{ query_bp_id }}</h2><p class="seq">{{ query_sequence }}</p></div>
-    {% if conflicts %}<button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>{% endif %}
+    {% if conflicts %}<button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载结果") }}</button>{% endif %}
   </div>
   {% if conflicts %}
-  <p class="hint" style="margin-bottom:12px">k = {{ kmer }}，共 {{ conflicts|length }} 条探针与其共享片段。示例片段优先显示互为反向互补的组合。</p>
+  <p class="hint" style="margin-bottom:12px">k = {{ kmer }}{{ _("，共") }} {{ conflicts|length }} {{ _("条探针与其共享片段。示例片段优先显示互为反向互补的组合。") }}</p>
   <div class="table-wrap tall">
     <table class="table" id="result-table">
-      <thead><tr><th>BP_ID</th><th>序列</th><th>共享 k-mer 数</th><th>示例 k-mer</th></tr></thead>
+      <thead><tr><th>BP_ID</th><th>{{ _("序列") }}</th><th>{{ _("共享 k-mer 数") }}</th><th>{{ _("示例 k-mer") }}</th></tr></thead>
       <tbody>
       {% for other_id, sequence, overlap_count, overlap_kmers in conflicts %}
         <tr data-row="{{ [other_id, sequence, overlap_count, overlap_kmers|join(',')]|tojson|forceescape }}">
@@ -41,11 +41,11 @@
     </table>
   </div>
   {% else %}
-  <div class="alert success">k = {{ kmer }} 时，库中没有其他探针与 {{ query_bp_id }} 共享片段。</div>
+  <div class="alert success">k = {{ kmer }} {{ _("时，库中没有其他探针与") }} {{ query_bp_id }} {{ _("共享片段。") }}</div>
   {% endif %}
 </section>
 {% elif query_bp_id and not error %}
-<div class="alert error">{{ query_bp_id }} 不在当前桥接探针库中。</div>
+<div class="alert error">{{ query_bp_id }} {{ _("不在当前桥接探针库中。") }}</div>
 {% endif %}
 {% endblock %}
 

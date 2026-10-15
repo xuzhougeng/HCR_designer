@@ -19,6 +19,16 @@ python -m pip install -r requirements.txt
 python -m flask --app app run --host 127.0.0.1 --port 6789
 ```
 
+### 中英文界面（i18n）
+
+侧栏顶部的“中文 / English”可切换界面语言，默认中文。选择保存在当前浏览器的 `hcr_language` Cookie 中，有效期一年；也可使用 `?lang=zh` 或 `?lang=en` 指定并保存语言，优先级为 URL 参数、Cookie、中文默认值。切换会重新打开当前页面，并保留分页、搜索等 URL 参数。
+
+页面标题、表单、帮助、管理页面、动态任务结果、验证提示和日期/数字格式共用语言设置。下单清单通过状态代码显示当前语言，也兼容此前保存的中英文状态文案。用户填写的任务名、参考名、序列编号及序列内容保留原文；结果 ZIP 和分析数据格式不变。
+
+翻译入口为 `scripts/i18n.py` 和 `static/js/i18n.js`，中文原文作为消息键，英文译文集中在 `locales/en.json`；已有后端验证与状态消息放在 `locales/messages.en.json`，在 HTTP 或模板展示边界翻译，不改写任务记录。模板使用 `_("中文文案", name=value)`，JavaScript 使用 `HCR.t("中文文案", {name: value})`；完整句子里的动态值使用 `{name}` 占位符，并在英文中保留相同占位符。新增页面应继承 `base.html`，独立 Flask 路由模块应先调用可重复注册的 `register_i18n(app)`，不需要额外依赖或外部翻译服务。
+
+验证：`python -m unittest discover -s tests -p test_i18n.py -v`，覆盖语言持久化、错误与进度翻译、用户数据保留、所有公开页面、字典完整性及浏览器翻译函数。
+
 ### 管理员与空间清理
 
 首次使用前在项目目录初始化管理员，账号由命令指定，密码会隐藏输入并要求重复确认（至少 12 位）：

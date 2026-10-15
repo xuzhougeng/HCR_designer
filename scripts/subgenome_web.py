@@ -7,6 +7,8 @@ from src.common.subgenome_generator import generate_subgenomes
 
 
 def register_subgenome_routes(app):
+    from scripts.i18n import register_i18n
+    register_i18n(app)
     @app.route('/subgenomes', methods=['GET', 'POST'])
     def subgenomes():
         if request.method == 'GET':

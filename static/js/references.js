@@ -6,7 +6,7 @@
     let value = Number(el.dataset.bytes), i = 0;
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
-    el.textContent = value.toLocaleString('zh-CN', {maximumFractionDigits:2}) + ' ' + units[i];
+    el.textContent = value.toLocaleString(HCR.locale, {maximumFractionDigits:2}) + ' ' + units[i];
   });
   const saved = sessionStorage.getItem('reference-library-message');
   if (saved) { HCR.setAlert(message, saved); sessionStorage.removeItem('reference-library-message'); }
@@ -30,8 +30,8 @@
     const visible = new Set(matches.slice(start, start + size));
     entries.forEach(row => { row.hidden = !visible.has(row); });
     document.getElementById('reference-no-results').hidden = !entries.length || !!matches.length;
-    const count = query ? `匹配 ${matches.length} / ${entries.length} 个` : `共 ${entries.length} 个`;
-    const summary = matches.length ? `显示 ${start + 1}–${Math.min(start + size, matches.length)} 个 · ${count} · 第 ${currentPage} / ${pages} 页` : count;
+    const count = query ? HCR.t("匹配 {v0} / {v1} 个", {v0: matches.length, v1: entries.length}) : HCR.t("共 {v0} 个", {v0: entries.length});
+    const summary = matches.length ? HCR.t("显示 {v0}–{v1} 个 · {v2} · 第 {v3} / {v4} 页", {v0: start + 1, v1: Math.min(start + size, matches.length), v2: count, v3: currentPage, v4: pages}) : count;
     pagers.forEach((pager, index) => {
       pager.hidden = !entries.length || (index > 0 && pages === 1);
       pager.querySelector('[data-page-summary]').textContent = summary;
@@ -52,7 +52,7 @@
         button.className = 'btn small';
         button.dataset.page = page;
         button.textContent = page;
-        button.setAttribute('aria-label', `第 ${page} 页`);
+        button.setAttribute('aria-label', HCR.t("第 {v0} 页", {v0: page}));
         if (page === currentPage) button.setAttribute('aria-current', 'page');
         numbers.append(button);
         previous = page;
@@ -78,14 +78,14 @@
   renderPage();
   async function write(url, data, success) {
     document.querySelectorAll('form button').forEach(button => { button.disabled = true; });
-    HCR.setAlert(message, '正在处理参考文件，请稍候……', 'busy');
+    HCR.setAlert(message, HCR.t("正在处理参考文件，请稍候……"), 'busy');
     try {
       const isForm = data instanceof FormData;
       const response = await fetch(url, {method:'POST', headers:{'X-CSRF-Token':config.csrf, ...(isForm ? {} : {'Content-Type':'application/json'})}, body:isForm ? data : JSON.stringify(data)});
       if (response.status === 401) { location.href = config.login_url; return; }
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || '参考库操作未完成。');
-      const text = result.errors?.length ? '部分文件未能删除，请检查权限后刷新。' : success(result);
+      if (!response.ok) throw new Error(result.error || HCR.t("参考库操作未完成。"));
+      const text = result.errors?.length ? HCR.t("部分文件未能删除，请检查权限后刷新。") : success(result);
       sessionStorage.setItem('reference-library-message', text); location.reload();
     } catch (error) { HCR.setAlert(message, error.message, 'error'); }
     finally { document.querySelectorAll('form button').forEach(button => { button.disabled = false; }); }
@@ -105,7 +105,7 @@
       data.append('polyploid', document.getElementById('library-ploidy').value);
       const annotation = document.getElementById('library-subgenome-map').files[0];
       if (annotation) data.append('subgenome_map', annotation);
-      write(config.upload_url, data, result => result.duplicate ? `内容重复，已复用参考库“${result.reference.display_name}”（${result.reference.filename}）。已有配置与归属已保留，如需更新请在该参考库下保存配置。` : `参考库“${result.reference.display_name}”已上传，SHA-256 已计算。`);
+      write(config.upload_url, data, result => result.duplicate ? HCR.t("内容重复，已复用参考库“{v0}”（{v1}）。已有配置与归属已保留，如需更新请在该参考库下保存配置。", {v0: result.reference.display_name, v1: result.reference.filename}) : HCR.t("参考库“{v0}”已上传，SHA-256 已计算。", {v0: result.reference.display_name}));
     });
   }
   document.querySelectorAll('.reference-entry').forEach(row => {
@@ -116,11 +116,11 @@
       const data = new FormData(form);
       data.append('filename', row.dataset.filename);
       if (!form.elements.subgenome_map.files.length) data.delete('subgenome_map');
-      write(config.configure_url, data, () => '参考库配置已保存。');
+      write(config.configure_url, data, () => HCR.t("参考库配置已保存。"));
     });
-    row.querySelector('.compute-hash').addEventListener('click', () => write(config.hash_url, {filename:row.dataset.filename}, () => 'SHA-256 与序列数已更新。'));
+    row.querySelector('.compute-hash').addEventListener('click', () => write(config.hash_url, {filename:row.dataset.filename}, () => HCR.t("SHA-256 与序列数已更新。")));
     row.querySelector('.delete-reference')?.addEventListener('click', () => {
-      if (confirm(`确定永久删除“${row.dataset.display}”及其全部 BLAST 索引？\n删除后无法恢复，在用参考会受到保护。`)) write(config.delete_url, {keys:[row.dataset.filename]}, () => '参考库及配套索引已删除。');
+      if (confirm(HCR.t("确定永久删除“{v0}”及其全部 BLAST 索引？\n删除后无法恢复，在用参考会受到保护。", {v0: row.dataset.display}))) write(config.delete_url, {keys:[row.dataset.filename]}, () => HCR.t("参考库及配套索引已删除。"));
     });
   });
 })();

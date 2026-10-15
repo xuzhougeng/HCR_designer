@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{% block language %}zh-CN{% endblock %}">
+<html lang="{{ html_language }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -31,35 +31,39 @@
 </svg>
 {% set endpoint = request.endpoint %}
 {% set nav_groups = [
-  ('设计', [
-    ('split', '双探针设计', 'i-split', ['split', 'split_batch'], ''),
-    ('triplet', '三探针设计', 'i-triplet', ['triplet', 'triplet_batch'], ''),
-    ('jobs', '任务记录', 'i-clock', ['jobs', 'split_result'], ''),
-    ('orders', '下单清单', 'i-cart', ['orders'], '#count'),
+  (_("设计"), [
+    ('split', _("双探针设计"), 'i-split', ['split', 'split_batch'], ''),
+    ('triplet', _("三探针设计"), 'i-triplet', ['triplet', 'triplet_batch'], ''),
+    ('jobs', _("任务记录"), 'i-clock', ['jobs', 'split_result'], ''),
+    ('orders', _("下单清单"), 'i-cart', ['orders'], '#count'),
   ]),
-  ('桥接探针库', [
-    ('bridge_list', '浏览探针库', 'i-library', ['bridge_list'], ''),
-    ('bridge_query', '冲突检查', 'i-conflict', ['bridge_query', 'bridge_sequence', 'bridge_analyze'], ''),
-    ('bridge', '推荐新探针', 'i-plus', ['bridge'], ''),
-    ('bridge_validate', '合规验证', 'i-check', ['bridge_validate'], ''),
+  (_("桥接探针库"), [
+    ('bridge_list', _("浏览探针库"), 'i-library', ['bridge_list'], ''),
+    ('bridge_query', _("冲突检查"), 'i-conflict', ['bridge_query', 'bridge_sequence', 'bridge_analyze'], ''),
+    ('bridge', _("推荐新探针"), 'i-plus', ['bridge'], ''),
+    ('bridge_validate', _("合规验证"), 'i-check', ['bridge_validate'], ''),
   ]),
-  ('序列工具', [
-    ('formatting', 'FASTA 格式化', 'i-format', ['formatting'], ''),
-    ('subgenomes', '亚基因组编号', 'i-library', ['subgenomes'], ''),
-    ('references', '参考库管理', 'i-library', ['references'], ''),
-    ('probe_recommend', '探针数量推荐', 'i-bars', ['probe_recommend'], ''),
-    ('filter', 'AI 筛选', 'i-chip', ['filter'], '实验'),
+  (_("序列工具"), [
+    ('formatting', _("FASTA 格式化"), 'i-format', ['formatting'], ''),
+    ('subgenomes', _("亚基因组编号"), 'i-library', ['subgenomes'], ''),
+    ('references', _("参考库管理"), 'i-library', ['references'], ''),
+    ('probe_recommend', _("探针数量推荐"), 'i-bars', ['probe_recommend'], ''),
+    ('filter', _("AI 筛选"), 'i-chip', ['filter'], _("实验")),
   ]),
-  ('其他', [
-    ('help', '帮助', 'i-help', ['help'], ''),
+  (_("其他"), [
+    ('help', _("帮助"), 'i-help', ['help'], ''),
   ]),
 ] %}
 <div class="shell">
-  <aside class="sidebar" id="sidebar" aria-label="工具导航">
+  <aside class="sidebar" id="sidebar" aria-label="{{ _("工具导航") }}">
     <a class="side-brand" href="{{ url_for('index') }}"{% if endpoint == 'index' %} aria-current="page"{% endif %}>
       <svg width="30" height="30"><use href="#i-logo"/></svg>
       <span><strong>Probe Designer</strong><small>HCR · split-probe</small></span>
     </a>
+    <nav class="language-switch" aria-label="{{ _('界面语言') }}">
+      <a href="{{ language_url('zh') }}" lang="zh-CN" hreflang="zh-CN"{% if language == 'zh' %} aria-current="true"{% endif %}>中文</a>
+      <a href="{{ language_url('en') }}" lang="en" hreflang="en"{% if language == 'en' %} aria-current="true"{% endif %}>English</a>
+    </nav>
     {% for group, items in nav_groups %}
     <nav class="side-group" aria-label="{{ group }}">
       <span>{{ group }}</span>
@@ -71,18 +75,18 @@
     </nav>
     {% endfor %}
     {% if admin_csrf_token is defined %}
-    <nav class="side-group" aria-label="管理">
-      <span>管理</span>
+    <nav class="side-group" aria-label="{{ _("管理") }}">
+      <span>{{ _("管理") }}</span>
       <a class="side-link" href="{{ url_for('admin') }}"{% if endpoint in ['admin', 'admin_login'] %} aria-current="page"{% endif %}>
-        <svg aria-hidden="true"><use href="#i-check"/></svg>空间管理
+        <svg aria-hidden="true"><use href="#i-check"/></svg>{{ _("空间管理") }}
       </a>
     </nav>
     {% endif %}
-    <div class="side-foot">坐标 1-based inclusive<br>序列方向 5′ → 3′<br>结果为计算候选，需实验验证</div>
+    <div class="side-foot">{{ _("坐标 1-based inclusive") }}<br>{{ _("序列方向 5′ → 3′") }}<br>{{ _("结果为计算候选，需实验验证") }}</div>
   </aside>
   <div class="main">
     <header class="topbar">
-      <button type="button" id="nav-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="打开导航"><svg width="20" height="20"><use href="#i-menu"/></svg></button>
+      <button type="button" id="nav-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="{{ _("打开导航") }}"><svg width="20" height="20"><use href="#i-menu"/></svg></button>
       <strong>Probe Designer</strong>
     </header>
     <main class="page {% block page_class %}{% endblock %}" id="page">
@@ -100,6 +104,8 @@
     </main>
   </div>
 </div>
+<script type="application/json" id="i18n-config">{{ {'language': language, 'messages': i18n_catalog}|tojson }}</script>
+<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

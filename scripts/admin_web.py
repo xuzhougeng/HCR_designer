@@ -17,6 +17,8 @@ from scripts.storage_maintenance import CleanupScheduler, STORAGE_LOCK, StorageM
 
 
 def register_admin(app):
+    from scripts.i18n import register_i18n
+    register_i18n(app)
     app.config.setdefault('ADMIN_CREDENTIALS_FILE', str(Path(app.instance_path) / 'admin.json'))
     app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
                       PERMANENT_SESSION_LIFETIME=timedelta(hours=8))

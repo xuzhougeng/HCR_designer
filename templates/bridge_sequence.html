@@ -1,41 +1,41 @@
 {% extends "base.html" %}
 {% from "partials/bridge.html" import conflict_modes, kmer_cell, kmer_field %}
-{% block title %}冲突检查 · Probe Designer{% endblock %}
-{% block eyebrow %}桥接探针库 · 冲突检查{% endblock %}
-{% block heading %}冲突检查{% endblock %}
-{% block lede %}检查尚未入库的新序列是否与已有桥接探针共享 k-mer。{% endblock %}
+{% block title %}{{ _("冲突检查 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("桥接探针库 · 冲突检查") }}{% endblock %}
+{% block heading %}{{ _("冲突检查") }}{% endblock %}
+{% block lede %}{{ _("检查尚未入库的新序列是否与已有桥接探针共享 k-mer。") }}{% endblock %}
 {% block head_actions %}{{ conflict_modes('sequence') }}{% endblock %}
 
 {% block content %}
 <form method="post" class="panel">
   <div class="split">
-    <label class="field">待检查序列（每行一条）<textarea name="sequences" rows="6" spellcheck="false" placeholder="ACTATCGCGGCCGACTGTA&#10;GCTAGCTAGGATCCAATCG" required>{{ sequences or '' }}</textarea></label>
+    <label class="field">{{ _("待检查序列（每行一条）") }}<textarea name="sequences" rows="6" spellcheck="false" placeholder="ACTATCGCGGCCGACTGTA&#10;GCTAGCTAGGATCCAATCG" required>{{ sequences or '' }}</textarea></label>
     <div>
       {{ kmer_field(kmer) }}
-      <button type="submit" class="btn primary">检查冲突</button>
+      <button type="submit" class="btn primary">{{ _("检查冲突") }}</button>
     </div>
   </div>
 </form>
 
-{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error|message }}</div>{% endif %}
 
 {% if sequence_results %}
 <section class="panel">
   <div class="panel-head">
-    <div><h2>检查结果</h2><p>k = {{ kmer }} · {{ sequence_results|length }} 条输入 · {{ sequence_results|selectattr(1)|list|length }} 条存在冲突</p></div>
-    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+    <div><h2>{{ _("检查结果") }}</h2><p>k = {{ kmer }} · {{ sequence_results|length }} {{ _("条输入 ·") }} {{ sequence_results|selectattr(1)|list|length }} {{ _("条存在冲突") }}</p></div>
+    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载结果") }}</button>
   </div>
   <div class="stack">
   {% for sequence, conflicts in sequence_results %}
     <div class="result-block" data-input="{{ sequence }}">
       <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px">
-        <span class="chip {{ 'bad' if conflicts else 'ok' }}">{{ '冲突 ' ~ conflicts|length ~ ' 条' if conflicts else '无冲突' }}</span>
-        <span class="hint">输入 {{ loop.index }}</span><code class="seq">{{ sequence }}</code>
+        <span class="chip {{ 'bad' if conflicts else 'ok' }}">{{ _("冲突 ") ~ conflicts|length ~ _(" 条") if conflicts else _("无冲突") }}</span>
+        <span class="hint">{{ _("输入") }} {{ loop.index }}</span><code class="seq">{{ sequence }}</code>
       </div>
       {% if conflicts %}
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>BP_ID</th><th>序列</th><th>共享 k-mer 数</th><th>示例 k-mer</th></tr></thead>
+          <thead><tr><th>BP_ID</th><th>{{ _("序列") }}</th><th>{{ _("共享 k-mer 数") }}</th><th>{{ _("示例 k-mer") }}</th></tr></thead>
           <tbody>
           {% for bp_id, bp_sequence, overlap_count, overlap_kmers in conflicts %}
             <tr data-row="{{ [bp_id, bp_sequence, overlap_count, overlap_kmers|join(',')]|tojson|forceescape }}">

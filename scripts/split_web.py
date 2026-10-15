@@ -7,6 +7,7 @@ import threading
 from flask import jsonify, render_template, request, send_file, url_for
 from scripts.split_workflow import SplitWorkflow, InputError, DEFAULTS
 from scripts.storage_maintenance import STORAGE_LOCK
+from scripts.i18n import register_i18n
 
 
 def storage_locked(function):
@@ -55,6 +56,7 @@ class JobRunner:
 
 
 def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
+    register_i18n(app)
     def workflow():
         return SplitWorkflow(app.config['UPLOAD_FOLDER'], bridges, cdna, cds, aliases,
                              reference_library=app.extensions.get('reference_library'))

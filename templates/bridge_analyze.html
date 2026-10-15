@@ -1,45 +1,45 @@
 {% extends "base.html" %}
 {% from "partials/bridge.html" import conflict_modes, kmer_cell, kmer_field %}
-{% block title %}冲突检查 · Probe Designer{% endblock %}
-{% block eyebrow %}桥接探针库 · 冲突检查{% endblock %}
-{% block heading %}冲突检查{% endblock %}
-{% block lede %}一次输入多条 BP_ID 或序列，两两比较，找出计划在同一实验中使用的探针之间的冲突。{% endblock %}
+{% block title %}{{ _("冲突检查 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("桥接探针库 · 冲突检查") }}{% endblock %}
+{% block heading %}{{ _("冲突检查") }}{% endblock %}
+{% block lede %}{{ _("一次输入多条 BP_ID 或序列，两两比较，找出计划在同一实验中使用的探针之间的冲突。") }}{% endblock %}
 {% block head_actions %}{{ conflict_modes('mutual') }}{% endblock %}
 
 {% block content %}
 <form method="post" enctype="multipart/form-data" class="panel">
   <div class="split">
     <div>
-      <label class="field">BP_ID 或序列（每行一条，可混合）<textarea name="input_content" rows="7" spellcheck="false" placeholder="BP_0079&#10;BP_1101&#10;GCTAGCTAGGATCCAATCG">{{ input_content or '' }}</textarea></label>
-      <label class="field">或上传文本文件<input type="file" name="input_file" accept=".txt,.csv"><small>每行一个 BP_ID 或序列；选择文件后以文件内容为准</small></label>
+      <label class="field">{{ _("BP_ID 或序列（每行一条，可混合）") }}<textarea name="input_content" rows="7" spellcheck="false" placeholder="BP_0079&#10;BP_1101&#10;GCTAGCTAGGATCCAATCG">{{ input_content or '' }}</textarea></label>
+      <label class="field">{{ _("或上传文本文件") }}<input type="file" name="input_file" accept=".txt,.csv"><small>{{ _("每行一个 BP_ID 或序列；选择文件后以文件内容为准") }}</small></label>
     </div>
     <div>
       {{ kmer_field(kmer) }}
-      <button type="submit" class="btn primary">两两比较</button>
+      <button type="submit" class="btn primary">{{ _("两两比较") }}</button>
     </div>
   </div>
 </form>
 
-{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error|message }}</div>{% endif %}
 
 {% if results %}
 {% set conflicted = results|selectattr(1)|list|length %}
 <section class="panel">
   <div class="panel-head">
-    <div><h2>比较结果</h2><p>k = {{ kmer }} · {{ results|length }} 条输入 · {{ conflicted }} 条与其他输入存在冲突</p></div>
-    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+    <div><h2>{{ _("比较结果") }}</h2><p>k = {{ kmer }} · {{ results|length }} {{ _("条输入 ·") }} {{ conflicted }} {{ _("条与其他输入存在冲突") }}</p></div>
+    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载结果") }}</button>
   </div>
   <div class="table-wrap">
     <table class="table" id="result-table">
-      <thead><tr><th>输入</th><th>状态</th><th>冲突对象与共享 k-mer</th></tr></thead>
+      <thead><tr><th>{{ _("输入") }}</th><th>{{ _("状态") }}</th><th>{{ _("冲突对象与共享 k-mer") }}</th></tr></thead>
       <tbody>
       {% for input_item, conflicts in results %}
         <tr data-input="{{ input_item }}" data-conflicts="{{ conflicts|map('list')|list|tojson|forceescape }}">
           <td class="seq">{{ input_item }}</td>
-          <td><span class="chip {{ 'bad' if conflicts else 'ok' }}">{{ '冲突 ' ~ conflicts|length if conflicts else '无冲突' }}</span></td>
+          <td><span class="chip {{ 'bad' if conflicts else 'ok' }}">{{ _("冲突 ") ~ conflicts|length if conflicts else _("无冲突") }}</span></td>
           <td>
             {% for conflict_item, overlap_count, overlap_kmers in conflicts %}
-            <div style="margin-bottom:6px"><code>{{ conflict_item }}</code> <span class="hint">{{ overlap_count }} 个共享片段</span><br>{{ kmer_cell(overlap_kmers, overlap_count) }}</div>
+            <div style="margin-bottom:6px"><code>{{ conflict_item }}</code> <span class="hint">{{ overlap_count }} {{ _("个共享片段") }}</span><br>{{ kmer_cell(overlap_kmers, overlap_count) }}</div>
             {% else %}<span class="hint">—</span>{% endfor %}
           </td>
         </tr>

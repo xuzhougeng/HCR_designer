@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}浏览桥接探针库 · Probe Designer{% endblock %}
-{% block eyebrow %}桥接探针库{% endblock %}
-{% block heading %}浏览探针库{% endblock %}
-{% block lede %}当前运行表 resources/probe_table.txt 中的全部桥接探针。Tm 与 GC 由本站算法即时计算。{% endblock %}
-{% block head_actions %}<button type="button" class="btn" id="export-button"><svg aria-hidden="true"><use href="#i-download"/></svg>导出当前列表 CSV</button>{% endblock %}
+{% block title %}{{ _("浏览桥接探针库 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("桥接探针库") }}{% endblock %}
+{% block heading %}{{ _("浏览探针库") }}{% endblock %}
+{% block lede %}{{ _("当前运行表 resources/probe_table.txt 中的全部桥接探针。Tm 与 GC 由本站算法即时计算。") }}{% endblock %}
+{% block head_actions %}<button type="button" class="btn" id="export-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("导出当前列表 CSV") }}</button>{% endblock %}
 
 {% block content %}
 {% set tms = probes|map(attribute='tm')|list %}
 {% set gcs = probes|map(attribute='gc')|list %}
 <div class="stats">
-  <div class="stat"><span>探针总数</span><strong>{{ '{:,}'.format(probes|length) }}</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
-  <div class="stat"><span>长度</span><strong>{{ probes|map(attribute='length')|min }}{% if (probes|map(attribute='length')|max) != (probes|map(attribute='length')|min) %}–{{ probes|map(attribute='length')|max }}{% endif %} nt</strong><small>5′ → 3′</small></div>
-  <div class="stat"><span>Tm 范围</span><strong>{{ tms|min }}–{{ tms|max }} °C</strong><small>中位 {{ (tms|sort)[tms|length // 2] }} °C</small></div>
-  <div class="stat"><span>GC 范围</span><strong>{{ gcs|min }}–{{ gcs|max }}%</strong><small>中位 {{ (gcs|sort)[gcs|length // 2] }}%</small></div>
+  <div class="stat"><span>{{ _("探针总数") }}</span><strong>{{ '{:,}'.format(probes|length) }}</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
+  <div class="stat"><span>{{ _("长度") }}</span><strong>{{ probes|map(attribute='length')|min }}{% if (probes|map(attribute='length')|max) != (probes|map(attribute='length')|min) %}–{{ probes|map(attribute='length')|max }}{% endif %} nt</strong><small>5′ → 3′</small></div>
+  <div class="stat"><span>{{ _("Tm 范围") }}</span><strong>{{ tms|min }}–{{ tms|max }} °C</strong><small>{{ _("中位") }} {{ (tms|sort)[tms|length // 2] }} °C</small></div>
+  <div class="stat"><span>{{ _("GC 范围") }}</span><strong>{{ gcs|min }}–{{ gcs|max }}%</strong><small>{{ _("中位") }} {{ (gcs|sort)[gcs|length // 2] }}%</small></div>
 </div>
 
 <section class="panel">
   <div class="toolbar">
-    <label class="field">搜索<input type="search" id="search" placeholder="BP_ID 或序列片段，例如 BP_11 或 GGCCGAC" autocomplete="off" spellcheck="false"></label>
+    <label class="field">{{ _("搜索") }}<input type="search" id="search" placeholder="{{ _("BP_ID 或序列片段，例如 BP_11 或 GGCCGAC") }}" autocomplete="off" spellcheck="false"></label>
     <span class="count" id="visible-count" aria-live="polite"></span>
   </div>
   <div class="table-wrap tall">
     <table class="table" id="probe-table">
-      <thead><tr><th>BP_ID</th><th>序列 5′ → 3′</th><th>长度</th><th>Tm (°C)</th><th>GC (%)</th><th></th></tr></thead>
+      <thead><tr><th>BP_ID</th><th>{{ _("序列 5′ → 3′") }}</th><th>{{ _("长度") }}</th><th>Tm (°C)</th><th>GC (%)</th><th></th></tr></thead>
       <tbody>
         {% for probe in probes %}
         <tr data-id="{{ probe.bp_id }}" data-seq="{{ probe.sequence }}">
@@ -31,13 +31,13 @@
           <td class="num">{{ probe.length }}</td>
           <td class="num">{{ probe.tm }}</td>
           <td class="num">{{ probe.gc }}</td>
-          <td style="white-space:nowrap"><button type="button" class="text-button" data-copy="{{ probe.sequence }}">复制</button> · <a href="{{ url_for('bridge_query', bp_id=probe.bp_id) }}" style="font-size:12.5px">查冲突</a></td>
+          <td style="white-space:nowrap"><button type="button" class="text-button" data-copy="{{ probe.sequence }}">{{ _("复制") }}</button> · <a href="{{ url_for('bridge_query', bp_id=probe.bp_id) }}" style="font-size:12.5px">{{ _("查冲突") }}</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <p class="empty" id="no-match" hidden>没有匹配的探针。</p>
+  <p class="empty" id="no-match" hidden>{{ _("没有匹配的探针。") }}</p>
 </section>
 {% endblock %}
 
@@ -55,7 +55,7 @@
       row.hidden = !hit;
       if (hit) shown++;
     }
-    count.textContent = '显示 ' + shown.toLocaleString() + ' / ' + rows.length.toLocaleString() + ' 条';
+    count.textContent = HCR.t("显示 ") + shown.toLocaleString(HCR.locale) + ' / ' + rows.length.toLocaleString(HCR.locale) + HCR.t(" 条");
     document.getElementById('no-match').hidden = shown > 0;
   }
   search.addEventListener('input', apply);

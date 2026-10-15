@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}合规验证 · Probe Designer{% endblock %}
-{% block eyebrow %}桥接探针库{% endblock %}
-{% block heading %}合规验证{% endblock %}
-{% block lede %}上传一批候选桥接序列，按长度、GC、Tm 和连续同碱基规则逐条检查，再决定是否入库。{% endblock %}
+{% block title %}{{ _("合规验证 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("桥接探针库") }}{% endblock %}
+{% block heading %}{{ _("合规验证") }}{% endblock %}
+{% block lede %}{{ _("上传一批候选桥接序列，按长度、GC、Tm 和连续同碱基规则逐条检查，再决定是否入库。") }}{% endblock %}
 
 {% block content %}
 <form method="post" enctype="multipart/form-data" class="panel">
@@ -10,51 +10,51 @@
     <div>
       <label class="dropzone" data-dropzone tabindex="0">
         <svg aria-hidden="true"><use href="#i-upload"/></svg>
-        <strong data-file-label>点击选择或拖入 CSV 文件</strong>
-        <span class="hint">第一行为表头；第一列编号，第二列序列</span>
+        <strong data-file-label>{{ _("点击选择或拖入 CSV 文件") }}</strong>
+        <span class="hint">{{ _("第一行为表头；第一列编号，第二列序列") }}</span>
         <input type="file" name="probe_file" accept=".csv" required>
       </label>
     </div>
     <div class="divider-left">
       <div class="grid-2">
-        <label class="field">最小长度（nt）<input type="number" name="min_length" value="{{ min_length }}" min="10" max="50"></label>
-        <label class="field">最大长度（nt）<input type="number" name="max_length" value="{{ max_length }}" min="10" max="50"></label>
-        <label class="field">最低 GC（%）<input type="number" name="min_gc" value="{{ min_gc }}" min="0" max="100" step="0.1"></label>
-        <label class="field">最高 GC（%）<input type="number" name="max_gc" value="{{ max_gc }}" min="0" max="100" step="0.1"></label>
-        <label class="field">最低 Tm（°C）<input type="number" name="min_tm" value="{{ min_tm }}" min="0" max="100" step="0.1"></label>
-        <label class="field">最高 Tm（°C）<input type="number" name="max_tm" value="{{ max_tm }}" min="0" max="100" step="0.1"></label>
-        <label class="field">连续同碱基上限<input type="number" name="poly_n" value="{{ poly_n }}" min="2" max="10"></label>
+        <label class="field">{{ _("最小长度（nt）") }}<input type="number" name="min_length" value="{{ min_length }}" min="10" max="50"></label>
+        <label class="field">{{ _("最大长度（nt）") }}<input type="number" name="max_length" value="{{ max_length }}" min="10" max="50"></label>
+        <label class="field">{{ _("最低 GC（%）") }}<input type="number" name="min_gc" value="{{ min_gc }}" min="0" max="100" step="0.1"></label>
+        <label class="field">{{ _("最高 GC（%）") }}<input type="number" name="max_gc" value="{{ max_gc }}" min="0" max="100" step="0.1"></label>
+        <label class="field">{{ _("最低 Tm（°C）") }}<input type="number" name="min_tm" value="{{ min_tm }}" min="0" max="100" step="0.1"></label>
+        <label class="field">{{ _("最高 Tm（°C）") }}<input type="number" name="max_tm" value="{{ max_tm }}" min="0" max="100" step="0.1"></label>
+        <label class="field">{{ _("连续同碱基上限") }}<input type="number" name="poly_n" value="{{ poly_n }}" min="2" max="10"></label>
       </div>
     </div>
   </div>
-  <div class="actions"><span>序列只允许大写 A/T/C/G</span><div><button type="submit" class="btn primary">开始验证</button></div></div>
+  <div class="actions"><span>{{ _("序列只允许大写 A/T/C/G") }}</span><div><button type="submit" class="btn primary">{{ _("开始验证") }}</button></div></div>
 </form>
 
-{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error|message }}</div>{% endif %}
 
 {% if results %}
 {% set passed = results|selectattr('is_valid')|list|length %}
 <section class="panel">
   <div class="panel-head">
-    <div><h2>验证结果</h2><p>{{ results|length }} 条 · 合格 {{ passed }} · 不合格 {{ results|length - passed }}</p></div>
+    <div><h2>{{ _("验证结果") }}</h2><p>{{ results|length }} {{ _("条 · 合格") }} {{ passed }} {{ _("· 不合格") }} {{ results|length - passed }}</p></div>
     <div class="head-actions">
-      <div class="seg" role="group" aria-label="筛选">
-        <button type="button" data-show="all" aria-pressed="true">全部</button>
-        <button type="button" data-show="fail" aria-pressed="false">只看不合格</button>
+      <div class="seg" role="group" aria-label="{{ _("筛选") }}">
+        <button type="button" data-show="all" aria-pressed="true">{{ _("全部") }}</button>
+        <button type="button" data-show="fail" aria-pressed="false">{{ _("只看不合格") }}</button>
       </div>
-      <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+      <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载结果") }}</button>
     </div>
   </div>
   <div class="table-wrap tall">
     <table class="table" id="result-table">
-      <thead><tr><th>编号</th><th>序列</th><th>状态</th><th>原因</th></tr></thead>
+      <thead><tr><th>{{ _("编号") }}</th><th>{{ _("序列") }}</th><th>{{ _("状态") }}</th><th>{{ _("原因") }}</th></tr></thead>
       <tbody>
       {% for result in results %}
         <tr data-valid="{{ 'yes' if result.is_valid else 'no' }}">
           <td><code>{{ result.probe_id }}</code></td>
           <td class="seq">{{ result.sequence }}</td>
-          <td><span class="chip {{ 'ok' if result.is_valid else 'bad' }}">{{ '合格' if result.is_valid else '不合格' }}</span></td>
-          <td>{{ result.reasons }}</td>
+          <td><span class="chip {{ 'ok' if result.is_valid else 'bad' }}">{{ _("合格") if result.is_valid else _("不合格") }}</span></td>
+          <td>{{ result.reasons|message }}</td>
         </tr>
       {% endfor %}
       </tbody>

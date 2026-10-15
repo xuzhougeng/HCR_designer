@@ -28,7 +28,7 @@
     const response = await fetch(url, {method: 'POST', body, headers: {'X-Requested-With': 'fetch'}});
     const type = response.headers.get('Content-Type') || '';
     if (!response.ok || type.includes('application/json') || type.includes('text/html')) {
-      let message = '请求未完成（HTTP ' + response.status + '）。';
+      let message = HCR.t('请求未完成（HTTP {status}）。', {status: response.status});
       if (type.includes('application/json')) {
         const data = await response.json().catch(() => null);
         if (data && data.error) message = data.error;
@@ -65,11 +65,11 @@
       await navigator.clipboard.writeText(text);
       if (button) {
         const label = button.textContent;
-        button.textContent = '已复制';
+        button.textContent = HCR.t('已复制');
         setTimeout(() => { button.textContent = label; }, 1200);
       }
     } catch (error) {
-      window.prompt('复制以下内容', text);
+      window.prompt(HCR.t('复制以下内容'), text);
     }
   }
 
@@ -130,6 +130,19 @@
 
   /* Order list: probe pairs picked across jobs, kept in this browser only. */
   const ORDER_KEY = 'hcr.orderList.v1';
+  function orderStateLabel(item) {
+    if (item.state === 'unknown' && (item.quality_retained || ['未评估 · 按质量保留', 'Not assessed · retained by quality'].includes(item.state_label))) {
+      return HCR.t('未评估 · 按质量保留');
+    }
+    return {keep: HCR.t('保留待复核'), excluded: HCR.t('按目标策略排除'), other: HCR.t('未保留'), unknown: HCR.t('特异性未评估')}[item.state] || item.state_label;
+  }
+
+  function orderClosestLabel(item) {
+    if (item.closest_status === 'not_detected' || ['未检出', 'Not detected'].includes(item.closest)) return HCR.t('未检出');
+    if (item.closest_status === 'not_assessed' || ['未评估', 'Not assessed'].includes(item.closest)) return HCR.t('未评估');
+    return item.closest;
+  }
+
   const orders = {
     read() {
       try { return JSON.parse(localStorage.getItem(ORDER_KEY) || '[]'); } catch (error) { return []; }
@@ -159,7 +172,7 @@
     badge.textContent = count;
   }
 
-  window.HCR = {saveBlob, postForFile, downloadRows, setAlert, copyText, orders};
+  Object.assign(window.HCR, {saveBlob, postForFile, downloadRows, setAlert, copyText, orders, orderStateLabel, orderClosestLabel});
   window.addEventListener('storage', event => { if (event.key === ORDER_KEY) updateOrderBadge(); });
   document.addEventListener('DOMContentLoaded', () => { initShell(); initDropzones(); initCopyButtons(); updateOrderBadge(); });
 })();

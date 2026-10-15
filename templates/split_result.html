@@ -1,111 +1,111 @@
 {% extends "base.html" %}
 {% set tasks = status.tasks %}
-{% set states = {'queued': ('排队中', 'info'), 'running': ('计算中', 'info'), 'completed': ('已完成', 'ok'), 'failed': ('失败', 'bad'), 'interrupted': ('已中断', 'warn')} %}
-{% block title %}{{ tasks[0].name }}{% if tasks|length > 1 %} 等 {{ tasks|length }} 个任务{% endif %} · 双探针结果{% endblock %}
+{% set states = {'queued': (_("排队中"), 'info'), 'running': (_("计算中"), 'info'), 'completed': (_("已完成"), 'ok'), 'failed': (_("失败"), 'bad'), 'interrupted': (_("已中断"), 'warn')} %}
+{% block title %}{{ tasks[0].name }}{% if tasks|length > 1 %} {{ _("等") }} {{ tasks|length }} {{ _("个任务") }}{% endif %} {{ _("· 双探针结果") }}{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}">{% endblock %}
-{% block eyebrow %}设计 · 双探针 · 任务 {{ status.id[:8] }}{% endblock %}
-{% block heading %}{{ tasks[0].name }}{% if tasks|length > 1 %} 等 {{ tasks|length }} 个任务{% endif %}{% endblock %}
-{% block lede %}{{ '批量' if status.mode == 'batch' else '单条' }} · {{ status.reference or '未指定参考库' }} · <span class="chip {{ states.get(status.status, ('', ''))[1] }}" id="status-chip">{{ states.get(status.status, (status.status, ''))[0] }}</span>{% endblock %}
+{% block eyebrow %}{{ _("设计 · 双探针 · 任务") }} {{ status.id[:8] }}{% endblock %}
+{% block heading %}{{ tasks[0].name }}{% if tasks|length > 1 %} {{ _("等") }} {{ tasks|length }} {{ _("个任务") }}{% endif %}{% endblock %}
+{% block lede %}{{ _("批量") if status.mode == 'batch' else _("单条") }} · {{ status.reference or _("未指定参考库") }} · <span class="chip {{ states.get(status.status, ('', ''))[1] }}" id="status-chip">{{ states.get(status.status, (status.status, ''))[0] }}</span>{% endblock %}
 {% block head_actions %}
-<a class="btn" href="{{ jobs_url }}">任务记录</a>
-<a class="btn" href="{{ url_for('split') }}">新建设计</a>
-{% if result %}<a class="btn primary" href="{{ status.download_url }}"><svg aria-hidden="true"><use href="#i-download"/></svg>下载完整 ZIP</a>{% endif %}
+<a class="btn" href="{{ jobs_url }}">{{ _("任务记录") }}</a>
+<a class="btn" href="{{ url_for('split') }}">{{ _("新建设计") }}</a>
+{% if result %}<a class="btn primary" href="{{ status.download_url }}"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载完整 ZIP") }}</a>{% endif %}
 {% endblock %}
 
 {% block content %}
-<p class="hint">分析结果保留 3 个月，请及时下载需要长期保存的 ZIP 文件。</p>
+<p class="hint">{{ _("分析结果保留 3 个月，请及时下载需要长期保存的 ZIP 文件。") }}</p>
 {% if not result %}
 <section class="panel" id="progress-panel" aria-live="polite">
   <div class="panel-head">
-    <div><h2 id="progress-title">任务进度</h2><p id="progress-detail">读取中……</p></div>
+    <div><h2 id="progress-title">{{ _("任务进度") }}</h2><p id="progress-detail">{{ _("读取中……") }}</p></div>
     <span class="elapsed mono" id="elapsed"></span>
   </div>
   <ol class="stage-track" id="stage-track">
-    <li data-stage="queued">排队</li>
-    <li data-stage="reference">参考库索引</li>
-    <li data-stage="candidates">生成候选</li>
-    <li data-stage="specificity">配对扫描</li>
-    <li data-stage="selection">排序筛选</li>
-    <li data-stage="packaging">整理结果</li>
+    <li data-stage="queued">{{ _("排队") }}</li>
+    <li data-stage="reference">{{ _("参考库索引") }}</li>
+    <li data-stage="candidates">{{ _("生成候选") }}</li>
+    <li data-stage="specificity">{{ _("配对扫描") }}</li>
+    <li data-stage="selection">{{ _("排序筛选") }}</li>
+    <li data-stage="packaging">{{ _("整理结果") }}</li>
   </ol>
   <div class="task-progress"><div class="bar"><i id="progress-bar"></i></div><span id="progress-count" class="hint"></span></div>
   <div class="alert error" id="progress-error" hidden></div>
   <div class="actions">
-    <span>任务在服务器后台运行，可以关闭本页，稍后从“任务记录”回到这里。</span>
-    <div><button type="button" class="btn primary" id="rerun-button" hidden>按原参数重新运行</button></div>
+    <span>{{ _("任务在服务器后台运行，可以关闭本页，稍后从“任务记录”回到这里。") }}</span>
+    <div><button type="button" class="btn primary" id="rerun-button" hidden>{{ _("按原参数重新运行") }}</button></div>
   </div>
 </section>
 {% else %}
 <div class="stats" id="result-stats"></div>
 <div class="alert notice" id="result-limit"></div>
-<details class="disclosure panel run-settings"><summary>本次参数与参考信息</summary><div id="run-settings" class="kv-list"></div></details>
+<details class="disclosure panel run-settings"><summary>{{ _("本次参数与参考信息") }}</summary><div id="run-settings" class="kv-list"></div></details>
 
 <section class="panel workspace" aria-labelledby="track-title">
   <div class="panel-head">
-    <div><h2 id="track-title">候选位置</h2><p id="track-caption">目标转录本坐标，1-based；点击候选查看证据</p></div>
-    <label class="field compact" id="task-picker"{% if tasks|length < 2 %} hidden{% endif %}>任务<select id="result-task"></select></label>
+    <div><h2 id="track-title">{{ _("候选位置") }}</h2><p id="track-caption">{{ _("目标转录本坐标，1-based；点击候选查看证据") }}</p></div>
+    <label class="field compact" id="task-picker"{% if tasks|length < 2 %} hidden{% endif %}>{{ _("任务") }}<select id="result-task"></select></label>
   </div>
   <div class="polyploid-controls" id="polyploid-controls" hidden>
-    <label><input type="checkbox" id="polyploid-view" checked> 多倍体模式</label>
-    <span class="hint">使用本次任务的亚基因组归属，跨物种证据优先；此开关仅切换展示</span>
+    <label><input type="checkbox" id="polyploid-view" checked> {{ _("多倍体模式") }}</label>
+    <span class="hint">{{ _("使用本次任务的亚基因组归属，跨物种证据优先；此开关仅切换展示") }}</span>
   </div>
-  <div class="track-scroll"><svg id="track" role="img" aria-label="候选探针在目标转录本上的位置"></svg></div>
+  <div class="track-scroll"><svg id="track" role="img" aria-label="{{ _("候选探针在目标转录本上的位置") }}"></svg></div>
   <div class="legend">
-    <span><i class="sw keep"></i>保留待复核</span><span><i class="sw excluded"></i>按目标策略排除</span>
-    <span><i class="sw other"></i>其他未保留</span><span><i class="sw unknown"></i>特异性未评估</span>
+    <span><i class="sw keep"></i>{{ _("保留待复核") }}</span><span><i class="sw excluded"></i>{{ _("按目标策略排除") }}</span>
+    <span><i class="sw other"></i>{{ _("其他未保留") }}</span><span><i class="sw unknown"></i>{{ _("特异性未评估") }}</span>
   </div>
   <div class="homolog-panel" id="homolog-panel" hidden>
     <div class="panel-head">
-      <div><h3>另一分组的最相似序列</h3><p id="homolog-summary" role="status"></p></div>
-      <button type="button" class="btn small" id="homolog-retry" hidden>重试比对</button>
+      <div><h3>{{ _("另一分组的最相似序列") }}</h3><p id="homolog-summary" role="status"></p></div>
+      <button type="button" class="btn small" id="homolog-retry" hidden>{{ _("重试比对") }}</button>
     </div>
-    <p class="hint" id="homolog-method">按跨物种优先、比对得分排序，展示最佳局部比对；未覆盖区域以 · 表示。此比对供复核参考，不改变候选保留结果。</p>
+    <p class="hint" id="homolog-method">{{ _("按跨物种优先、比对得分排序，展示最佳局部比对；未覆盖区域以 · 表示。此比对供复核参考，不改变候选保留结果。") }}</p>
     <div id="homolog-detail" hidden>
       <div class="homolog-window-toolbar">
         <span class="hint" id="homolog-window-label"></span>
-        <div class="head-actions"><button type="button" class="btn small" id="homolog-back">← 前 80 nt</button><button type="button" class="btn small" id="homolog-forward">后 80 nt →</button></div>
+        <div class="head-actions"><button type="button" class="btn small" id="homolog-back">{{ _("← 前 80 nt") }}</button><button type="button" class="btn small" id="homolog-forward">{{ _("后 80 nt →") }}</button></div>
       </div>
       <div class="seqview" id="homolog-sequence"></div>
-      <p class="hint">一致为灰色，错配为橙色，插入缺失为红色（− 为缺口）；目标行蓝／紫标记当前探针区域。点击上方比对轨道可移动查看范围。</p>
+      <p class="hint">{{ _("一致为灰色，错配为橙色，插入缺失为红色（− 为缺口）；目标行蓝／紫标记当前探针区域。点击上方比对轨道可移动查看范围。") }}</p>
     </div>
   </div>
 </section>
 
 <section class="panel" aria-labelledby="candidates-title">
-  <div class="panel-head"><div><h2 id="candidates-title">候选探针对</h2><p id="closest-caption">错配条按探针 5′ → 3′ 显示与最接近的非目标配对；灰色为一致碱基，橙色为错配碱基</p></div></div>
+  <div class="panel-head"><div><h2 id="candidates-title">{{ _("候选探针对") }}</h2><p id="closest-caption">{{ _("错配条按探针 5′ → 3′ 显示与最接近的非目标配对；灰色为一致碱基，橙色为错配碱基") }}</p></div></div>
   <div class="toolbar">
-    <label class="field">显示范围<select id="result-filter">
-      <option value="keep">保留待复核</option><option value="all">全部候选</option>
-      <option value="cross">跨物种完全配对</option><option value="excluded">按目标策略排除</option><option value="unassessed">特异性未评估</option>
+    <label class="field">{{ _("显示范围") }}<select id="result-filter">
+      <option value="keep">{{ _("保留待复核") }}</option><option value="all">{{ _("全部候选") }}</option>
+      <option value="cross">{{ _("跨物种完全配对") }}</option><option value="excluded">{{ _("按目标策略排除") }}</option><option value="unassessed">{{ _("特异性未评估") }}</option>
     </select></label>
-    <label class="field">排序<select id="result-sort"><option value="position">按位置</option><option value="risk">最接近的非目标配对优先</option><option value="rank">按评分</option></select></label>
+    <label class="field">{{ _("排序") }}<select id="result-sort"><option value="position">{{ _("按位置") }}</option><option value="risk">{{ _("最接近的非目标配对优先") }}</option><option value="rank">{{ _("按评分") }}</option></select></label>
     <span class="count" id="visible-count"></span>
   </div>
   <div class="table-wrap tall"><table class="table candidate-table">
-    <thead><tr><th>探针对</th><th>位置</th><th>状态</th><th>最近非目标配对</th><th>原因</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("探针对") }}</th><th>{{ _("位置") }}</th><th>{{ _("状态") }}</th><th>{{ _("最近非目标配对") }}</th><th>{{ _("原因") }}</th><th></th></tr></thead>
     <tbody id="candidate-rows"></tbody>
   </table></div>
   <p class="empty" id="empty-results" hidden></p>
 </section>
 
-<section class="panel evidence" id="evidence" hidden aria-live="polite" tabindex="-1" aria-label="探针对证据">
+<section class="panel evidence" id="evidence" hidden aria-live="polite" tabindex="-1" aria-label="{{ _("探针对证据") }}">
   <div class="panel-head">
     <div><h2 id="evidence-title"></h2><p id="evidence-summary"></p></div>
-    <div class="head-actions"><button type="button" class="btn" id="evidence-order"></button><button type="button" class="text-button" id="close-evidence">收起</button></div>
+    <div class="head-actions"><button type="button" class="btn" id="evidence-order"></button><button type="button" class="text-button" id="close-evidence">{{ _("收起") }}</button></div>
   </div>
-  <div class="evidence-navigation" aria-label="切换探针对证据">
-    <div class="head-actions"><button type="button" class="btn small" id="evidence-previous">↑ 上一对</button><button type="button" class="btn small" id="evidence-next">↓ 下一对</button><span class="hint" id="evidence-position"></span></div>
-    <span class="hint">按当前筛选与排序切换，支持 ↑ ↓ 或 ← →</span>
+  <div class="evidence-navigation" aria-label="{{ _("切换探针对证据") }}">
+    <div class="head-actions"><button type="button" class="btn small" id="evidence-previous">{{ _("↑ 上一对") }}</button><button type="button" class="btn small" id="evidence-next">{{ _("↓ 下一对") }}</button><span class="hint" id="evidence-position"></span></div>
+    <span class="hint">{{ _("按当前筛选与排序切换，支持 ↑ ↓ 或 ← →") }}</span>
   </div>
   <div class="arm-cards" id="arm-cards"></div>
-  <h3 class="sub">序列视图 <span class="hint">目标正义链 5′ → 3′，两侧各显示 12 nt；下方为非目标转录本同位置的序列</span></h3>
+  <h3 class="sub">{{ _("序列视图") }} <span class="hint">{{ _("目标正义链 5′ → 3′，两侧各显示 12 nt；下方为非目标转录本同位置的序列") }}</span></h3>
   <div class="seqview" id="seqview"></div>
-  <h3 class="sub">全部配对位点</h3>
-  <div class="table-wrap"><table class="table"><thead><tr><th>参考转录本</th><th>关系</th><th>L 坐标 / 错配</th><th>R 坐标 / 错配</th><th>方向 / 间隔</th></tr></thead><tbody id="evidence-matches"></tbody></table></div>
+  <h3 class="sub">{{ _("全部配对位点") }}</h3>
+  <div class="table-wrap"><table class="table"><thead><tr><th>{{ _("参考转录本") }}</th><th>{{ _("关系") }}</th><th>{{ _("L 坐标 / 错配") }}</th><th>{{ _("R 坐标 / 错配") }}</th><th>{{ _("方向 / 间隔") }}</th></tr></thead><tbody id="evidence-matches"></tbody></table></div>
 </section>
 {% endif %}
 
-<script type="application/json" id="job-status">{{ status|tojson }}</script>
+<script type="application/json" id="job-status">{{ status|localized_status|tojson }}</script>
 {% endblock %}
 
 {% block scripts %}<script src="{{ url_for('static', filename='js/result-evidence.js') }}" defer></script><script src="{{ url_for('static', filename='js/results.js') }}" defer></script>{% endblock %}

@@ -1,57 +1,57 @@
 {% extends "base.html" %}
 {% from "partials/bridge.html" import kmer_field %}
-{% block title %}推荐新探针 · Probe Designer{% endblock %}
-{% block eyebrow %}桥接探针库{% endblock %}
-{% block heading %}推荐新探针{% endblock %}
-{% block lede %}给出已经在用的桥接探针，系统从库中挑选与它们、以及彼此之间都没有 k-mer 冲突的新探针。{% endblock %}
+{% block title %}{{ _("推荐新探针 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("桥接探针库") }}{% endblock %}
+{% block heading %}{{ _("推荐新探针") }}{% endblock %}
+{% block lede %}{{ _("给出已经在用的桥接探针，系统从库中挑选与它们、以及彼此之间都没有 k-mer 冲突的新探针。") }}{% endblock %}
 
 {% block content %}
 <form method="post" enctype="multipart/form-data" class="panel">
   <div class="split">
     <div>
-      <label class="field">已在使用的 BP_ID（逗号分隔）<textarea name="bp_ids" rows="3" spellcheck="false" placeholder="BP_0079, BP_1101, BP_1102">{{ bp_ids or '' }}</textarea></label>
-      <label class="field">或上传 BP_ID 文件<input type="file" name="bp_file" accept=".txt,.csv"><small>每行一个 BP_ID，与上方输入合并去重</small></label>
+      <label class="field">{{ _("已在使用的 BP_ID（逗号分隔）") }}<textarea name="bp_ids" rows="3" spellcheck="false" placeholder="BP_0079, BP_1101, BP_1102">{{ bp_ids or '' }}</textarea></label>
+      <label class="field">{{ _("或上传 BP_ID 文件") }}<input type="file" name="bp_file" accept=".txt,.csv"><small>{{ _("每行一个 BP_ID，与上方输入合并去重") }}</small></label>
     </div>
     <div class="divider-left">
       <div class="grid-2">
-        <label class="field">需要的新探针数<input type="number" name="number" value="{{ number or 1 }}" min="1" max="100" step="1"></label>
+        <label class="field">{{ _("需要的新探针数") }}<input type="number" name="number" value="{{ number or 1 }}" min="1" max="100" step="1"></label>
         {{ kmer_field(kmer) }}
       </div>
       <div class="field">
-        <span>限定候选范围（可选）</span>
+        <span>{{ _("限定候选范围（可选）") }}</span>
         <div class="range-pair">
           <input name="bp_start" value="{{ bp_start or '' }}" placeholder="BP_0001" pattern="BP_[0-9]{4}" autocomplete="off">
-          <span>至</span>
+          <span>{{ _("至") }}</span>
           <input name="bp_end" value="{{ bp_end or '' }}" placeholder="BP_0048" pattern="BP_[0-9]{4}" autocomplete="off">
         </div>
-        <small>例如只在已合成的一批编号中挑选</small>
+        <small>{{ _("例如只在已合成的一批编号中挑选") }}</small>
       </div>
     </div>
   </div>
-  <div class="actions"><span>已在使用的探针会作为排除条件</span><div><button type="submit" class="btn primary">获取推荐</button></div></div>
+  <div class="actions"><span>{{ _("已在使用的探针会作为排除条件") }}</span><div><button type="submit" class="btn primary">{{ _("获取推荐") }}</button></div></div>
 </form>
 
-{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error|message }}</div>{% endif %}
 
 {% if result_probes %}
 <section class="panel">
   <div class="panel-head">
-    <div><h2>推荐结果</h2><p>{{ result_probes|length }} 条 · k = {{ kmer }}{% if bp_start and bp_end %} · 范围 {{ bp_start }}–{{ bp_end }}{% endif %}</p></div>
-    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+    <div><h2>{{ _("推荐结果") }}</h2><p>{{ result_probes|length }} {{ _("条 · k =") }} {{ kmer }}{% if bp_start and bp_end %} {{ _("· 范围") }} {{ bp_start }}–{{ bp_end }}{% endif %}</p></div>
+    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载结果") }}</button>
   </div>
   <div class="table-wrap">
     <table class="table" id="result-table">
-      <thead><tr><th>BP_ID</th><th>序列 5′ → 3′</th><th></th></tr></thead>
+      <thead><tr><th>BP_ID</th><th>{{ _("序列 5′ → 3′") }}</th><th></th></tr></thead>
       <tbody>
       {% for bp_id, sequence in result_probes %}
-        <tr><td><code>{{ bp_id }}</code></td><td class="seq">{{ sequence }}</td><td><button type="button" class="text-button" data-copy="{{ sequence }}">复制</button></td></tr>
+        <tr><td><code>{{ bp_id }}</code></td><td class="seq">{{ sequence }}</td><td><button type="button" class="text-button" data-copy="{{ sequence }}">{{ _("复制") }}</button></td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
 {% elif result_probes is defined %}
-<div class="alert notice">没有找到满足条件的新探针。可以放宽候选范围、减少需要的数量，或增大 k-mer 长度（冲突判定更宽松）。</div>
+<div class="alert notice">{{ _("没有找到满足条件的新探针。可以放宽候选范围、减少需要的数量，或增大 k-mer 长度（冲突判定更宽松）。") }}</div>
 {% endif %}
 {% endblock %}
 

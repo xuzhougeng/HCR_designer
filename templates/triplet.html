@@ -1,98 +1,98 @@
 {% extends "base.html" %}
 {% set batch = mode == 'batch' %}
-{% block title %}三探针设计 · Probe Designer{% endblock %}
-{% block eyebrow %}设计{% endblock %}
-{% block heading %}三探针设计{% endblock %}
-{% block lede %}L/M/R 三段组合靶向同一转录本。单条按基因编号或序列设计，批量按 CSV 逐行设计，完成后下载结果 ZIP。{% endblock %}
+{% block title %}{{ _("三探针设计 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("设计") }}{% endblock %}
+{% block heading %}{{ _("三探针设计") }}{% endblock %}
+{% block lede %}{{ _("L/M/R 三段组合靶向同一转录本。单条按基因编号或序列设计，批量按 CSV 逐行设计，完成后下载结果 ZIP。") }}{% endblock %}
 {% block head_actions %}
-<nav class="seg" aria-label="输入数量">
-  <a href="{{ url_for('triplet') }}"{% if not batch %} aria-current="page"{% endif %}>单条</a>
-  <a href="{{ url_for('triplet_batch') }}"{% if batch %} aria-current="page"{% endif %}>批量</a>
+<nav class="seg" aria-label="{{ _("输入数量") }}">
+  <a href="{{ url_for('triplet') }}"{% if not batch %} aria-current="page"{% endif %}>{{ _("单条") }}</a>
+  <a href="{{ url_for('triplet_batch') }}"{% if batch %} aria-current="page"{% endif %}>{{ _("批量") }}</a>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="alert notice">三探针仍使用单臂 BLAST 的旧判定，尚未迁移到双探针的双臂配对扫描。结果请按候选看待。</div>
+<div class="alert notice">{{ _("三探针仍使用单臂 BLAST 的旧判定，尚未迁移到双探针的双臂配对扫描。结果请按候选看待。") }}</div>
 
 <form id="triplet-form" class="stack" action="{{ url_for('triplet_batch' if batch else 'triplet') }}" method="post" enctype="multipart/form-data" novalidate>
   {% if batch %}
   <section class="panel is-current" aria-labelledby="input-title">
-    <div class="panel-head"><div><h2 id="input-title"><span class="step-no">1</span>批量任务</h2><p>每行一个任务，没有表头：任务名称、桥接探针编号、基因编号，可选第 4 列为该任务最多保留的组合数。</p></div><button type="button" class="btn small" id="template-button">下载 CSV 模板</button></div>
+    <div class="panel-head"><div><h2 id="input-title"><span class="step-no">1</span>{{ _("批量任务") }}</h2><p>{{ _("每行一个任务，没有表头：任务名称、桥接探针编号、基因编号，可选第 4 列为该任务最多保留的组合数。") }}</p></div><button type="button" class="btn small" id="template-button">{{ _("下载 CSV 模板") }}</button></div>
     <div class="split">
       <div>
         <label class="dropzone" data-dropzone tabindex="0">
           <svg aria-hidden="true"><use href="#i-upload"/></svg>
-          <strong data-file-label>点击选择或拖入 CSV 文件</strong>
-          <span class="hint">UTF-8 编码，逗号分隔</span>
+          <strong data-file-label>{{ _("点击选择或拖入 CSV 文件") }}</strong>
+          <span class="hint">{{ _("UTF-8 编码，逗号分隔") }}</span>
           <input type="file" name="batch_file" id="batch-file" accept=".csv,text/csv">
         </label>
       </div>
       <div class="divider-left">
-        <p class="hint" style="margin-bottom:8px">示例</p>
+        <p class="hint" style="margin-bottom:8px">{{ _("示例") }}</p>
         <pre class="seq" style="margin:0 0 12px;padding:10px 12px;background:var(--sunk);border-radius:5px">task1,BP_1101,AT1G01010
 task2,BP_1102,WUS,8</pre>
         <ul class="note-list">
-          <li>基因编号依次在别名表、内置 TAIR CDS、TAIR cDNA 和所选参考库中查找。</li>
-          <li>找不到序列或编号无效的行会跳过，并列在结果 ZIP 的 <code>skipped_tasks.tsv</code> 中。</li>
+          <li>{{ _("基因编号依次在别名表、内置 TAIR CDS、TAIR cDNA 和所选参考库中查找。") }}</li>
+          <li>{{ _("找不到序列或编号无效的行会跳过，并列在结果 ZIP 的") }} <code>skipped_tasks.tsv</code> {{ _("中。") }}</li>
         </ul>
       </div>
     </div>
   </section>
   {% else %}
   <section class="panel is-current" aria-labelledby="input-title">
-    <div class="panel-head"><div><h2 id="input-title"><span class="step-no">1</span>目标序列</h2><p>结果文件和探针编号使用任务名称。</p></div></div>
+    <div class="panel-head"><div><h2 id="input-title"><span class="step-no">1</span>{{ _("目标序列") }}</h2><p>{{ _("结果文件和探针编号使用任务名称。") }}</p></div></div>
     <div class="grid-2">
-      <label class="field">任务名称<input name="name" id="task-name" maxlength="80" placeholder="例如：WUS_triplet" autocomplete="off" required></label>
-      <label class="field">桥接探针编号<input name="bp_id" id="bridge-id" value="BP_1101" autocomplete="off" spellcheck="false" required><small>BP_0001–1000 或 BP_1101–2578</small></label>
+      <label class="field">{{ _("任务名称") }}<input name="name" id="task-name" maxlength="80" placeholder="{{ _("例如：WUS_triplet") }}" autocomplete="off" required></label>
+      <label class="field">{{ _("桥接探针编号") }}<input name="bp_id" id="bridge-id" value="BP_1101" autocomplete="off" spellcheck="false" required><small>{{ _("BP_0001–1000 或 BP_1101–2578") }}</small></label>
     </div>
-    <div class="seq-preview"><span>对应桥接序列 · 5′ → 3′</span><code class="seq" id="bridge-sequence"></code></div>
+    <div class="seq-preview"><span>{{ _("对应桥接序列 · 5′ → 3′") }}</span><code class="seq" id="bridge-sequence"></code></div>
     <div class="field">
-      <span>目标来源</span>
-      <div class="seg" role="group" aria-label="目标来源">
-        <button type="button" data-source="gene" aria-pressed="true">按基因编号</button>
-        <button type="button" data-source="sequence" aria-pressed="false">粘贴序列</button>
+      <span>{{ _("目标来源") }}</span>
+      <div class="seg" role="group" aria-label="{{ _("目标来源") }}">
+        <button type="button" data-source="gene" aria-pressed="true">{{ _("按基因编号") }}</button>
+        <button type="button" data-source="sequence" aria-pressed="false">{{ _("粘贴序列") }}</button>
       </div>
     </div>
     <div id="gene-source" class="grid-2">
-      <label class="field">基因编号<input name="geneID" id="gene-id" placeholder="例如：AT1G01010" autocomplete="off" spellcheck="false"><small>大小写不敏感</small></label>
-      <label class="field">序列类型<select name="sequenceType" id="sequence-type"><option value="cdna">内置 TAIR cDNA（含 UTR）</option><option value="cds">内置 TAIR CDS（仅编码区）</option></select></label>
+      <label class="field">{{ _("基因编号") }}<input name="geneID" id="gene-id" placeholder="{{ _("例如：AT1G01010") }}" autocomplete="off" spellcheck="false"><small>{{ _("大小写不敏感") }}</small></label>
+      <label class="field">{{ _("序列类型") }}<select name="sequenceType" id="sequence-type"><option value="cdna">{{ _("内置 TAIR cDNA（含 UTR）") }}</option><option value="cds">{{ _("内置 TAIR CDS（仅编码区）") }}</option></select></label>
     </div>
-    <label class="field" id="sequence-source" hidden>目标序列<textarea name="seq" id="sequence-text" rows="5" spellcheck="false" placeholder="仅 A/T/C/G，5′ → 3′"></textarea></label>
+    <label class="field" id="sequence-source" hidden>{{ _("目标序列") }}<textarea name="seq" id="sequence-text" rows="5" spellcheck="false" placeholder="{{ _("仅 A/T/C/G，5′ → 3′") }}"></textarea></label>
   </section>
   {% endif %}
 
   <section class="panel" aria-labelledby="reference-title">
-    <div class="panel-head"><div><h2 id="reference-title"><span class="step-no">2</span>背景序列</h2><p>用于 BLAST 检查探针在其他序列上的结合；不选则跳过特异性检查。</p></div></div>
+    <div class="panel-head"><div><h2 id="reference-title"><span class="step-no">2</span>{{ _("背景序列") }}</h2><p>{{ _("用于 BLAST 检查探针在其他序列上的结合；不选则跳过特异性检查。") }}</p></div></div>
     <div class="grid-2">
-      <label class="field">已有参考库<select name="existing_ref_genome" id="existing-reference"><option value="">不使用 / 改为上传</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}{{ ' · 多倍体' if genome.polyploid is sameas true else '' }}</option>{% endfor %}</select><small><a href="{{ url_for('references') }}" target="_blank" rel="noopener">打开参考库管理</a>，上传并配置共享参考。</small></label>
-      <label class="field">或上传参考 FASTA<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"{% if reference_can_edit is defined and not reference_can_edit() %} disabled{% endif %}><small>上传时按哈希去重；也可前往参考库管理页上传并配置多倍体。</small></label>
+      <label class="field">{{ _("已有参考库") }}<select name="existing_ref_genome" id="existing-reference"><option value="">{{ _("不使用 / 改为上传") }}</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}{{ _(" · 多倍体") if genome.polyploid is sameas true else '' }}</option>{% endfor %}</select><small><a href="{{ url_for('references') }}" target="_blank" rel="noopener">{{ _("打开参考库管理") }}</a>{{ _("，上传并配置共享参考。") }}</small></label>
+      <label class="field">{{ _("或上传参考 FASTA") }}<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"{% if reference_can_edit is defined and not reference_can_edit() %} disabled{% endif %}><small>{{ _("上传时按哈希去重；也可前往参考库管理页上传并配置多倍体。") }}</small></label>
     </div>
   </section>
 
   <section class="panel" aria-labelledby="parameter-title">
-    <div class="panel-head"><div><h2 id="parameter-title"><span class="step-no">3</span>参数</h2><p>默认值适用于大多数转录本。</p></div></div>
+    <div class="panel-head"><div><h2 id="parameter-title"><span class="step-no">3</span>{{ _("参数") }}</h2><p>{{ _("默认值适用于大多数转录本。") }}</p></div></div>
     <div class="grid-3">
-      <label class="field">最多保留组合数<input type="number" name="max_selected" value="5" min="1" max="10" step="1"><small>{% if batch %}CSV 第 4 列优先{% else %}1–10{% endif %}</small></label>
-      <label class="field">相邻组合最小间距（nt）<input type="number" name="min_gap" value="{{ 2 if batch else 15 }}" min="0" step="1"></label>
-      <label class="field">最小互补长度（nt）<input type="number" name="min_complementary_length" value="5" min="4" max="8" step="1"><small>4–8</small></label>
+      <label class="field">{{ _("最多保留组合数") }}<input type="number" name="max_selected" value="5" min="1" max="10" step="1"><small>{% if batch %}{{ _("CSV 第 4 列优先") }}{% else %}1–10{% endif %}</small></label>
+      <label class="field">{{ _("相邻组合最小间距（nt）") }}<input type="number" name="min_gap" value="{{ 2 if batch else 15 }}" min="0" step="1"></label>
+      <label class="field">{{ _("最小互补长度（nt）") }}<input type="number" name="min_complementary_length" value="5" min="4" max="8" step="1"><small>4–8</small></label>
     </div>
     <details class="disclosure">
-      <summary>高级参数<span>臂长、Tm、GC 与序列复杂度</span></summary>
+      <summary>{{ _("高级参数") }}<span>{{ _("臂长、Tm、GC 与序列复杂度") }}</span></summary>
       <div class="grid-3">
         {% for name, label, value, minimum, maximum, step in [
-          ('min_length', '最小长度（nt）', 15, 15, 20, 1), ('max_length', '最大长度（nt）', 20, 15, 50, 1),
-          ('poly_n', '连续同碱基阈值', 4, 2, 20, 1),
-          ('min_tm', '最低 Tm（°C）', 47.0, 40, 50, 0.1), ('max_tm', '最高 Tm（°C）', 53.0, 50, 60, 0.1),
-          ('kmer_size', '重复片段长度（nt）', 8, 6, 10, 1),
-          ('min_gc', '最低 GC（%）', 40.0, 30, 50, 0.1), ('max_gc', '最高 GC（%）', 60.0, 50, 70, 0.1),
-          ('min_kmer_count', '重复次数阈值', 2, 2, 4, 1)] %}
+          ('min_length', _("最小长度（nt）"), 15, 15, 20, 1), ('max_length', _("最大长度（nt）"), 20, 15, 50, 1),
+          ('poly_n', _("连续同碱基阈值"), 4, 2, 20, 1),
+          ('min_tm', _("最低 Tm（°C）"), 47.0, 40, 50, 0.1), ('max_tm', _("最高 Tm（°C）"), 53.0, 50, 60, 0.1),
+          ('kmer_size', _("重复片段长度（nt）"), 8, 6, 10, 1),
+          ('min_gc', _("最低 GC（%）"), 40.0, 30, 50, 0.1), ('max_gc', _("最高 GC（%）"), 60.0, 50, 70, 0.1),
+          ('min_kmer_count', _("重复次数阈值"), 2, 2, 4, 1)] %}
         <label class="field">{{ label }}<input type="number" name="{{ name }}" value="{{ value }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}"><small>{{ minimum }}–{{ maximum }}</small></label>
         {% endfor %}
       </div>
     </details>
     <div class="actions">
-      <span>计算在服务器上同步完成，期间请保持本页打开</span>
-      <div><button type="submit" class="btn primary" id="submit-button"><svg aria-hidden="true"><use href="#i-download"/></svg>开始设计并下载 ZIP</button></div>
+      <span>{{ _("计算在服务器上同步完成，期间请保持本页打开") }}</span>
+      <div><button type="submit" class="btn primary" id="submit-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("开始设计并下载 ZIP") }}</button></div>
     </div>
   </section>
 </form>
@@ -100,10 +100,10 @@ task2,BP_1102,WUS,8</pre>
 <div id="triplet-status" class="alert" role="status" aria-live="polite" hidden></div>
 
 <section class="panel" id="triplet-result" hidden aria-labelledby="result-title">
-  <div class="panel-head"><div><h2 id="result-title">设计完成</h2><p id="result-detail"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>再次下载</button></div>
+  <div class="panel-head"><div><h2 id="result-title">{{ _("设计完成") }}</h2><p id="result-detail"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("再次下载") }}</button></div>
   <ul class="note-list">
-    <li>ZIP 内每个任务包含探针序列 CSV、BED 坐标与详细报告。</li>
-    <li>修改参数后可直接再次提交，不需要刷新页面。</li>
+    <li>{{ _("ZIP 内每个任务包含探针序列 CSV、BED 坐标与详细报告。") }}</li>
+    <li>{{ _("修改参数后可直接再次提交，不需要刷新页面。") }}</li>
   </ul>
 </section>
 {% endblock %}
@@ -129,7 +129,7 @@ task2,BP_1102,WUS,8</pre>
   if (!batch) {
     const bridgeInput = document.getElementById('bridge-id');
     const preview = document.getElementById('bridge-sequence');
-    const showBridge = () => { preview.textContent = bridges[bridgeInput.value.trim().toUpperCase()] || '编号不在当前桥接探针库中'; };
+    const showBridge = () => { preview.textContent = bridges[bridgeInput.value.trim().toUpperCase()] || HCR.t("编号不在当前桥接探针库中"); };
     bridgeInput.addEventListener('input', showBridge);
     showBridge();
     document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => {
@@ -149,18 +149,18 @@ task2,BP_1102,WUS,8</pre>
       if (!input.value.trim() || !input.checkValidity()) {
         input.closest('details')?.setAttribute('open', '');
         input.focus();
-        return '请检查“' + input.closest('label').firstChild.textContent.trim() + '”的取值范围。';
+        return HCR.t("请检查“") + input.closest('label').firstChild.textContent.trim() + HCR.t("”的取值范围。");
       }
     }
     const value = name => Number(form.elements.namedItem(name).value);
-    if (value('min_length') > value('max_length')) return '最小长度不能大于最大长度。';
-    if (value('min_tm') > value('max_tm')) return '最低 Tm 不能高于最高 Tm。';
-    if (value('min_gc') > value('max_gc')) return '最低 GC 不能高于最高 GC。';
-    if (batch) return document.getElementById('batch-file').files.length ? '' : '请先选择批量任务 CSV 文件。';
-    if (!form.elements.namedItem('name').value.trim()) return '请填写任务名称。';
-    if (!bridges[form.elements.namedItem('bp_id').value.trim().toUpperCase()]) return '桥接探针编号不在当前探针库中。';
-    if (source === 'gene' && !form.elements.namedItem('geneID').value.trim()) return '请填写基因编号，或切换为粘贴序列。';
-    if (source === 'sequence' && !/^[ACGTacgt\s]+$/.test(form.elements.namedItem('seq').value)) return '粘贴的序列只能包含 A/T/C/G。';
+    if (value('min_length') > value('max_length')) return HCR.t("最小长度不能大于最大长度。");
+    if (value('min_tm') > value('max_tm')) return HCR.t("最低 Tm 不能高于最高 Tm。");
+    if (value('min_gc') > value('max_gc')) return HCR.t("最低 GC 不能高于最高 GC。");
+    if (batch) return document.getElementById('batch-file').files.length ? '' : HCR.t("请先选择批量任务 CSV 文件。");
+    if (!form.elements.namedItem('name').value.trim()) return HCR.t("请填写任务名称。");
+    if (!bridges[form.elements.namedItem('bp_id').value.trim().toUpperCase()]) return HCR.t("桥接探针编号不在当前探针库中。");
+    if (source === 'gene' && !form.elements.namedItem('geneID').value.trim()) return HCR.t("请填写基因编号，或切换为粘贴序列。");
+    if (source === 'sequence' && !/^[ACGTacgt\s]+$/.test(form.elements.namedItem('seq').value)) return HCR.t("粘贴的序列只能包含 A/T/C/G。");
     return '';
   }
 
@@ -178,8 +178,8 @@ task2,BP_1102,WUS,8</pre>
     const started = Date.now();
     submit.disabled = true;
     document.getElementById('triplet-result').hidden = true;
-    HCR.setAlert(status, '正在生成候选并检查背景序列……', 'busy');
-    const timer = setInterval(() => HCR.setAlert(status, '正在生成候选并检查背景序列……已用时 ' + Math.round((Date.now() - started) / 1000) + ' s', 'busy'), 1000);
+    HCR.setAlert(status, HCR.t("正在生成候选并检查背景序列……"), 'busy');
+    const timer = setInterval(() => HCR.setAlert(status, HCR.t("正在生成候选并检查背景序列……已用时 ") + Math.round((Date.now() - started) / 1000) + ' s', 'busy'), 1000);
     try {
       const result = await HCR.postForFile(form.action, data, batch ? 'triplet_batch_results.zip' : 'triplet_results.zip');
       lastFile = result;
@@ -187,8 +187,8 @@ task2,BP_1102,WUS,8</pre>
       const seconds = Math.round((Date.now() - started) / 1000);
       const done = result.response.headers.get('X-Tasks-Completed');
       const skipped = result.response.headers.get('X-Tasks-Skipped');
-      let detail = result.filename + ' · ' + Math.max(1, Math.round(result.blob.size / 1024)) + ' KB · 用时 ' + (seconds < 1 ? '不到 1' : seconds) + ' s';
-      if (done !== null) detail += ' · 完成 ' + done + ' 个任务' + (Number(skipped) ? '，跳过 ' + skipped + ' 个（见 skipped_tasks.tsv）' : '');
+      let detail = result.filename + ' · ' + Math.max(1, Math.round(result.blob.size / 1024)) + HCR.t(" KB · 用时 ") + (seconds < 1 ? HCR.t("不到 1") : seconds) + ' s';
+      if (done !== null) detail += HCR.t(" · 完成 ") + done + HCR.t(" 个任务") + (Number(skipped) ? HCR.t("，跳过 ") + skipped + HCR.t(" 个（见 skipped_tasks.tsv）") : '');
       document.getElementById('result-detail').textContent = detail;
       document.getElementById('triplet-result').hidden = false;
       HCR.setAlert(status, '');

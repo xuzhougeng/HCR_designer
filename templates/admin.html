@@ -1,55 +1,55 @@
 {% extends "base.html" %}
-{% block title %}空间管理 · Probe Designer{% endblock %}
-{% block eyebrow %}管理{% endblock %}
-{% block heading %}空间管理{% endblock %}
-{% block lede %}查看上传文件与分析结果的占用，删除不再需要的数据。{% endblock %}
+{% block title %}{{ _("空间管理 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("管理") }}{% endblock %}
+{% block heading %}{{ _("空间管理") }}{% endblock %}
+{% block lede %}{{ _("查看上传文件与分析结果的占用，删除不再需要的数据。") }}{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">{% endblock %}
 {% block head_actions %}
 <form method="post" action="{{ url_for('admin_logout') }}">
   <input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}">
-  <button class="btn" type="submit">退出登录</button>
+  <button class="btn" type="submit">{{ _("退出登录") }}</button>
 </form>
 {% endblock %}
 {% block content %}
 <div class="stats">
-  <div class="stat"><span>文件与结果占用</span><strong data-bytes="{{ total_bytes }}"></strong></div>
-  <div class="stat"><span>管理项目</span><strong>{{ entries|length }} 项</strong></div>
-  <div class="stat"><span>过期结果可释放</span><strong data-bytes="{{ expired_bytes }}"></strong></div>
+  <div class="stat"><span>{{ _("文件与结果占用") }}</span><strong data-bytes="{{ total_bytes }}"></strong></div>
+  <div class="stat"><span>{{ _("管理项目") }}</span><strong>{{ entries|length }} {{ _("项") }}</strong></div>
+  <div class="stat"><span>{{ _("过期结果可释放") }}</span><strong data-bytes="{{ expired_bytes }}"></strong></div>
 </div>
 <section class="panel stack">
   <div class="panel-head">
-    <div><h2>分析结果保留 3 个月</h2><p>按自然月计算，保留期从最近一次提交或完成时间起算。旧版结果使用文件修改时间。</p></div>
-    <button class="btn" type="button" id="cleanup-results">立即清理过期结果</button>
+    <div><h2>{{ _("分析结果保留 3 个月") }}</h2><p>{{ _("按自然月计算，保留期从最近一次提交或完成时间起算。旧版结果使用文件修改时间。") }}</p></div>
+    <button class="btn" type="button" id="cleanup-results">{{ _("立即清理过期结果") }}</button>
   </div>
-  <p class="hint">{% if automatic_cleanup %}定期清理已启用，每 24 小时检查一次。{% else %}此服务未启用定期清理，可立即手动清理；请维护人员使用标准启动脚本启用。{% endif %}参考基因组和其他上传文件由管理员手动删除。</p>
-  <p class="hint">本次过期时间界限：<time data-date="{{ cutoff }}"></time>。排队中、运行中及记录异常的项目会跳过。</p>
-  {% if last_cleanup %}<p class="hint">最近清理：<time data-date="{{ last_cleanup.ran_at }}"></time>，删除 {{ last_cleanup.deleted|length }} 项，跳过 {{ last_cleanup.skipped|length }} 项，失败 {{ last_cleanup.errors|length }} 项。</p>{% endif %}
+  <p class="hint">{% if automatic_cleanup %}{{ _("定期清理已启用，每 24 小时检查一次。") }}{% else %}{{ _("此服务未启用定期清理，可立即手动清理；请维护人员使用标准启动脚本启用。") }}{% endif %}{{ _("参考基因组和其他上传文件由管理员手动删除。") }}</p>
+  <p class="hint">{{ _("本次过期时间界限：") }}<time data-date="{{ cutoff }}"></time>{{ _("。排队中、运行中及记录异常的项目会跳过。") }}</p>
+  {% if last_cleanup %}<p class="hint">{{ _("最近清理：") }}<time data-date="{{ last_cleanup.ran_at }}"></time>{{ _("，删除") }} {{ last_cleanup.deleted|length }} {{ _("项，跳过") }} {{ last_cleanup.skipped|length }} {{ _("项，失败") }} {{ last_cleanup.errors|length }} {{ _("项。") }}</p>{% endif %}
 </section>
 <p class="alert" id="admin-message" role="status" hidden></p>
 <section class="panel">
   <div class="toolbar">
-    <label class="field">类别<select id="storage-kind"><option value="">全部类别</option>{% for kind in entries|map(attribute='kind')|unique %}<option>{{ kind }}</option>{% endfor %}</select></label>
-    <label class="field">搜索<input type="search" id="storage-search" placeholder="文件名或任务编号" autocomplete="off"></label>
-    <button class="btn danger" type="button" id="delete-selected" disabled>删除所选</button>
-    <span class="count" id="selected-summary">已选 0 项</span>
+    <label class="field">{{ _("类别") }}<select id="storage-kind"><option value="">{{ _("全部类别") }}</option>{% for kind in entries|map(attribute='kind')|unique %}<option value="{{ kind }}">{{ _(kind) }}</option>{% endfor %}</select></label>
+    <label class="field">{{ _("搜索") }}<input type="search" id="storage-search" placeholder="{{ _("文件名或任务编号") }}" autocomplete="off"></label>
+    <button class="btn danger" type="button" id="delete-selected" disabled>{{ _("删除所选") }}</button>
+    <span class="count" id="selected-summary">{{ _("已选 0 项") }}</span>
   </div>
   <div class="table-wrap">
     <table class="table admin-table">
-      <thead><tr><th><input type="checkbox" id="select-visible" aria-label="选择当前可删除项目"></th><th>文件 / 任务</th><th>类别</th><th>占用</th><th>保留期起算时间</th><th>状态</th></tr></thead>
+      <thead><tr><th><input type="checkbox" id="select-visible" aria-label="{{ _("选择当前可删除项目") }}"></th><th>{{ _("文件 / 任务") }}</th><th>{{ _("类别") }}</th><th>{{ _("占用") }}</th><th>{{ _("保留期起算时间") }}</th><th>{{ _("状态") }}</th></tr></thead>
       <tbody>
       {% for entry in entries %}
         <tr data-key="{{ entry.key }}" data-name="{{ entry.name }}" data-kind="{{ entry.kind }}" data-size="{{ entry.size }}">
-          <td><input type="checkbox" class="storage-select" aria-label="选择 {{ entry.name }}"{% if entry.blocked %} disabled{% endif %}></td>
-          <td><span class="mono">{{ entry.name }}</span>{% if entry.file_count > 1 %}<div class="hint">含配套文件，共 {{ entry.file_count }} 项</div>{% endif %}{% if entry.blocked %}<div class="hint">{{ entry.blocked }}</div>{% endif %}</td>
-          <td>{{ entry.kind }}</td><td class="num" data-bytes="{{ entry.size }}"></td>
+          <td><input type="checkbox" class="storage-select" aria-label="{{ _('选择 {name}', name=entry.name) }}"{% if entry.blocked %} disabled{% endif %}></td>
+          <td><span class="mono">{{ entry.name }}</span>{% if entry.file_count > 1 %}<div class="hint">{{ _("含配套文件，共") }} {{ entry.file_count }} {{ _("项") }}</div>{% endif %}{% if entry.blocked %}<div class="hint">{{ entry.blocked|message }}</div>{% endif %}</td>
+          <td>{{ _(entry.kind) }}</td><td class="num" data-bytes="{{ entry.size }}"></td>
           <td class="num"><time data-date="{{ entry.modified_at }}"></time></td>
-          <td>{% if entry.blocked %}<span class="chip warn">受保护</span>{% elif entry.expired %}<span class="chip warn">已过期</span>{% else %}<span class="chip">可清理</span>{% endif %}</td>
+          <td>{% if entry.blocked %}<span class="chip warn">{{ _("受保护") }}</span>{% elif entry.expired %}<span class="chip warn">{{ _("已过期") }}</span>{% else %}<span class="chip">{{ _("可清理") }}</span>{% endif %}</td>
         </tr>
-      {% else %}<tr><td colspan="6" class="empty">暂无上传文件或分析结果。</td></tr>{% endfor %}
+      {% else %}<tr><td colspan="6" class="empty">{{ _("暂无上传文件或分析结果。") }}</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>
-  <p class="hint">参考基因组删除时会一并删除压缩源文件和 BLAST 索引。分析任务删除时会一并删除该任务上传的参考、探针文件和下载包。删除后无法恢复，已有结果链接将失效。</p>
+  <p class="hint">{{ _("参考基因组删除时会一并删除压缩源文件和 BLAST 索引。分析任务删除时会一并删除该任务上传的参考、探针文件和下载包。删除后无法恢复，已有结果链接将失效。") }}</p>
 </section>
 <script type="application/json" id="admin-config">{{ {'csrf': admin_csrf_token(), 'delete_url': url_for('admin_delete'), 'cleanup_url': url_for('admin_cleanup'), 'login_url': url_for('admin_login')}|tojson }}</script>
 {% endblock %}

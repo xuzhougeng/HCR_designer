@@ -1,32 +1,32 @@
 {% extends "base.html" %}
-{% block title %}FASTA 格式化 · Probe Designer{% endblock %}
-{% block eyebrow %}序列工具{% endblock %}
-{% block heading %}FASTA 格式化{% endblock %}
-{% block lede %}在上传参考库或批量设计之前清理 FASTA：统一编号、大小写和字符，并去除同一基因的较短转录本变体。{% endblock %}
+{% block title %}{{ _("FASTA 格式化 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("序列工具") }}{% endblock %}
+{% block heading %}{{ _("FASTA 格式化") }}{% endblock %}
+{% block lede %}{{ _("在上传参考库或批量设计之前清理 FASTA：统一编号、大小写和字符，并去除同一基因的较短转录本变体。") }}{% endblock %}
 
 {% block content %}
 <form id="format-form" class="panel" enctype="multipart/form-data" novalidate>
   <div class="split">
     <label class="dropzone" data-dropzone tabindex="0">
       <svg aria-hidden="true"><use href="#i-upload"/></svg>
-      <strong data-file-label>点击选择或拖入 FASTA 文件</strong>
-      <span class="hint">.fasta、.fa 或 .gz；文件只在内存中处理，不保存到服务器</span>
+      <strong data-file-label>{{ _("点击选择或拖入 FASTA 文件") }}</strong>
+      <span class="hint">{{ _(".fasta、.fa 或 .gz；文件只在内存中处理，不保存到服务器") }}</span>
       <input type="file" name="fasta_file" id="fasta-file" accept=".fasta,.fa,.gz">
     </label>
     <div class="check-grid">
-      <label class="check-card"><input type="checkbox" name="clean_headers" checked>清理序列标题<small>只保留第一个空格前的编号：&gt;AT2G17950 WUS → &gt;AT2G17950</small></label>
-      <label class="check-card"><input type="checkbox" name="uppercase" checked>转为大写<small>小写的软屏蔽碱基一并转换</small></label>
-      <label class="check-card"><input type="checkbox" name="filter_invalid" checked>过滤无效序列<small>自动识别核酸或蛋白，去掉含非法字符的条目</small></label>
-      <label class="check-card"><input type="checkbox" name="deduplicate" checked>去除变体重复<small>AT2G17950.1 与 .2 只保留最长的一条</small></label>
+      <label class="check-card"><input type="checkbox" name="clean_headers" checked>{{ _("清理序列标题") }}<small>{{ _("只保留第一个空格前的编号：>AT2G17950 WUS → >AT2G17950") }}</small></label>
+      <label class="check-card"><input type="checkbox" name="uppercase" checked>{{ _("转为大写") }}<small>{{ _("小写的软屏蔽碱基一并转换") }}</small></label>
+      <label class="check-card"><input type="checkbox" name="filter_invalid" checked>{{ _("过滤无效序列") }}<small>{{ _("自动识别核酸或蛋白，去掉含非法字符的条目") }}</small></label>
+      <label class="check-card"><input type="checkbox" name="deduplicate" checked>{{ _("去除变体重复") }}<small>{{ _("AT2G17950.1 与 .2 只保留最长的一条") }}</small></label>
     </div>
   </div>
-  <div class="actions"><span>处理完成后自动下载 *_formatted.fasta</span><div><button type="button" class="btn" id="reset-button">清空</button><button type="submit" class="btn primary" id="submit-button"><svg aria-hidden="true"><use href="#i-download"/></svg>处理并下载</button></div></div>
+  <div class="actions"><span>{{ _("处理完成后自动下载 *_formatted.fasta") }}</span><div><button type="button" class="btn" id="reset-button">{{ _("清空") }}</button><button type="submit" class="btn primary" id="submit-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("处理并下载") }}</button></div></div>
 </form>
 
 <div id="format-status" class="alert" role="status" aria-live="polite" hidden></div>
 
 <section class="panel" id="format-result" hidden aria-labelledby="format-result-title">
-  <div class="panel-head"><div><h2 id="format-result-title">处理结果</h2><p id="format-file"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>再次下载</button></div>
+  <div class="panel-head"><div><h2 id="format-result-title">{{ _("处理结果") }}</h2><p id="format-file"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("再次下载") }}</button></div>
   <div class="stats" id="format-stats"></div>
 </section>
 {% endblock %}
@@ -41,19 +41,19 @@
   let last = null;
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!input.files.length) { HCR.setAlert(status, '请先选择 FASTA 文件。', 'error'); return; }
+    if (!input.files.length) { HCR.setAlert(status, HCR.t("请先选择 FASTA 文件。"), 'error'); return; }
     submit.disabled = true;
-    HCR.setAlert(status, '正在处理 ' + input.files[0].name + '……', 'busy');
+    HCR.setAlert(status, HCR.t("正在处理 ") + input.files[0].name + '……', 'busy');
     try {
       last = await HCR.postForFile('{{ url_for("formatting") }}', new FormData(form), 'formatted_sequences.fasta');
       HCR.saveBlob(last.blob, last.filename);
       const stats = JSON.parse(last.response.headers.get('X-Format-Stats') || '{}');
-      const types = {NT: '核酸', AA: '蛋白', Mixed: '混合'};
+      const types = {NT: HCR.t("核酸"), AA: HCR.t("蛋白"), Mixed: HCR.t("混合")};
       const written = ((await last.blob.text()).match(/^>/gm) || []).length;
       const tiles = [
-        ['原始序列', stats.original_count, '条'], ['过滤无效', stats.removed_count, '条'],
-        ['去除变体', stats.deduplicated_count, '条'], ['清理标题', stats.headers_cleaned, '条'],
-        ['最终输出', written, '条'], ['识别类型', types[stats.detected_type] || '—', '']];
+        [HCR.t("原始序列"), stats.original_count, HCR.t("条")], [HCR.t("过滤无效"), stats.removed_count, HCR.t("条")],
+        [HCR.t("去除变体"), stats.deduplicated_count, HCR.t("条")], [HCR.t("清理标题"), stats.headers_cleaned, HCR.t("条")],
+        [HCR.t("最终输出"), written, HCR.t("条")], [HCR.t("识别类型"), types[stats.detected_type] || '—', '']];
       const box = document.getElementById('format-stats');
       box.replaceChildren(...tiles.map(([label, value, unit]) => {
         const tile = document.createElement('div'); tile.className = 'stat';

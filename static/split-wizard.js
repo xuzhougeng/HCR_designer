@@ -43,8 +43,8 @@
     byId('multiple-sets-field').hidden = !polyploid;
     if (!hasAnnotation) field('process_multiple_sets').checked = false;
     byId('multiple-sets-hint').textContent = hasAnnotation
-      ? '使用参考库已保存的亚基因组归属；结果页提供跨组同源比对与跨物种优先的配对证据，无需再次上传。'
-      : '此参考库尚无有效的亚基因组归属文件，请先到参考库管理页上传，刷新本页后即可勾选。';
+      ? HCR.t("使用参考库已保存的亚基因组归属；结果页提供跨组同源比对与跨物种优先的配对证据，无需再次上传。")
+      : HCR.t("此参考库尚无有效的亚基因组归属文件，请先到参考库管理页上传，刷新本页后即可勾选。");
     byId('subgenome-note').hidden = refMode === 'none';
     field('existing_ref_genome').disabled = busy || refMode !== 'existing';
     field('ref_genome').disabled = busy || refMode !== 'upload';
@@ -57,12 +57,12 @@
     else if (subgenomeOption.disabled && field('target_mode').value === 'subgenome') field('target_mode').value = 'species';
     field('target_mode').disabled = busy || useAnnotation;
     const bridge = field('bp_id').value.trim().toUpperCase();
-    byId('bridge-sequence').textContent = config.bridges[bridge] || '编号不在当前桥接探针库中';
+    byId('bridge-sequence').textContent = config.bridges[bridge] || HCR.t("编号不在当前桥接探针库中");
     byId('reference-note').textContent = refMode === 'none'
-      ? '本次只做质量筛选，结果将标记“特异性未评估”。用于物种来源判定时请选择参考库。'
-      : '参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。';
+      ? HCR.t("本次只做质量筛选，结果将标记“特异性未评估”。用于物种来源判定时请选择参考库。")
+      : HCR.t("参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。");
     if (refMode === 'existing' && field('existing_ref_genome').selectedOptions[0]?.dataset.ploidy === 'true') {
-      byId('reference-note').textContent += ' 此参考已配置为多倍体，可为本次任务选择是否考虑多套染色体。';
+      byId('reference-note').textContent += HCR.t(" 此参考已配置为多倍体，可为本次任务选择是否考虑多套染色体。");
     }
   }
   function invalidate() {
@@ -79,31 +79,31 @@
   }
   async function requestJSON(url, options) {
     const response = await fetch(url, options);
-    const data = await response.json().catch(() => ({error:'服务器未返回完整结果，请重试。'}));
-    if (!response.ok) throw Object.assign(new Error(data.error || '请求未完成。'), {field:data.field});
+    const data = await response.json().catch(() => ({error:HCR.t("服务器未返回完整结果，请重试。")}));
+    if (!response.ok) throw Object.assign(new Error(data.error || HCR.t("请求未完成。")), {field:data.field});
     return data;
   }
   function referenceText(reference) {
-    if (!reference) return '未指定参考库 · 特异性未评估';
-    const species = Object.entries(reference.species_counts).map(([key, value]) => key + ' ' + value.toLocaleString()).join(' / ');
-    let text = reference.name + ' · ' + reference.sequence_count.toLocaleString() + ' 条序列\n' + species;
-    if (reference.polyploid !== undefined && reference.polyploid !== null) text += '\n参考配置：' + (reference.polyploid ? '多倍体' : '非多倍体');
+    if (!reference) return HCR.t("未指定参考库 · 特异性未评估");
+    const species = Object.entries(reference.species_counts).map(([key, value]) => HCR.t(key) + ' ' + value.toLocaleString(HCR.locale)).join(' / ');
+    let text = reference.name + ' · ' + reference.sequence_count.toLocaleString(HCR.locale) + HCR.t(" 条序列\n") + species;
+    if (reference.polyploid !== undefined && reference.polyploid !== null) text += HCR.t("\n参考配置：") + (reference.polyploid ? HCR.t("多倍体") : HCR.t("非多倍体"));
     const sub = reference.subgenome;
     if (sub) {
-      const counts = Object.entries(sub.subgenome_counts).map(([key, value]) => key + ' ' + value.toLocaleString()).join(' / ');
-      text += '\n亚基因组（' + sub.source + '）：' + counts + ' · 未标注 ' + (sub.unannotated || 0).toLocaleString() + ' 条';
+      const counts = Object.entries(sub.subgenome_counts).map(([key, value]) => key + ' ' + value.toLocaleString(HCR.locale)).join(' / ');
+      text += HCR.t("\n亚基因组（") + sub.source + '）：' + counts + HCR.t(" · 未标注 ") + (sub.unannotated || 0).toLocaleString(HCR.locale) + HCR.t(" 条");
     }
     return text;
   }
   function renderPrepared() {
-    byId('reference-summary').textContent = referenceText(prepared.reference) + (prepared.reference?.polyploid ? '\n使用参考库的亚基因组归属：' + (prepared.process_multiple_sets ? '是' : '否') : '');
+    byId('reference-summary').textContent = referenceText(prepared.reference) + (prepared.reference?.polyploid ? HCR.t("\n使用参考库的亚基因组归属：") + (prepared.process_multiple_sets ? HCR.t("是") : HCR.t("否")) : '');
     const body = byId('prepared-tasks'); body.replaceChildren();
     prepared.tasks.forEach(task => {
       const row = element('tr');
-      [task.name, task.gene_id || '未指定', task.sequence_length + ' nt', task.bridge_id,
-        task.max_selected === null ? '默认 ' + field('max_selected').value + ' 对' : task.max_selected + ' 对',
-        task.subgenome || '未标注',
-        (task.allowed_ids || []).length ? task.allowed_ids.join('; ') : '无（按目标判定模式）'].forEach(value => row.append(element('td', value)));
+      [task.name, task.gene_id || HCR.t("未指定"), task.sequence_length + ' nt', task.bridge_id,
+        task.max_selected === null ? HCR.t("默认 ") + field('max_selected').value + HCR.t(" 对") : task.max_selected + HCR.t(" 对"),
+        task.subgenome || HCR.t("未标注"),
+        (task.allowed_ids || []).length ? task.allowed_ids.join('; ') : HCR.t("无（按目标判定模式）")].forEach(value => row.append(element('td', value)));
       body.append(row);
     });
   }
@@ -118,7 +118,7 @@
     if (refMode !== 'upload') data.delete('ref_genome');
     if (refMode !== 'subgenome_files') data.delete('subgenome_files');
     if (refMode === 'none') data.delete('process_multiple_sets');
-    setBusy(true, '正在核对目标、桥接探针和参考序列……大文件首次检查可能需要一些时间。');
+    setBusy(true, HCR.t("正在核对目标、桥接探针和参考序列……大文件首次检查可能需要一些时间。"));
     let error;
     try {
       prepared = await requestJSON(config.prepare_url, {method:'POST',body:data});
@@ -134,12 +134,12 @@
       if (!input.value.trim() || !input.checkValidity()) {
         input.closest('details')?.setAttribute('open', '');
         input.focus(); input.reportValidity();
-        throw new Error('请检查参数范围，整数参数不能填写小数。');
+        throw new Error(HCR.t("请检查参数范围，整数参数不能填写小数。"));
       }
       values[input.name] = input.value;
     }
-    for (const [low, high, label] of [['min_length','max_length','臂长'],['min_tm','max_tm','Tm'],['min_gc','max_gc','GC']]) {
-      if (Number(values[low]) > Number(values[high])) throw new Error(label + ' 的最小值不能大于最大值。');
+    for (const [low, high, label] of [['min_length','max_length',HCR.t("臂长")],['min_tm','max_tm','Tm'],['min_gc','max_gc','GC']]) {
+      if (Number(values[low]) > Number(values[high])) throw new Error(label + HCR.t(" 的最小值不能大于最大值。"));
     }
     return values;
   }
@@ -147,7 +147,7 @@
     if (busy || !prepared) return;
     let values;
     try {values = readParameters();} catch (error) {showMessage(error.message, 'error');return;}
-    setBusy(true, '正在提交到后台队列……');
+    setBusy(true, HCR.t("正在提交到后台队列……"));
     try {
       const job = await requestJSON(prepared.run_url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)});
       window.location.href = job.result_url;

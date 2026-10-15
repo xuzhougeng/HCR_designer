@@ -1,29 +1,29 @@
 {% extends "base.html" %}
-{% block title %}探针数量推荐 · Probe Designer{% endblock %}
-{% block eyebrow %}序列工具{% endblock %}
-{% block heading %}探针数量推荐{% endblock %}
-{% block lede %}由 CDS 长度与 read counts 计算每个基因的 TPM，表达越低推荐的探针越多。{% endblock %}
+{% block title %}{{ _("探针数量推荐 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("序列工具") }}{% endblock %}
+{% block heading %}{{ _("探针数量推荐") }}{% endblock %}
+{% block lede %}{{ _("由 CDS 长度与 read counts 计算每个基因的 TPM，表达越低推荐的探针越多。") }}{% endblock %}
 
 {% block content %}
 <div class="split">
   <form id="recommend-form" class="panel" enctype="multipart/form-data" novalidate>
-    <div class="panel-head"><div><h2>上传两个文件</h2><p>两份文件中的基因编号必须完全一致，否则无法计算 TPM。</p></div></div>
+    <div class="panel-head"><div><h2>{{ _("上传两个文件") }}</h2><p>{{ _("两份文件中的基因编号必须完全一致，否则无法计算 TPM。") }}</p></div></div>
     <div class="grid-2">
       <label class="dropzone" data-dropzone tabindex="0">
         <svg aria-hidden="true"><use href="#i-upload"/></svg>
-        <strong>CDS 序列</strong>
+        <strong>{{ _("CDS 序列") }}</strong>
         <span class="hint" data-file-label>FASTA，.fasta / .fa</span>
         <input type="file" name="cds_file" id="cds-file" accept=".fasta,.fa">
       </label>
       <label class="dropzone" data-dropzone tabindex="0">
         <svg aria-hidden="true"><use href="#i-upload"/></svg>
-        <strong>表达量 counts</strong>
-        <span class="hint" data-file-label>两列文本，.txt</span>
+        <strong>{{ _("表达量 counts") }}</strong>
+        <span class="hint" data-file-label>{{ _("两列文本，.txt") }}</span>
         <input type="file" name="counts_file" id="counts-file" accept=".txt,.tsv">
       </label>
     </div>
     <details class="disclosure" style="margin-top:16px">
-      <summary>文件格式示例</summary>
+      <summary>{{ _("文件格式示例") }}</summary>
       <div class="grid-2">
         <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">&gt;AT1G01010
 ATGGAGGATCAAGTTGGGTTTGG…
@@ -34,14 +34,14 @@ AT1G01020	892
 AT1G01030	245</pre>
       </div>
     </details>
-    <div class="actions"><span>结果同时下载为 CSV</span><div><button type="submit" class="btn primary" id="submit-button">计算推荐数量</button></div></div>
+    <div class="actions"><span>{{ _("结果同时下载为 CSV") }}</span><div><button type="submit" class="btn primary" id="submit-button">{{ _("计算推荐数量") }}</button></div></div>
   </form>
 
   <aside class="panel" aria-labelledby="rules-title">
-    <div class="panel-head"><div><h2 id="rules-title">推荐规则</h2><p>按 TPM 分段</p></div></div>
+    <div class="panel-head"><div><h2 id="rules-title">{{ _("推荐规则") }}</h2><p>{{ _("按 TPM 分段") }}</p></div></div>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>TPM</th><th>推荐探针数</th></tr></thead>
+        <thead><tr><th>TPM</th><th>{{ _("推荐探针数") }}</th></tr></thead>
         <tbody>
           <tr><td class="num">&lt; 1</td><td class="num">10</td></tr>
           <tr><td class="num">1 – 10</td><td class="num">8</td></tr>
@@ -58,13 +58,13 @@ AT1G01030	245</pre>
 
 <section class="panel" id="recommend-result" hidden aria-labelledby="recommend-title">
   <div class="panel-head">
-    <div><h2 id="recommend-title">推荐结果</h2><p id="recommend-summary"></p></div>
-    <button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>再次下载 CSV</button>
+    <div><h2 id="recommend-title">{{ _("推荐结果") }}</h2><p id="recommend-summary"></p></div>
+    <button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("再次下载 CSV") }}</button>
   </div>
   <div class="stats" id="recommend-stats" style="margin-bottom:16px"></div>
-  <div class="toolbar"><label class="field">搜索基因<input type="search" id="gene-search" placeholder="基因编号" autocomplete="off"></label><span class="count" id="gene-count"></span></div>
+  <div class="toolbar"><label class="field">{{ _("搜索基因") }}<input type="search" id="gene-search" placeholder="{{ _("基因编号") }}" autocomplete="off"></label><span class="count" id="gene-count"></span></div>
   <div class="table-wrap tall">
-    <table class="table"><thead><tr><th>基因编号</th><th>TPM</th><th>推荐探针数</th></tr></thead><tbody id="recommend-rows"></tbody></table>
+    <table class="table"><thead><tr><th>{{ _("基因编号") }}</th><th>TPM</th><th>{{ _("推荐探针数") }}</th></tr></thead><tbody id="recommend-rows"></tbody></table>
   </div>
 </section>
 {% endblock %}
@@ -89,16 +89,16 @@ AT1G01030	245</pre>
       });
       return row;
     }));
-    document.getElementById('gene-count').textContent = '显示 ' + Math.min(shown.length, 2000).toLocaleString() + ' / ' + records.length.toLocaleString() + ' 个基因';
+    document.getElementById('gene-count').textContent = HCR.t("显示 ") + Math.min(shown.length, 2000).toLocaleString(HCR.locale) + ' / ' + records.length.toLocaleString(HCR.locale) + HCR.t(" 个基因");
   }
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (!document.getElementById('cds-file').files.length || !document.getElementById('counts-file').files.length) {
-      HCR.setAlert(status, '请同时选择 CDS 序列文件和表达量文件。', 'error'); return;
+      HCR.setAlert(status, HCR.t("请同时选择 CDS 序列文件和表达量文件。"), 'error'); return;
     }
     submit.disabled = true;
-    HCR.setAlert(status, '正在计算 TPM……', 'busy');
+    HCR.setAlert(status, HCR.t("正在计算 TPM……"), 'busy');
     try {
       last = await HCR.postForFile('{{ url_for("probe_recommend") }}', new FormData(form), 'probe_recommend_results.csv');
       HCR.saveBlob(last.blob, last.filename);
@@ -109,12 +109,12 @@ AT1G01030	245</pre>
       const stats = document.getElementById('recommend-stats');
       stats.replaceChildren(...Object.keys(counts).map(Number).sort((a, b) => b - a).map(n => {
         const tile = document.createElement('div'); tile.className = 'stat';
-        const label = document.createElement('span'); label.textContent = '推荐 ' + n + ' 个';
-        const value = document.createElement('strong'); value.textContent = counts[n].toLocaleString() + ' 个基因';
+        const label = document.createElement('span'); label.textContent = HCR.t("推荐 ") + n + HCR.t(" 个");
+        const value = document.createElement('strong'); value.textContent = counts[n].toLocaleString(HCR.locale) + HCR.t(" 个基因");
         tile.append(label, value); return tile;
       }));
       const total = records.reduce((sum, r) => sum + r.number, 0);
-      document.getElementById('recommend-summary').textContent = records.length.toLocaleString() + ' 个基因 · 合计推荐 ' + total.toLocaleString() + ' 个探针';
+      document.getElementById('recommend-summary').textContent = records.length.toLocaleString(HCR.locale) + HCR.t(" 个基因 · 合计推荐 ") + total.toLocaleString(HCR.locale) + HCR.t(" 个探针");
       document.getElementById('recommend-result').hidden = false;
       render();
       HCR.setAlert(status, '');

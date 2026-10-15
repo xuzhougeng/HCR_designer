@@ -8,6 +8,8 @@ from scripts.reference_library import ReferenceLibrary
 
 
 def register_reference_routes(app):
+    from scripts.i18n import register_i18n
+    register_i18n(app)
     app.config.setdefault('REFERENCE_CATALOG_FILE', str(Path(app.instance_path) / 'references.json'))
     app.config.setdefault('REFERENCE_PUBLIC_EDIT', True)
     library = ReferenceLibrary(app.config['UPLOAD_FOLDER'], app.config['REFERENCE_CATALOG_FILE'])

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}下单清单 · Probe Designer{% endblock %}
-{% block eyebrow %}设计{% endblock %}
-{% block heading %}下单清单{% endblock %}
-{% block lede %}从各个任务结果中挑选的探针对。导出前检查同一批实验里的桥接探针是否重复使用或彼此共享 k-mer。{% endblock %}
+{% block title %}{{ _("下单清单 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("设计") }}{% endblock %}
+{% block heading %}{{ _("下单清单") }}{% endblock %}
+{% block lede %}{{ _("从各个任务结果中挑选的探针对。导出前检查同一批实验里的桥接探针是否重复使用或彼此共享 k-mer。") }}{% endblock %}
 {% block head_actions %}
-<button type="button" class="btn" id="export-detail"><svg aria-hidden="true"><use href="#i-download"/></svg>导出明细</button>
-<button type="button" class="btn primary" id="export-synthesis"><svg aria-hidden="true"><use href="#i-download"/></svg>导出合成表</button>
+<button type="button" class="btn" id="export-detail"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("导出明细") }}</button>
+<button type="button" class="btn primary" id="export-synthesis"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("导出合成表") }}</button>
 {% endblock %}
 
 {% block content %}
@@ -13,32 +13,32 @@
 
 <section class="panel" aria-labelledby="check-title">
   <div class="panel-head">
-    <div><h2 id="check-title">导出前检查</h2><p>清单变化后请重新检查。</p></div>
+    <div><h2 id="check-title">{{ _("导出前检查") }}</h2><p>{{ _("清单变化后请重新检查。") }}</p></div>
     <div class="head-actions">
-      <label class="field" style="margin:0;min-width:120px">k-mer 长度<input type="number" id="kmer" value="9" min="3" max="15" step="1"></label>
-      <button type="button" class="btn primary" id="check-button" style="align-self:flex-end">检查桥接冲突</button>
+      <label class="field" style="margin:0;min-width:120px">{{ _("k-mer 长度") }}<input type="number" id="kmer" value="9" min="3" max="15" step="1"></label>
+      <button type="button" class="btn primary" id="check-button" style="align-self:flex-end">{{ _("检查桥接冲突") }}</button>
     </div>
   </div>
-  <ul class="note-list" id="check-results"><li>尚未检查。</li></ul>
+  <ul class="note-list" id="check-results"><li>{{ _("尚未检查。") }}</li></ul>
 </section>
 
 <section class="panel" aria-labelledby="list-title">
   <div class="panel-head">
-    <div><h2 id="list-title">已选探针对</h2><p>清单只保存在当前浏览器中；换电脑或清除浏览器数据后需要重新挑选。</p></div>
-    <button type="button" class="btn" id="clear-button">清空清单</button>
+    <div><h2 id="list-title">{{ _("已选探针对") }}</h2><p>{{ _("清单只保存在当前浏览器中；换电脑或清除浏览器数据后需要重新挑选。") }}</p></div>
+    <button type="button" class="btn" id="clear-button">{{ _("清空清单") }}</button>
   </div>
   <div class="alert notice" id="clear-confirm" hidden>
-    确定清空全部 <b id="clear-count"></b> 对？此操作无法撤销。
-    <button type="button" class="btn small" id="clear-yes" style="margin-left:10px">清空</button>
-    <button type="button" class="text-button" id="clear-no" style="margin-left:6px">取消</button>
+    {{ _("确定清空全部") }} <b id="clear-count"></b> {{ _("对？此操作无法撤销。") }}
+    <button type="button" class="btn small" id="clear-yes" style="margin-left:10px">{{ _("清空") }}</button>
+    <button type="button" class="text-button" id="clear-no" style="margin-left:6px">{{ _("取消") }}</button>
   </div>
   <div class="table-wrap">
     <table class="table" style="min-width:920px">
-      <thead><tr><th>探针对</th><th>目标</th><th>桥接</th><th>状态</th><th>最近非目标配对</th><th>合成序列</th><th></th></tr></thead>
+      <thead><tr><th>{{ _("探针对") }}</th><th>{{ _("目标") }}</th><th>{{ _("桥接") }}</th><th>{{ _("状态") }}</th><th>{{ _("最近非目标配对") }}</th><th>{{ _("合成序列") }}</th><th></th></tr></thead>
       <tbody id="order-rows"></tbody>
     </table>
   </div>
-  <p class="empty" id="order-empty" hidden>清单为空。在<a href="{{ url_for('jobs') }}">任务记录</a>中打开一个已完成的任务，点击“加入清单”。</p>
+  <p class="empty" id="order-empty" hidden>{{ _("清单为空。在") }}<a href="{{ url_for('jobs') }}">{{ _("任务记录") }}</a>{{ _("中打开一个已完成的任务，点击“加入清单”。") }}</p>
 </section>
 {% endblock %}
 
@@ -53,21 +53,21 @@
     const items = sorted();
     const genes = new Set(items.map(i => i.gene_id)), bridges = new Set(items.map(i => i.bridge_id));
     document.getElementById('order-stats').replaceChildren(...[
-      ['探针对', items.length], ['目标基因', genes.size], ['桥接探针', bridges.size], ['合成条数', items.filter(i => i.synthesis).length * 2]
+      [HCR.t("探针对"), items.length], [HCR.t("目标基因"), genes.size], [HCR.t("桥接探针"), bridges.size], [HCR.t("合成条数"), items.filter(i => i.synthesis).length * 2]
     ].map(([label, value]) => { const t = el('div', null, 'stat'); t.append(el('span', label), el('strong', value)); return t; }));
     const body = document.getElementById('order-rows'); body.replaceChildren();
     items.forEach(item => {
       const row = el('tr');
-      const name = el('td'); const link = el('a', item.label); link.href = item.result_url; name.append(link, el('div', '位置 ' + item.left.start + '–' + item.right.end, 'hint'));
+      const name = el('td'); const link = el('a', item.label); link.href = item.result_url; name.append(link, el('div', HCR.t("位置 ") + item.left.start + '–' + item.right.end, 'hint'));
       const bridge = el('td'); bridge.append(el('code', item.bridge_id), el('div', item.bridge_sequence || '', 'hint seq'));
-      const state = el('td'); state.append(el('span', item.state_label, 'chip ' + (STATE[item.state] || '')));
+      const state = el('td'); state.append(el('span', HCR.orderStateLabel(item), 'chip ' + (STATE[item.state] || '')));
       const synth = el('td');
       if (item.synthesis && item.synthesis.L && item.synthesis.R) {
         ['L', 'R'].forEach(side => { const line = el('div', null, 'seq'); line.style.fontSize = '11.5px'; line.append(el('b', item.synthesis[side].id + ' '), item.synthesis[side].sequence); synth.append(line); });
-      } else synth.append(el('span', '该结果未保存合成序列，请从任务 ZIP 的 *_dual.csv 获取', 'hint'));
-      const actions = el('td'); const remove = el('button', '移除', 'btn small'); remove.type = 'button';
+      } else synth.append(el('span', HCR.t("该结果未保存合成序列，请从任务 ZIP 的 *_dual.csv 获取"), 'hint'));
+      const actions = el('td'); const remove = el('button', HCR.t("移除"), 'btn small'); remove.type = 'button';
       remove.addEventListener('click', () => HCR.orders.remove(item.key)); actions.append(remove);
-      row.append(name, el('td', item.gene_id, 'seq'), bridge, state, el('td', item.closest, 'hint'), synth, actions);
+      row.append(name, el('td', item.gene_id, 'seq'), bridge, state, el('td', HCR.orderClosestLabel(item), 'hint'), synth, actions);
       body.append(row);
     });
     document.getElementById('order-empty').hidden = items.length > 0;
@@ -79,21 +79,21 @@
     const genesByBridge = {};
     items.forEach(i => { (genesByBridge[i.bridge_id] = genesByBridge[i.bridge_id] || new Set()).add(i.gene_id); });
     Object.entries(genesByBridge).filter(([, genes]) => genes.size > 1).forEach(([bridge, genes]) =>
-      findings.push(['bad', bridge + ' 同时用于 ' + [...genes].join('、') + '，同一轮实验中无法区分这些基因的信号。']));
+      findings.push(['bad', bridge + HCR.t(" 同时用于 ") + [...genes].join('、') + HCR.t("，同一轮实验中无法区分这些基因的信号。")]));
     const flagged = items.filter(i => i.state !== 'keep');
-    if (flagged.length) findings.push(['warn', flagged.length + ' 对不是“保留待复核”状态：' + flagged.map(i => i.label).join('、') + '。']);
+    if (flagged.length) findings.push(['warn', flagged.length + HCR.t(" 对不是“保留待复核”状态：") + flagged.map(i => i.label).join('、') + '。']);
     const missing = items.filter(i => !(i.synthesis && i.synthesis.L && i.synthesis.R));
-    if (missing.length) findings.push(['warn', missing.length + ' 对缺少合成序列，导出的合成表不包含它们：' + missing.map(i => i.label).join('、') + '。']);
+    if (missing.length) findings.push(['warn', missing.length + HCR.t(" 对缺少合成序列，导出的合成表不包含它们：") + missing.map(i => i.label).join('、') + '。']);
     const perGene = {};
     items.forEach(i => { perGene[i.gene_id] = (perGene[i.gene_id] || 0) + 1; });
-    findings.push(['info', '每个基因的探针对数：' + Object.entries(perGene).map(([g, n]) => g + ' ' + n).join('；') + '。']);
+    findings.push(['info', HCR.t("每个基因的探针对数：") + Object.entries(perGene).map(([g, n]) => g + ' ' + n).join('；') + '。']);
     return findings;
   }
 
   function showFindings(findings) {
     const list = document.getElementById('check-results');
     list.replaceChildren(...findings.map(([kind, text]) => {
-      const li = el('li'); li.append(el('span', {bad: '冲突', warn: '注意', ok: '通过', info: '信息'}[kind], 'chip ' + (kind === 'info' ? '' : kind)), ' ', text); return li;
+      const li = el('li'); li.append(el('span', {bad: HCR.t("冲突"), warn: HCR.t("注意"), ok: HCR.t("通过"), info: HCR.t("信息")}[kind], 'chip ' + (kind === 'info' ? '' : kind)), ' ', text); return li;
     }));
   }
 
@@ -105,12 +105,12 @@
       const response = await fetch('{{ url_for("orders_check") }}', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({bp_ids: [...new Set(items.map(i => i.bridge_id))], kmer: document.getElementById('kmer').value})});
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '检查未完成');
-      data.conflicts.forEach(c => findings.unshift(['bad', c.a + ' 与 ' + c.b + ' 共享 ' + c.overlap + ' 个 ' + data.kmer + '-mer（如 ' + c.kmers.join('、') + '）。']));
-      if (data.unknown.length) findings.unshift(['bad', '不在当前桥接探针库中：' + data.unknown.join('、') + '。']);
-      if (!data.conflicts.length && data.checked.length > 1) findings.unshift(['ok', data.checked.length + ' 条桥接探针之间没有共享的 ' + data.kmer + '-mer。']);
+      if (!response.ok) throw new Error(data.error || HCR.t("检查未完成"));
+      data.conflicts.forEach(c => findings.unshift(['bad', c.a + HCR.t(" 与 ") + c.b + HCR.t(" 共享 ") + c.overlap + HCR.t(" 个 ") + data.kmer + HCR.t("-mer（如 ") + c.kmers.join('、') + '）。']));
+      if (data.unknown.length) findings.unshift(['bad', HCR.t("不在当前桥接探针库中：") + data.unknown.join('、') + '。']);
+      if (!data.conflicts.length && data.checked.length > 1) findings.unshift(['ok', data.checked.length + HCR.t(" 条桥接探针之间没有共享的 ") + data.kmer + '-mer。']);
     } catch (error) {
-      findings.unshift(['bad', '服务器检查失败：' + error.message]);
+      findings.unshift(['bad', HCR.t("服务器检查失败：") + error.message]);
     } finally { button.disabled = false; }
     showFindings(findings);
   });
@@ -122,15 +122,15 @@
   });
   document.getElementById('export-detail').addEventListener('click', () => {
     const rows = [['pair', 'gene_id', 'task', 'job_id', 'bridge_id', 'bridge_sequence', 'status', 'L_arm', 'L_start', 'L_end', 'R_arm', 'R_start', 'R_end', 'closest_non_target', 'L_synthesis', 'R_synthesis']];
-    sorted().forEach(i => rows.push([i.label, i.gene_id, i.task, i.job_id, i.bridge_id, i.bridge_sequence, i.state_label, i.left.sequence, i.left.start, i.left.end,
-      i.right.sequence, i.right.start, i.right.end, i.closest, i.synthesis?.L?.sequence || '', i.synthesis?.R?.sequence || '']));
+    sorted().forEach(i => rows.push([i.label, i.gene_id, i.task, i.job_id, i.bridge_id, i.bridge_sequence, HCR.orderStateLabel(i), i.left.sequence, i.left.start, i.left.end,
+      i.right.sequence, i.right.start, i.right.end, HCR.orderClosestLabel(i), i.synthesis?.L?.sequence || '', i.synthesis?.R?.sequence || '']));
     HCR.downloadRows(rows, 'probe_order_detail.csv');
   });
   const confirmBox = document.getElementById('clear-confirm');
   document.getElementById('clear-button').addEventListener('click', () => { document.getElementById('clear-count').textContent = HCR.orders.read().length; confirmBox.hidden = false; });
   document.getElementById('clear-no').addEventListener('click', () => { confirmBox.hidden = true; });
   document.getElementById('clear-yes').addEventListener('click', () => { HCR.orders.clear(); confirmBox.hidden = true; });
-  document.addEventListener('hcr:orders', () => { render(); showFindings([['info', '清单已变化，请重新检查。']]); });
+  document.addEventListener('hcr:orders', () => { render(); showFindings([['info', HCR.t("清单已变化，请重新检查。")]]); });
   window.addEventListener('storage', render);
   render();
 })();

@@ -1,102 +1,102 @@
 {% extends "base.html" %}
-{% block title %}帮助 · Probe Designer{% endblock %}
-{% block eyebrow %}其他{% endblock %}
-{% block heading %}帮助{% endblock %}
-{% block lede %}各工具的用途、输入格式、默认参数，以及如何理解设计结果。{% endblock %}
+{% block title %}{{ _("帮助 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("其他") }}{% endblock %}
+{% block heading %}{{ _("帮助") }}{% endblock %}
+{% block lede %}{{ _("各工具的用途、输入格式、默认参数，以及如何理解设计结果。") }}{% endblock %}
 
 {% block content %}
-<nav class="seg" aria-label="本页目录">
-  <a href="#tools">工具一览</a><a href="#parameters">默认参数</a><a href="#formats">输入格式</a><a href="#reading">结果解读</a><a href="#faq">常见问题</a>
+<nav class="seg" aria-label="{{ _("本页目录") }}">
+  <a href="#tools">{{ _("工具一览") }}</a><a href="#parameters">{{ _("默认参数") }}</a><a href="#formats">{{ _("输入格式") }}</a><a href="#reading">{{ _("结果解读") }}</a><a href="#faq">{{ _("常见问题") }}</a>
 </nav>
 
 <section class="panel" id="tools" aria-labelledby="tools-title">
-  <div class="panel-head"><div><h2 id="tools-title">工具一览</h2><p>与左侧导航的分组一致</p></div></div>
+  <div class="panel-head"><div><h2 id="tools-title">{{ _("工具一览") }}</h2><p>{{ _("与左侧导航的分组一致") }}</p></div></div>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>分组</th><th>工具</th><th>用途</th><th>输出</th></tr></thead>
+      <thead><tr><th>{{ _("分组") }}</th><th>{{ _("工具") }}</th><th>{{ _("用途") }}</th><th>{{ _("输出") }}</th></tr></thead>
       <tbody>
-        <tr><td rowspan="2">设计</td><td><a href="{{ url_for('split') }}">双探针设计</a></td><td>L/R 两臂相邻结合目标转录本；在参考库中做双臂配对扫描，按目标策略筛选</td><td>页面内逐对证据 + 结果 ZIP</td></tr>
-        <tr><td><a href="{{ url_for('triplet') }}">三探针设计</a></td><td>L/M/R 三段组合；特异性按单臂 BLAST 判定</td><td>结果 ZIP</td></tr>
-        <tr><td rowspan="4">桥接探针库</td><td><a href="{{ url_for('bridge_list') }}">浏览探针库</a></td><td>查看、搜索和导出全部桥接探针</td><td>CSV</td></tr>
-        <tr><td><a href="{{ url_for('bridge_query') }}">冲突检查</a></td><td>按 BP_ID、按新序列或多条互查共享 k-mer（含反向互补）</td><td>页面表格 + TSV</td></tr>
-        <tr><td><a href="{{ url_for('bridge') }}">推荐新探针</a></td><td>挑选与在用探针及彼此之间都无冲突的新探针</td><td>页面表格 + TSV</td></tr>
-        <tr><td><a href="{{ url_for('bridge_validate') }}">合规验证</a></td><td>按长度、GC、Tm、连续同碱基检查一批序列</td><td>页面表格 + CSV</td></tr>
-        <tr><td rowspan="5">序列工具</td><td><a href="{{ url_for('formatting') }}">FASTA 格式化</a></td><td>清理标题、大写、过滤无效序列、去除转录本变体重复</td><td>FASTA + 统计</td></tr>
-        <tr><td><a href="{{ url_for('subgenomes') }}">亚基因组编号</a></td><td>按文件或编号特征提取亚基因组归属，预览未匹配和冲突</td><td>两列 CSV + 问题编号 CSV</td></tr>
-        <tr><td><a href="{{ url_for('references') }}">参考库管理</a></td><td>共享参考上传去重、多倍体及亚基因组归属配置</td><td>FASTA 目录 + SHA-256</td></tr>
-        <tr><td><a href="{{ url_for('probe_recommend') }}">探针数量推荐</a></td><td>由 CDS 与 counts 计算 TPM 并推荐探针数</td><td>页面表格 + CSV</td></tr>
-        <tr><td><a href="{{ url_for('filter') }}">AI 筛选</a> <span class="chip warn">实验</span></td><td>大语言模型对三探针结果给出保留建议</td><td>页面表格</td></tr>
+        <tr><td rowspan="2">{{ _("设计") }}</td><td><a href="{{ url_for('split') }}">{{ _("双探针设计") }}</a></td><td>{{ _("L/R 两臂相邻结合目标转录本；在参考库中做双臂配对扫描，按目标策略筛选") }}</td><td>{{ _("页面内逐对证据 + 结果 ZIP") }}</td></tr>
+        <tr><td><a href="{{ url_for('triplet') }}">{{ _("三探针设计") }}</a></td><td>{{ _("L/M/R 三段组合；特异性按单臂 BLAST 判定") }}</td><td>{{ _("结果 ZIP") }}</td></tr>
+        <tr><td rowspan="4">{{ _("桥接探针库") }}</td><td><a href="{{ url_for('bridge_list') }}">{{ _("浏览探针库") }}</a></td><td>{{ _("查看、搜索和导出全部桥接探针") }}</td><td>CSV</td></tr>
+        <tr><td><a href="{{ url_for('bridge_query') }}">{{ _("冲突检查") }}</a></td><td>{{ _("按 BP_ID、按新序列或多条互查共享 k-mer（含反向互补）") }}</td><td>{{ _("页面表格 + TSV") }}</td></tr>
+        <tr><td><a href="{{ url_for('bridge') }}">{{ _("推荐新探针") }}</a></td><td>{{ _("挑选与在用探针及彼此之间都无冲突的新探针") }}</td><td>{{ _("页面表格 + TSV") }}</td></tr>
+        <tr><td><a href="{{ url_for('bridge_validate') }}">{{ _("合规验证") }}</a></td><td>{{ _("按长度、GC、Tm、连续同碱基检查一批序列") }}</td><td>{{ _("页面表格 + CSV") }}</td></tr>
+        <tr><td rowspan="5">{{ _("序列工具") }}</td><td><a href="{{ url_for('formatting') }}">{{ _("FASTA 格式化") }}</a></td><td>{{ _("清理标题、大写、过滤无效序列、去除转录本变体重复") }}</td><td>{{ _("FASTA + 统计") }}</td></tr>
+        <tr><td><a href="{{ url_for('subgenomes') }}">{{ _("亚基因组编号") }}</a></td><td>{{ _("按文件或编号特征提取亚基因组归属，预览未匹配和冲突") }}</td><td>{{ _("两列 CSV + 问题编号 CSV") }}</td></tr>
+        <tr><td><a href="{{ url_for('references') }}">{{ _("参考库管理") }}</a></td><td>{{ _("共享参考上传去重、多倍体及亚基因组归属配置") }}</td><td>{{ _("FASTA 目录 + SHA-256") }}</td></tr>
+        <tr><td><a href="{{ url_for('probe_recommend') }}">{{ _("探针数量推荐") }}</a></td><td>{{ _("由 CDS 与 counts 计算 TPM 并推荐探针数") }}</td><td>{{ _("页面表格 + CSV") }}</td></tr>
+        <tr><td><a href="{{ url_for('filter') }}">{{ _("AI 筛选") }}</a> <span class="chip warn">{{ _("实验") }}</span></td><td>{{ _("大语言模型对三探针结果给出保留建议") }}</td><td>{{ _("页面表格") }}</td></tr>
       </tbody>
     </table>
   </div>
 </section>
 
 <section class="panel" id="parameters" aria-labelledby="parameters-title">
-  <div class="panel-head"><div><h2 id="parameters-title">默认参数</h2><p>双探针与三探针共用的质量过滤条件</p></div></div>
+  <div class="panel-head"><div><h2 id="parameters-title">{{ _("默认参数") }}</h2><p>{{ _("双探针与三探针共用的质量过滤条件") }}</p></div></div>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>参数</th><th>默认值</th><th>说明</th></tr></thead>
+      <thead><tr><th>{{ _("参数") }}</th><th>{{ _("默认值") }}</th><th>{{ _("说明") }}</th></tr></thead>
       <tbody>
-        <tr><td>臂长</td><td class="num">15–20 nt</td><td>每个靶向臂的长度范围</td></tr>
-        <tr><td>Tm</td><td class="num">47–53 °C</td><td>单臂熔解温度</td></tr>
-        <tr><td>GC</td><td class="num">40–60%</td><td>单臂 GC 含量</td></tr>
-        <tr><td>连续同碱基阈值</td><td class="num">4</td><td>出现更长的单碱基重复则淘汰</td></tr>
-        <tr><td>重复片段</td><td class="num">8 nt / 2 次</td><td>同一 k-mer 重复出现即视为低复杂度</td></tr>
-        <tr><td>互补长度</td><td class="num">5 nt</td><td>检查探针间互补的最小长度</td></tr>
-        <tr><td>每个基因最多保留</td><td class="num">5</td><td>不足时保留实际数量；批量 CSV 第 4 列可覆盖</td></tr>
-        <tr><td>组合间距</td><td class="num">双探针 2 nt · 三探针单条 15 nt / 批量 2 nt</td><td>已选组合之间的最小距离</td></tr>
-        <tr><td>非允许配对排除阈值</td><td class="num">每臂 0 错配</td><td>仅双探针；0 表示只排除完全配对，阈值未经实验校准</td></tr>
+        <tr><td>{{ _("臂长") }}</td><td class="num">15–20 nt</td><td>{{ _("每个靶向臂的长度范围") }}</td></tr>
+        <tr><td>Tm</td><td class="num">47–53 °C</td><td>{{ _("单臂熔解温度") }}</td></tr>
+        <tr><td>GC</td><td class="num">40–60%</td><td>{{ _("单臂 GC 含量") }}</td></tr>
+        <tr><td>{{ _("连续同碱基阈值") }}</td><td class="num">4</td><td>{{ _("出现更长的单碱基重复则淘汰") }}</td></tr>
+        <tr><td>{{ _("重复片段") }}</td><td class="num">{{ _("8 nt / 2 次") }}</td><td>{{ _("同一 k-mer 重复出现即视为低复杂度") }}</td></tr>
+        <tr><td>{{ _("互补长度") }}</td><td class="num">5 nt</td><td>{{ _("检查探针间互补的最小长度") }}</td></tr>
+        <tr><td>{{ _("每个基因最多保留") }}</td><td class="num">5</td><td>{{ _("不足时保留实际数量；批量 CSV 第 4 列可覆盖") }}</td></tr>
+        <tr><td>{{ _("组合间距") }}</td><td class="num">{{ _("双探针 2 nt · 三探针单条 15 nt / 批量 2 nt") }}</td><td>{{ _("已选组合之间的最小距离") }}</td></tr>
+        <tr><td>{{ _("非允许配对排除阈值") }}</td><td class="num">{{ _("每臂 0 错配") }}</td><td>{{ _("仅双探针；0 表示只排除完全配对，阈值未经实验校准") }}</td></tr>
       </tbody>
     </table>
   </div>
 </section>
 
 <section class="panel" id="formats" aria-labelledby="formats-title">
-  <div class="panel-head"><div><h2 id="formats-title">输入格式</h2></div></div>
+  <div class="panel-head"><div><h2 id="formats-title">{{ _("输入格式") }}</h2></div></div>
   <div class="grid-2">
     <div class="prose">
-      <h3>双探针批量 CSV</h3>
-      <p class="hint">UTF-8，可带表头。第 4 列覆盖保留数量，第 5 列用分号列出允许共同检测的转录本。</p>
+      <h3>{{ _("双探针批量 CSV") }}</h3>
+      <p class="hint">{{ _("UTF-8，可带表头。第 4 列覆盖保留数量，第 5 列用分号列出允许共同检测的转录本。") }}</p>
       <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">task_name,BP_ID,gene_id,max_selected,allowed_ids
 ABCG13,BP_0079,BjuVA06G01970,5,</pre>
     </div>
     <div class="prose">
-      <h3>三探针批量 CSV</h3>
-      <p class="hint">无表头。第 4 列可选，为该任务最多保留的组合数。</p>
+      <h3>{{ _("三探针批量 CSV") }}</h3>
+      <p class="hint">{{ _("无表头。第 4 列可选，为该任务最多保留的组合数。") }}</p>
       <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">task1,BP_1101,AT1G01010
 task2,BP_1102,AT2G17950,8</pre>
     </div>
     <div class="prose">
-      <h3>亚基因组归属文件</h3>
-      <p class="hint">两列：转录本编号、所属亚基因组；制表符、逗号或空格分隔，可带表头。在参考库管理页上传并保存；分析选择多倍体参考后，只需勾选“是否考虑多套染色体”即可使用。也可以为单次任务按亚基因组分多个 FASTA 上传。</p>
+      <h3>{{ _("亚基因组归属文件") }}</h3>
+      <p class="hint">{{ _("两列：转录本编号、所属亚基因组；制表符、逗号或空格分隔，可带表头。在参考库管理页上传并保存；分析选择多倍体参考后，只需勾选“是否考虑多套染色体”即可使用。也可以为单次任务按亚基因组分多个 FASTA 上传。") }}</p>
     </div>
     <div class="prose">
-      <h3>表达量文件</h3>
-      <p class="hint">两列文本：基因编号、read count，不需要表头；编号需与 CDS FASTA 的标题完全一致。</p>
+      <h3>{{ _("表达量文件") }}</h3>
+      <p class="hint">{{ _("两列文本：基因编号、read count，不需要表头；编号需与 CDS FASTA 的标题完全一致。") }}</p>
     </div>
   </div>
 </section>
 
 <section class="panel" id="reading" aria-labelledby="reading-title">
-  <div class="panel-head"><div><h2 id="reading-title">结果解读</h2></div></div>
+  <div class="panel-head"><div><h2 id="reading-title">{{ _("结果解读") }}</h2></div></div>
   <div class="prose">
     <ul>
-      <li>坐标采用 1-based inclusive，序列方向 5′ → 3′。</li>
-      <li>双探针的配对扫描覆盖正向转录本、无缺口、每臂最多 3 个替换；插入缺失尚未复核。</li>
-      <li>目标判定模式决定哪些转录本上的配对算作预期信号：物种模式、严格模式、允许集合和亚基因组模式。</li>
-      <li>“当前检索未检出”与“保留待复核”都不等于特异性已经验证；排序分数不是结合概率。</li>
-      <li>结论受参考库收录范围限制：参考库中没有的转录本无法被检出。</li>
+      <li>{{ _("坐标采用 1-based inclusive，序列方向 5′ → 3′。") }}</li>
+      <li>{{ _("双探针的配对扫描覆盖正向转录本、无缺口、每臂最多 3 个替换；插入缺失尚未复核。") }}</li>
+      <li>{{ _("目标判定模式决定哪些转录本上的配对算作预期信号：物种模式、严格模式、允许集合和亚基因组模式。") }}</li>
+      <li>{{ _("“当前检索未检出”与“保留待复核”都不等于特异性已经验证；排序分数不是结合概率。") }}</li>
+      <li>{{ _("结论受参考库收录范围限制：参考库中没有的转录本无法被检出。") }}</li>
     </ul>
   </div>
 </section>
 
 <section class="panel" id="faq" aria-labelledby="faq-title">
-  <div class="panel-head"><div><h2 id="faq-title">常见问题</h2></div></div>
+  <div class="panel-head"><div><h2 id="faq-title">{{ _("常见问题") }}</h2></div></div>
   <div class="stack">
-    <details class="disclosure" open><summary>参考库从哪里来？</summary><p class="hint">服务器 uploads 目录中的 FASTA 会出现在“已有参考库”列表里；也可以在设计时直接上传，上传前建议先用 FASTA 格式化清理标题。</p></details>
-    <details class="disclosure"><summary>为什么双探针结果比三探针多了证据表？</summary><p class="hint">双探针已迁移到双臂配对扫描，能给出每个配对位点的坐标和错配；三探针仍是旧流程，只输出 BLAST 报告。</p></details>
-    <details class="disclosure"><summary>桥接探针冲突的 k-mer 长度怎么选？</summary><p class="hint">默认 9。k 越小，判定越严格，报告的冲突越多。</p></details>
-    <details class="disclosure"><summary>计算需要多久？</summary><p class="hint">在 Bo/Bju cDNA 参考上，单条双探针设计约 40 秒，其中配对扫描约 17 秒；批量任务按条数累加。期间请保持页面打开。</p></details>
+    <details class="disclosure" open><summary>{{ _("参考库从哪里来？") }}</summary><p class="hint">{{ _("服务器 uploads 目录中的 FASTA 会出现在“已有参考库”列表里；也可以在设计时直接上传，上传前建议先用 FASTA 格式化清理标题。") }}</p></details>
+    <details class="disclosure"><summary>{{ _("为什么双探针结果比三探针多了证据表？") }}</summary><p class="hint">{{ _("双探针已迁移到双臂配对扫描，能给出每个配对位点的坐标和错配；三探针仍是旧流程，只输出 BLAST 报告。") }}</p></details>
+    <details class="disclosure"><summary>{{ _("桥接探针冲突的 k-mer 长度怎么选？") }}</summary><p class="hint">{{ _("默认 9。k 越小，判定越严格，报告的冲突越多。") }}</p></details>
+    <details class="disclosure"><summary>{{ _("计算需要多久？") }}</summary><p class="hint">{{ _("在 Bo/Bju cDNA 参考上，单条双探针设计约 40 秒，其中配对扫描约 17 秒；批量任务按条数累加。期间请保持页面打开。") }}</p></details>
   </div>
 </section>
 {% endblock %}

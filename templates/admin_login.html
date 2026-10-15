@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}管理员登录 · Probe Designer{% endblock %}
-{% block eyebrow %}管理{% endblock %}
-{% block heading %}管理员登录{% endblock %}
-{% block lede %}登录后管理上传文件和分析结果，释放存储空间。{% endblock %}
+{% block title %}{{ _("管理员登录 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("管理") }}{% endblock %}
+{% block heading %}{{ _("管理员登录") }}{% endblock %}
+{% block lede %}{{ _("登录后管理上传文件和分析结果，释放存储空间。") }}{% endblock %}
 {% block content %}
 <section class="panel" style="max-width:460px;width:100%">
   {% if initialized %}
   <form method="post" class="stack">
     <input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}">
-    {% if error %}<p class="alert error" role="alert">{{ error }}</p>{% endif %}
-    <label class="field">管理员账号<input name="username" autocomplete="username" maxlength="80" required autofocus></label>
-    <label class="field">密码<input type="password" name="password" autocomplete="current-password" required></label>
-    <button class="btn primary" type="submit">登录</button>
+    {% if error %}<p class="alert error" role="alert">{{ error|message }}</p>{% endif %}
+    <label class="field">{{ _("管理员账号") }}<input name="username" autocomplete="username" maxlength="80" required autofocus></label>
+    <label class="field">{{ _("密码") }}<input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">{{ _("登录") }}</button>
   </form>
   {% else %}
-  <p class="alert" role="status">管理员账号尚未初始化，请联系维护人员完成初始化。</p>
+  <p class="alert" role="status">{{ _("管理员账号尚未初始化，请联系维护人员完成初始化。") }}</p>
   {% endif %}
 </section>
 {% endblock %}

@@ -1,46 +1,46 @@
 {% extends "base.html" %}
-{% block title %}亚基因组编号 · Probe Designer{% endblock %}
-{% block eyebrow %}序列工具{% endblock %}
-{% block heading %}亚基因组编号生成{% endblock %}
-{% block lede %}从 FASTA 标题提取序列编号，生成“编号 → 亚基因组”的两列 CSV，上传到参考库管理页后即可在双探针设计中勾选使用。{% endblock %}
+{% block title %}{{ _("亚基因组编号 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("序列工具") }}{% endblock %}
+{% block heading %}{{ _("亚基因组编号生成") }}{% endblock %}
+{% block lede %}{{ _("从 FASTA 标题提取序列编号，生成“编号 → 亚基因组”的两列 CSV，上传到参考库管理页后即可在双探针设计中勾选使用。") }}{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/subgenomes.css') }}">{% endblock %}
 {% block content %}
 <form id="subgenome-form" class="panel stack" novalidate data-url="{{ url_for('subgenomes') }}">
-  <div class="seg" role="group" aria-label="生成方式">
-    <button type="button" data-mode="files" aria-pressed="true">按多个 FASTA 文件</button>
-    <button type="button" data-mode="rules" aria-pressed="false">按单个 FASTA 的编号规则</button>
+  <div class="seg" role="group" aria-label="{{ _("生成方式") }}">
+    <button type="button" data-mode="files" aria-pressed="true">{{ _("按多个 FASTA 文件") }}</button>
+    <button type="button" data-mode="rules" aria-pressed="false">{{ _("按单个 FASTA 的编号规则") }}</button>
   </div>
   <div id="file-mode" class="stack">
-    <p class="hint">每个文件指定一个亚基因组，默认名称取自文件名。所有文件的编号会合并到同一个 CSV；同一亚基因组可以提供多个文件。</p>
-    <label class="field">选择 FASTA 文件<input type="file" id="group-fastas" accept=".fa,.fasta,.fna,.gz" multiple></label>
-    <div class="table-wrap" id="file-labels-box" hidden><table class="table"><thead><tr><th>FASTA 文件</th><th>亚基因组名称</th></tr></thead><tbody id="file-labels"></tbody></table></div>
+    <p class="hint">{{ _("每个文件指定一个亚基因组，默认名称取自文件名。所有文件的编号会合并到同一个 CSV；同一亚基因组可以提供多个文件。") }}</p>
+    <label class="field">{{ _("选择 FASTA 文件") }}<input type="file" id="group-fastas" accept=".fa,.fasta,.fna,.gz" multiple></label>
+    <div class="table-wrap" id="file-labels-box" hidden><table class="table"><thead><tr><th>{{ _("FASTA 文件") }}</th><th>{{ _("亚基因组名称") }}</th></tr></thead><tbody id="file-labels"></tbody></table></div>
   </div>
   <div id="rule-mode" class="stack" hidden>
-    <label class="field">选择一个 FASTA 文件<input type="file" id="rule-fasta" accept=".fa,.fasta,.fna,.gz"></label>
+    <label class="field">{{ _("选择一个 FASTA 文件") }}<input type="file" id="rule-fasta" accept=".fa,.fasta,.fna,.gz"></label>
     <div class="grid-2">
-      <label class="field">匹配方式<select id="rule-syntax"><option value="feature">特征规则：X / x 代表一位数字</option><option value="literal">原文匹配：所有字符均按原样匹配</option></select></label>
-      <label class="field">匹配位置<select id="rule-position"><option value="contains">编号中包含此特征</option><option value="prefix">编号以此特征开头</option><option value="suffix">编号以此特征结尾</option></select></label>
+      <label class="field">{{ _("匹配方式") }}<select id="rule-syntax"><option value="feature">{{ _("特征规则：X / x 代表一位数字") }}</option><option value="literal">{{ _("原文匹配：所有字符均按原样匹配") }}</option></select></label>
+      <label class="field">{{ _("匹配位置") }}<select id="rule-position"><option value="contains">{{ _("编号中包含此特征") }}</option><option value="prefix">{{ _("编号以此特征开头") }}</option><option value="suffix">{{ _("编号以此特征结尾") }}</option></select></label>
     </div>
-    <p class="hint">例如 A0X → A、B0X → B；Axx 可匹配 A01、A12。BjuVA06G01970 含 A0X，归入 A。规则只匹配标题的第一个编号，不匹配标题描述或序列内容。</p>
-    <div class="table-wrap"><table class="table rule-table"><thead><tr><th>编号特征</th><th>亚基因组名称</th><th></th></tr></thead><tbody id="subgenome-rules"></tbody></table></div>
-    <div class="head-actions"><button class="btn small" type="button" id="add-subgenome-rule">添加规则</button><label><input type="checkbox" id="rule-case"> 区分大小写</label></div>
+    <p class="hint">{{ _("例如 A0X → A、B0X → B；Axx 可匹配 A01、A12。BjuVA06G01970 含 A0X，归入 A。规则只匹配标题的第一个编号，不匹配标题描述或序列内容。") }}</p>
+    <div class="table-wrap"><table class="table rule-table"><thead><tr><th>{{ _("编号特征") }}</th><th>{{ _("亚基因组名称") }}</th><th></th></tr></thead><tbody id="subgenome-rules"></tbody></table></div>
+    <div class="head-actions"><button class="btn small" type="button" id="add-subgenome-rule">{{ _("添加规则") }}</button><label><input type="checkbox" id="rule-case"> {{ _("区分大小写") }}</label></div>
   </div>
-  <div class="actions"><span>支持 .fa、.fasta、.fna 及其 gzip 文件；文件处理后不保存在上传库中。</span><div><button type="submit" class="btn primary" id="generate-subgenomes">提取并预览</button></div></div>
+  <div class="actions"><span>{{ _("支持 .fa、.fasta、.fna 及其 gzip 文件；文件处理后不保存在上传库中。") }}</span><div><button type="submit" class="btn primary" id="generate-subgenomes">{{ _("提取并预览") }}</button></div></div>
 </form>
 <p class="alert" id="subgenome-status" role="status" aria-live="polite" hidden></p>
 <section class="panel stack" id="subgenome-result" hidden>
-  <div class="panel-head"><div><h2>生成结果</h2><p id="subgenome-summary"></p></div><div class="head-actions"><button class="btn" type="button" id="download-subgenome-issues" hidden>下载未匹配与冲突编号</button><button class="btn primary" type="button" id="download-subgenomes" disabled>下载归属 CSV</button></div></div>
+  <div class="panel-head"><div><h2>{{ _("生成结果") }}</h2><p id="subgenome-summary"></p></div><div class="head-actions"><button class="btn" type="button" id="download-subgenome-issues" hidden>{{ _("下载未匹配与冲突编号") }}</button><button class="btn primary" type="button" id="download-subgenomes" disabled>{{ _("下载归属 CSV") }}</button></div></div>
   <div class="stats" id="subgenome-stats"></div>
   <p class="hint" id="subgenome-counts"></p>
   <p class="alert" id="subgenome-notice" hidden></p>
-  <label id="accept-unmatched-box" hidden><input type="checkbox" id="accept-unmatched"> 我确认仅导出已匹配的编号，未匹配编号不写入归属 CSV。</label>
-  <div class="table-wrap"><table class="table"><thead><tr><th>序列编号</th><th>亚基因组</th></tr></thead><tbody id="subgenome-preview"></tbody></table></div>
+  <label id="accept-unmatched-box" hidden><input type="checkbox" id="accept-unmatched"> {{ _("我确认仅导出已匹配的编号，未匹配编号不写入归属 CSV。") }}</label>
+  <div class="table-wrap"><table class="table"><thead><tr><th>{{ _("序列编号") }}</th><th>{{ _("亚基因组") }}</th></tr></thead><tbody id="subgenome-preview"></tbody></table></div>
   <div id="subgenome-issues-box" hidden>
-    <h3>需要检查的编号</h3>
-    <div class="table-wrap"><table class="table"><thead><tr><th>序列编号</th><th>问题</th><th>匹配的亚基因组</th></tr></thead><tbody id="subgenome-issues"></tbody></table></div>
+    <h3>{{ _("需要检查的编号") }}</h3>
+    <div class="table-wrap"><table class="table"><thead><tr><th>{{ _("序列编号") }}</th><th>{{ _("问题") }}</th><th>{{ _("匹配的亚基因组") }}</th></tr></thead><tbody id="subgenome-issues"></tbody></table></div>
   </div>
-  <p class="hint">表格各预览前 100 条；下载包含全部记录。相同编号按大小写不敏感合并。一个编号归入多个亚基因组时必须先解决冲突，系统不会按规则顺序强行选择。规则归属由你提供的编号特征决定，请核对后用于设计。</p>
+  <p class="hint">{{ _("表格各预览前 100 条；下载包含全部记录。相同编号按大小写不敏感合并。一个编号归入多个亚基因组时必须先解决冲突，系统不会按规则顺序强行选择。规则归属由你提供的编号特征决定，请核对后用于设计。") }}</p>
 </section>
-<template id="subgenome-rule-template"><tr><td><input class="rule-pattern" aria-label="编号特征" maxlength="200" placeholder="例如 Axx"></td><td><input class="rule-label" aria-label="规则的亚基因组名称" maxlength="64" placeholder="例如 A"></td><td><button type="button" class="text-button remove-rule">移除</button></td></tr></template>
+<template id="subgenome-rule-template"><tr><td><input class="rule-pattern" aria-label="{{ _("编号特征") }}" maxlength="200" placeholder="{{ _("例如 Axx") }}"></td><td><input class="rule-label" aria-label="{{ _("规则的亚基因组名称") }}" maxlength="64" placeholder="{{ _("例如 A") }}"></td><td><button type="button" class="text-button remove-rule">{{ _("移除") }}</button></td></tr></template>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/subgenomes.js') }}"></script>{% endblock %}
