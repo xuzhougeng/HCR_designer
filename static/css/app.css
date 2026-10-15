@@ -107,7 +107,7 @@ p { margin: 0; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px 24px; flex-wrap: wrap; padding-bottom: 4px; }
 .page-head > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 72ch; }
 .eyebrow { font-size: 12px; letter-spacing: .1em; color: var(--muted); }
-.page-head h1 { font-size: 26px; font-weight: 600; letter-spacing: -.4px; }
+.page-head h1 { font-size: 26px; font-weight: 600; letter-spacing: -.4px; overflow-wrap: anywhere; }
 .lede { color: var(--muted); font-size: 14px; }
 .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
