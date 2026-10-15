@@ -189,10 +189,6 @@ def filter_probe_by_llm(probe_data):
 def index():
     return render_template('index.html')
 
-@app.route('/filter', methods=['GET', 'POST'])
-def filter():
-    return render_template('filter.html')
-
 @app.route("/help", methods=['GET'])
 def help():
     return render_template('help.html')
@@ -813,7 +809,7 @@ def bridge_validate():
             
     return render_template('bridge_validate.html', **default_params)
 
-@app.route('/filter', methods=['GET', 'POST'])
+@app.route('/filter', methods=['GET', 'POST'], endpoint='filter')
 def filter_probes():
     if request.method == 'POST':
         # 检查是否有文件上传

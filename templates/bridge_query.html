@@ -94,36 +94,8 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
-// 页面加载时初始化表单状态
-document.addEventListener('DOMContentLoaded', function() {
-    toggleQueryForm();
-});
-
-function toggleQueryForm() {
-    const bpIdForm = document.getElementById('bpIdForm');
-    const sequenceForm = document.getElementById('sequenceForm');
-    const bpIdInput = document.getElementById('bp_id');
-    const sequencesInput = document.getElementById('sequences');
-    const queryType = document.querySelector('input[name="query_type"]:checked').value;
-    
-    if (queryType === 'bp_id') {
-        bpIdForm.style.display = 'block';
-        sequenceForm.style.display = 'none';
-        bpIdInput.disabled = false;
-        sequencesInput.disabled = true;
-        bpIdInput.required = true;
-        sequencesInput.required = false;
-    } else {
-        bpIdForm.style.display = 'none';
-        sequenceForm.style.display = 'block';
-        bpIdInput.disabled = true;
-        sequencesInput.disabled = false;
-        bpIdInput.required = false;
-        sequencesInput.required = true;
-    }
-}
 
 function downloadResults() {
     const rows = document.querySelectorAll('table tbody tr');
