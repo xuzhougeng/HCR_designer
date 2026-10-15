@@ -72,6 +72,7 @@ class TargetPolicy:
         self.target_subgenome = str(target_subgenome) if target_subgenome else None
         self.exclusion_max_mismatches = int(exclusion_max_mismatches)
         self._resolved = {}
+        self._annotation = None
 
     @classmethod
     def from_dict(cls, data):
@@ -93,8 +94,10 @@ class TargetPolicy:
 
     @property
     def annotation(self):
-        """The loaded subgenome file, or ``None`` outside subgenome mode."""
-        return load_subgenome_map(self.subgenome_map) if self.subgenome_map else None
+        """The subgenome file, read once per policy object; ``None`` outside subgenome mode."""
+        if self._annotation is None and self.subgenome_map:
+            self._annotation = load_subgenome_map(self.subgenome_map)
+        return self._annotation
 
     def resolve_target(self, target_gene_id):
         """The target's own subgenome; a target the file does not annotate is an error."""

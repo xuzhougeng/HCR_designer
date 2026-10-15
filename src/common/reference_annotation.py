@@ -12,7 +12,7 @@ Labels come from the file, never from guessing at identifier spelling; a
 transcript absent from the file has no subgenome and is counted as unknown.
 """
 from collections import Counter
-from functools import lru_cache
+import hashlib
 from pathlib import Path
 import re
 
@@ -51,16 +51,26 @@ def format_subgenome_map(pairs):
     return 'transcript_id\tsubgenome\n' + ''.join(f'{identifier}\t{label}\n' for identifier, label in pairs)
 
 
-@lru_cache(maxsize=4)
-def _cached_annotation(path, mtime_ns, size):
-    return SubgenomeAnnotation(parse_subgenome_map(Path(path).read_text()), source=path)
+_CACHE = {}
+_CACHE_LIMIT = 4
 
 
 def load_subgenome_map(path):
-    """Load and cache an annotation file, keyed by path, modification time and size."""
+    """Load an annotation file, cached by path and a hash of its content.
+
+    Modification time and size are not a safe key: filesystems with coarse
+    timestamps give a same-size rewrite within one tick the same stat result.
+    """
     path = Path(path).resolve()
-    stat = path.stat()
-    return _cached_annotation(str(path), stat.st_mtime_ns, stat.st_size)
+    data = path.read_bytes()
+    key = (str(path), hashlib.sha256(data).hexdigest())
+    annotation = _CACHE.get(key)
+    if annotation is None:
+        annotation = SubgenomeAnnotation(parse_subgenome_map(data.decode('utf-8-sig')), source=str(path))
+        while len(_CACHE) >= _CACHE_LIMIT:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = annotation
+    return annotation
 
 
 class SubgenomeAnnotation:

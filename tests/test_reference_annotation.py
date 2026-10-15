@@ -1,4 +1,5 @@
 """Subgenome membership comes from a file, never from guessing identifier spelling."""
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -54,7 +55,11 @@ class SubgenomeMapTests(unittest.TestCase):
             path.write_text(format_subgenome_map([('t1', 'A'), ('t2', 'B')]))
             self.assertEqual(load_subgenome_map(path).of('t2'), 'B')
             self.assertIs(load_subgenome_map(path), load_subgenome_map(path))
+            # Same size, rewritten at once: a stat-based key cannot tell these apart.
+            size, stamp = path.stat().st_size, path.stat().st_mtime_ns
             path.write_text(format_subgenome_map([('t1', 'A'), ('t2', 'C')]))
+            os.utime(path, ns=(stamp, stamp))
+            self.assertEqual((path.stat().st_size, path.stat().st_mtime_ns), (size, stamp))
             self.assertEqual(load_subgenome_map(path).of('t2'), 'C')
 
 
