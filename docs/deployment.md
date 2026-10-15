@@ -33,4 +33,6 @@ HCR_HOST=0.0.0.0 bash scripts/run_web.sh
 
 备份存放在项目同级的 `HCR_designer_deployments/<部署标识>/`，避免与网页上传和输出混在一起。回滚时先停止该应用，确认没有部署后的用户改动，再恢复备份代码和旧索引，或检出保存的旧版本并恢复备份中的原有未提交文件；然后按记录的旧命令启动。不要删除 `uploads/` 中的参考、用户上传或新产生的结果。
 
-当前仍是同步计算请求和现有 tmux 服务，没有新增后台队列、开机自启或其他进程管理服务。长期运行方案可另行迁移到 WSGI 服务。近匹配不穷尽、插入缺失未复核的算法限制见主 README。
+双探针设计在应用进程内用单个后台线程排队执行（`scripts/split_web.py` 的 `JobRunner`），一次只算一个任务；状态与进度写在 `uploads/split_results/<任务>/request.json` 和 `progress.json`。旧的一次性 `POST /split`、`/split/batch` 仍同步返回 ZIP。
+
+**重启前先确认没有进行中的任务**：`curl -s -H 'Accept: application/json' http://127.0.0.1:6789/jobs` 中没有 `queued` 或 `running`。进程退出时正在计算或排队的任务不会继续；下次启动会把它们标记为 `interrupted`，用户可在任务页按原参数重新运行。仍是现有 tmux 服务，没有开机自启或其他进程管理；多进程 WSGI 部署前需要把队列换成独立进程或外部队列，否则每个进程各有一个队列。近匹配不穷尽、插入缺失未复核的算法限制见主 README。

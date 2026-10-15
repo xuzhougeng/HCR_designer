@@ -108,9 +108,12 @@ def generate_dual_probe(sequence: str,
     task_name:str, 
     BP_ID:str, 
     bridge_probe: str, 
-    config: DualProbeConfig, target_gene_id: str = None):
+    config: DualProbeConfig, target_gene_id: str = None, progress=None):
     """
     为序列创建DualProbe探针, 用于HCR
+
+    progress: optional callable(stage) told when each slow stage starts
+    ('candidates', 'specificity', 'selection').
 
     Parameters:
     -----------
@@ -137,14 +140,17 @@ def generate_dual_probe(sequence: str,
 
     # create probe designer
     designer = DualProbeDesigner(config)
-    
+    report = progress or (lambda stage: None)
+
     # 设计探针
+    report('candidates')
     probe_sets = designer.design_probes(sequence)
     
     # 输出探针信息, 包括详细结果和BED格式
     output_handler = ProbeOutputHandler(config.output_dir)
     
-    # 保存原始探针组合结果
+    # 保存原始探针组合结果（单臂比对与双臂配对扫描在这里完成）
+    report('specificity')
     probe_sets = output_handler.save_probe_sets(
         probe_sets, task_name, "dual_probe", config.blast_db, target_gene_id=target_gene_id,
         target_policy=config.target_policy)
@@ -155,6 +161,7 @@ def generate_dual_probe(sequence: str,
     probe_sets_json = copy.deepcopy(output_handler.probe_data)
     
     # 应用筛选并保存筛选结果
+    report('selection')
     output_handler.save_filtered_probe_sets(
         probe_sets_json, f"{task_name}_filtered", config.max_selected,
         config.gc_junction_penalty, min_distance=config.min_gap)
@@ -261,7 +268,8 @@ def main( name, sequence, gene_id,
          output_dir,
          max_selected: int = 5,
          gc_junction_penalty: float = 20.0,
-         target_policy: dict = None):
+         target_policy: dict = None,
+         progress=None):
     """主函数
 
     Args:
@@ -270,6 +278,8 @@ def main( name, sequence, gene_id,
         gc_junction_penalty: Left探针G/C连接处的惩罚分数，默认为5.0
     """
     # The reference FASTA feeds both the single-arm BLAST evidence and the exhaustive pair scan.
+    if ref_genome and progress:
+        progress('reference')
     blast_db = create_blast_db(ref_genome) if ref_genome else None
     config = create_config(
                            min_length=min_length,
@@ -292,7 +302,7 @@ def main( name, sequence, gene_id,
     
     # 设计探针
     probe_sets = generate_dual_probe(sequence, name, bridge_probe_id, bridge_probe, config,
-                                     target_gene_id=gene_id)
+                                     target_gene_id=gene_id, progress=progress)
     
     return probe_sets
 

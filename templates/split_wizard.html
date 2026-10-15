@@ -10,7 +10,7 @@
   <nav class="wizard-steps" aria-label="设计步骤">
     <button type="button" data-step="1" aria-current="step"><span>1</span><div>序列与参考<small>确认目标和比对范围</small></div></button>
     <button type="button" data-step="2" disabled><span>2</span><div>参数与检查<small>确认本次设计条件</small></div></button>
-    <button type="button" data-step="3" disabled><span>3</span><div>结果复核<small>查看依据与下载结果</small></div></button>
+    <button type="button" data-step="3" disabled><span>3</span><div>结果复核<small>后台计算，完成后逐对复核</small></div></button>
   </nav>
   <noscript><div class="wizard-alert error">分步页面需要启用 JavaScript。</div></noscript>
   <div id="workflow-message" class="wizard-alert" role="status" aria-live="polite" hidden></div>
@@ -74,20 +74,11 @@
           </div>
         </details>
       </div>
-      <div class="wizard-alert notice">双臂配对使用完整无缺口扫描，在每臂最多 3 个替换、正向转录本的范围内找全；不包含插入缺失复核。结果用于筛选候选，不能直接视为可合成清单。</div>
-      <footer class="wizard-actions"><button type="button" class="wizard-button" data-back>← 返回修改输入</button><button type="button" class="wizard-button primary" id="run-button">开始设计并复核</button></footer>
+      <div class="wizard-alert notice">双臂配对使用完整无缺口扫描，在每臂最多 3 个替换、正向转录本的范围内找全；不包含插入缺失复核。结果用于筛选候选，不能直接视为可合成清单。
+提交后任务进入后台队列，可以关闭本页，稍后在“任务记录”中查看进度与结果。</div>
+      <footer class="wizard-actions"><button type="button" class="wizard-button" data-back>← 返回修改输入</button><button type="button" class="wizard-button primary" id="run-button">提交到后台计算</button></footer>
     </section>
   </form>
-  <section id="step-3" class="wizard-panel" aria-labelledby="results-heading" hidden>
-    <div class="section-heading"><div><h2 id="results-heading">设计结果</h2><p id="result-subtitle"></p></div><div class="result-actions"><a class="wizard-button" href="{{ url_for('split') }}">新建设计</a><a class="wizard-button primary" id="download-results">下载完整结果 ZIP</a></div></div>
-    <div class="result-stats" id="result-stats"></div>
-    <div class="wizard-alert notice" id="result-limit"></div>
-    <details class="run-settings"><summary>查看本次参数与参考信息</summary><div id="run-settings-content"></div></details>
-    <div class="result-toolbar"><label class="field">任务<select id="result-task"></select></label><label class="field">显示范围<select id="result-filter"><option value="all">全部候选</option><option value="keep">保留待复核</option><option value="cross">跨物种完全匹配</option><option value="excluded">按目标策略排除</option><option value="unassessed">未完成特异性评估</option></select></label><span id="visible-count" aria-live="polite"></span></div>
-    <div class="table-scroll"><table class="wizard-table candidate-table"><thead><tr><th>本次探针对</th><th>筛选状态</th><th>跨物种配对</th><th>原因</th><th>证据</th></tr></thead><tbody id="candidate-rows"></tbody></table></div>
-    <p id="empty-results" class="empty-state" hidden></p>
-    <section id="pair-evidence" class="evidence-panel" hidden aria-live="polite"><div class="section-heading"><div><h3 id="evidence-heading"></h3><p>坐标采用 1-based inclusive；靶向臂序列为 5′ → 3′。</p></div><button type="button" class="text-button" id="close-evidence">收起详情</button></div><div id="evidence-arms" class="field-grid"></div><div id="evidence-summary"></div><div class="table-scroll"><table class="wizard-table"><thead><tr><th>参考转录本</th><th>关系</th><th>L 坐标 / 错配</th><th>R 坐标 / 错配</th><th>方向 / 间隔</th></tr></thead><tbody id="evidence-matches"></tbody></table></div></section>
-  </section>
 </div>
 <script type="application/json" id="split-config">{{ config|tojson }}</script>
 {% endblock %}

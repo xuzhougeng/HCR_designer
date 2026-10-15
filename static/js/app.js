@@ -128,6 +128,38 @@
     });
   }
 
-  window.HCR = {saveBlob, postForFile, downloadRows, setAlert, copyText};
-  document.addEventListener('DOMContentLoaded', () => { initShell(); initDropzones(); initCopyButtons(); });
+  /* Order list: probe pairs picked across jobs, kept in this browser only. */
+  const ORDER_KEY = 'hcr.orderList.v1';
+  const orders = {
+    read() {
+      try { return JSON.parse(localStorage.getItem(ORDER_KEY) || '[]'); } catch (error) { return []; }
+    },
+    write(items) {
+      try { localStorage.setItem(ORDER_KEY, JSON.stringify(items)); } catch (error) { /* storage blocked */ }
+      updateOrderBadge(items);
+      document.dispatchEvent(new CustomEvent('hcr:orders', {detail: items}));
+    },
+    has(key) { return orders.read().some(item => item.key === key); },
+    toggle(item) {
+      const items = orders.read();
+      const index = items.findIndex(existing => existing.key === item.key);
+      if (index >= 0) items.splice(index, 1); else items.push(Object.assign({added_at: new Date().toISOString()}, item));
+      orders.write(items);
+      return index < 0;
+    },
+    remove(key) { orders.write(orders.read().filter(item => item.key !== key)); },
+    clear() { orders.write([]); },
+  };
+
+  function updateOrderBadge(items) {
+    const badge = document.querySelector('[data-order-count]');
+    if (!badge) return;
+    const count = (items || orders.read()).length;
+    badge.hidden = count === 0;
+    badge.textContent = count;
+  }
+
+  window.HCR = {saveBlob, postForFile, downloadRows, setAlert, copyText, orders};
+  window.addEventListener('storage', event => { if (event.key === ORDER_KEY) updateOrderBadge(); });
+  document.addEventListener('DOMContentLoaded', () => { initShell(); initDropzones(); initCopyButtons(); updateOrderBadge(); });
 })();

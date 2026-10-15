@@ -42,6 +42,9 @@ TARGET_MODES = {'species': '物种模式：同物种其他转录本只参与排�
 FASTA_SUFFIXES = ('.fa', '.fasta', '.fna')
 MAP_SUFFIXES = ('.tsv', '.txt', '.csv', '.map')
 BATCH_HEADER = ['task_name', 'bp_id', 'gene_id', 'max_selected', 'allowed_ids']
+STAGES = {'queued': '排队等待', 'reference': '准备参考库索引', 'candidates': '生成候选',
+          'specificity': '双臂配对扫描与单臂比对', 'selection': '排序与筛选',
+          'packaging': '整理结果文件', 'completed': '已完成'}
 
 
 class InputError(ValueError):
@@ -404,8 +407,53 @@ class SplitWorkflow:
                 'reference': {k: v for k, v in reference.items() if k != 'fingerprint'} if reference else None,
                 'tasks': [{k: v for k, v in task.items() if k != 'sequence'} for task in manifest['tasks']]}
 
-    def run(self, identifier, values):
+    @staticmethod
+    def _now():
+        return datetime.now(timezone.utc).isoformat()
+
+    def _manifest(self, directory):
+        return json.loads((directory / 'request.json').read_text())
+
+    def _progress(self, directory, stage, index=0, total=0, task=None):
+        write_json(directory / 'progress.json', {'stage': stage, 'label': STAGES.get(stage, stage),
+                                                 'task_index': index, 'task_total': total,
+                                                 'task_name': task, 'updated_at': self._now()})
+
+    def queue(self, identifier, values):
+        """Validate a run request and mark the job queued.
+
+        Returns True when the job must be executed, False when an identical run already completed.
+        Problems the user can fix are raised here, before any work is queued.
+        """
         parameters = parse_parameters(values)
+        directory = self.job_dir(identifier)
+        manifest = self._manifest(directory)
+        if manifest['status'] == 'completed':
+            if self.result(identifier)['parameters'] != parameters:
+                raise InputError('这个任务已完成；修改参数后请重新检查输入以创建新任务。', status=409)
+            return False
+        if manifest['status'] in ('queued', 'running') or (directory / 'running.lock').exists():
+            raise InputError('该任务已在排队或计算中，请在任务记录中查看进度，不要重复提交。', status=409)
+        if manifest['reference_path']:
+            stat = Path(manifest['reference_path']).stat()
+            if {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size} != manifest['reference']['fingerprint']:
+                raise InputError('参考库在输入检查后发生变化，请返回第一步重新检查。')
+        if parameters['target_mode'] == 'subgenome':
+            if not manifest.get('subgenome_map'):
+                raise InputError('亚基因组模式需要在第一步提供亚基因组归属：按亚基因组分文件上传，'
+                                 '或为单一参考附带两列归属文件。', 'target_mode')
+            missing = [task['name'] for task in manifest['tasks'] if not task.get('subgenome')]
+            if missing:
+                raise InputError('这些任务的目标转录本在归属文件中没有亚基因组，无法确定允许集合：'
+                                 + '、'.join(missing), 'target_mode')
+        manifest.update(status='queued', parameters=parameters, queued_at=self._now(),
+                        started_at=None, error=None)
+        write_json(directory / 'request.json', manifest)
+        self._progress(directory, 'queued', 0, len(manifest['tasks']))
+        return True
+
+    def execute(self, identifier):
+        """Run a queued job to completion, recording progress; raises after marking failures."""
         directory = self.job_dir(identifier)
         lock = directory / 'running.lock'
         try:
@@ -413,33 +461,21 @@ class SplitWorkflow:
             os.close(fd)
         except FileExistsError:
             raise InputError('该任务正在计算，请等待当前请求完成，不要重复提交。', status=409)
-        manifest = json.loads((directory / 'request.json').read_text())
+        manifest = self._manifest(directory)
+        parameters = manifest['parameters']
+        total = len(manifest['tasks'])
         try:
-            if manifest['status'] == 'completed':
-                result = self.result(identifier)
-                if result['parameters'] != parameters:
-                    raise InputError('这个任务已完成；修改参数后请重新检查输入以创建新任务。', status=409)
-                return result
-            if manifest['reference_path']:
-                stat = Path(manifest['reference_path']).stat()
-                if {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size} != manifest['reference']['fingerprint']:
-                    raise InputError('参考库在输入检查后发生变化，请返回第一步重新检查。')
-            if parameters['target_mode'] == 'subgenome':
-                if not manifest.get('subgenome_map'):
-                    raise InputError('亚基因组模式需要在第一步提供亚基因组归属：按亚基因组分文件上传，'
-                                     '或为单一参考附带两列归属文件。', 'target_mode')
-                missing = [task['name'] for task in manifest['tasks'] if not task.get('subgenome')]
-                if missing:
-                    raise InputError('这些任务的目标转录本在归属文件中没有亚基因组，无法确定允许集合：'
-                                     + '、'.join(missing), 'target_mode')
-            manifest['status'] = 'running'
+            manifest.update(status='running', started_at=self._now())
             write_json(directory / 'request.json', manifest)
             output = directory / 'output'
             if output.exists():
                 shutil.rmtree(output)
             output.mkdir()
             results = []
-            for task in manifest['tasks']:
+            for index, task in enumerate(manifest['tasks'], 1):
+                def report(stage, index=index, name=task['name']):
+                    self._progress(directory, stage, index, total, name)
+                report('candidates')
                 task_dir = output / task['name']
                 task_dir.mkdir()
                 count = task['max_selected'] if task['max_selected'] is not None else parameters['max_selected']
@@ -453,18 +489,21 @@ class SplitWorkflow:
                              bridge_probe=task['bridge_sequence'], bridge_probe_id=task['bridge_id'],
                              output_dir=str(task_dir), max_selected=count,
                              gc_junction_penalty=parameters['gc_junction_penalty'],
-                             target_policy=task_policy(task, parameters, manifest))
+                             target_policy=task_policy(task, parameters, manifest), progress=report)
                 save_sequence(task['gene_id'] or task['name'], task['sequence'], str(task_dir / 'target.fasta'))
                 data = json.loads((task_dir / (task['name'] + '_filtered.json')).read_text())
                 probes = data['probe_sets']
+                synthesis = read_synthesis(task_dir / 'dual_probe_dual.csv', task['name'])
                 compact = []
                 for probe in probes:
                     item = {k: v for k, v in probe.items() if k not in ('left_probe', 'right_probe')}
                     for side in ('left_probe', 'right_probe'):
                         item[side] = {k: v for k, v in probe[side].items() if k != 'blast_results'}
+                    if probe['id'] in synthesis:
+                        item['synthesis'] = synthesis[probe['id']]
                     compact.append(item)
                 search = data.get('search') or {}
-                results.append(dict({k: v for k, v in task.items() if k != 'sequence'}, max_selected=count,
+                results.append(dict(task, max_selected=count,
                                     candidates=len(probes), selected=sum(p['keep'] for p in probes),
                                     cross_exact=sum(bool(p.get('specificity', {}).get('counts', {}).get('cross_species', [0])[0]) for p in probes),
                                     excluded=sum(p.get('reason_code', '').endswith('_pair') and p.get('reason_code') != 'no_exact_on_target_pair' for p in probes),
@@ -472,15 +511,17 @@ class SplitWorkflow:
                                     target_policy=data.get('target_policy') or task_policy(task, parameters, manifest),
                                     search={k: v for k, v in search.items() if k not in ('reference', 'executable')},
                                     probe_sets=compact))
+            self._progress(directory, 'packaging', total, total)
             exhaustive = bool(manifest['reference_path']) and all(
                 t['search'].get('status') == 'completed' and t['unassessed'] == 0 for t in results)
             result = dict(self.preview(manifest), status='completed', parameters=parameters, tasks=results,
-                          created_at=manifest['created_at'], completed_at=datetime.now(timezone.utc).isoformat(),
+                          created_at=manifest['created_at'], completed_at=self._now(),
                           coordinate_system='1-based inclusive', indel_checked=False,
                           search_exhaustive=exhaustive,
                           search_scope='sense strand, ungapped, <=%d substitutions per arm' % MAX_SUBSTITUTIONS if exhaustive else None,
                           experimental_validation=False)
-            write_json(output / 'run_summary.json', result)
+            summary_report = dict(result, tasks=[{k: v for k, v in t.items() if k != 'sequence'} for t in results])
+            write_json(output / 'run_summary.json', summary_report)
             with ZipFile(directory / 'results.zip', 'w', ZIP_DEFLATED) as archive:
                 for path in sorted(output.rglob('*')):
                     if path.is_file():
@@ -489,19 +530,111 @@ class SplitWorkflow:
                             relative = Path(*relative.parts[1:])
                         archive.write(path, str(relative))
             write_json(directory / 'result.json', result)
-            manifest['status'] = 'completed'
+            manifest.update(status='completed', completed_at=result['completed_at'], summary=summarize(results))
             write_json(directory / 'request.json', manifest)
+            self._progress(directory, 'completed', total, total)
             return result
-        except Exception:
+        except Exception as error:
             if manifest['status'] != 'completed':
-                manifest['status'] = 'failed'
+                manifest.update(status='failed', failed_at=self._now(),
+                                error=str(error) if isinstance(error, InputError)
+                                else '计算未完成（%s）。请检查参考文件与比对环境后重新运行。' % type(error).__name__)
                 write_json(directory / 'request.json', manifest)
             raise
         finally:
             lock.unlink(missing_ok=True)
 
+    def run(self, identifier, values):
+        """Queue and execute in the calling thread (used by the legacy one-shot POST)."""
+        if self.queue(identifier, values):
+            return self.execute(identifier)
+        return self.result(identifier)
+
+    def status(self, identifier):
+        directory = self.job_dir(identifier)
+        manifest = self._manifest(directory)
+        progress_path = directory / 'progress.json'
+        progress = json.loads(progress_path.read_text()) if progress_path.is_file() else None
+        keys = ('id', 'status', 'mode', 'created_at', 'queued_at', 'started_at', 'completed_at',
+                'failed_at', 'error', 'summary', 'parameters')
+        return dict({k: manifest.get(k) for k in keys}, progress=progress,
+                    reference=(manifest.get('reference') or {}).get('name'),
+                    tasks=[{'name': t['name'], 'gene_id': t['gene_id'], 'bridge_id': t['bridge_id'],
+                            'sequence_length': t['sequence_length']} for t in manifest['tasks']])
+
+    def list_jobs(self, limit=200):
+        """Newest first; jobs that were only prepared and never run are left out."""
+        jobs = []
+        if not self.root.is_dir():
+            return jobs
+        for path in self.root.glob('*/request.json'):
+            try:
+                manifest = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if manifest.get('status') == 'prepared':
+                continue
+            if manifest.get('status') == 'completed' and not manifest.get('summary'):
+                try:  # results saved before summaries existed
+                    manifest['summary'] = summarize(json.loads((path.parent / 'result.json').read_text())['tasks'])
+                    write_json(path, manifest)
+                except (OSError, ValueError, KeyError):
+                    pass
+            jobs.append(manifest)
+        jobs.sort(key=lambda m: m.get('queued_at') or m.get('created_at') or '', reverse=True)
+        return [self.status(m['id']) for m in jobs[:limit]]
+
+    def recover(self):
+        """After a restart nothing is running: mark unfinished jobs so they can be rerun."""
+        recovered = []
+        if not self.root.is_dir():
+            return recovered
+        for path in self.root.glob('*/request.json'):
+            try:
+                manifest = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if manifest.get('status') in ('queued', 'running'):
+                manifest.update(status='interrupted', error='服务重启时该任务尚未完成，可重新运行。')
+                write_json(path, manifest)
+                (path.parent / 'running.lock').unlink(missing_ok=True)
+                recovered.append(manifest['id'])
+        return recovered
+
     def result(self, identifier):
-        path = self.job_dir(identifier) / 'result.json'
+        directory = self.job_dir(identifier)
+        path = directory / 'result.json'
         if not path.is_file():
             raise InputError('该任务尚未生成完整结果。', status=409)
-        return json.loads(path.read_text())
+        result = json.loads(path.read_text())
+        if any('sequence' not in task for task in result['tasks']):  # saved before sequences were kept
+            sequences = {task['name']: task['sequence'] for task in self._manifest(directory)['tasks']}
+            for task in result['tasks']:
+                task.setdefault('sequence', sequences.get(task['name']))
+        for task in result['tasks']:  # saved before synthesis sequences were attached
+            if task['probe_sets'] and 'synthesis' not in task['probe_sets'][0]:
+                synthesis = read_synthesis(directory / 'output' / task['name'] / 'dual_probe_dual.csv', task['name'])
+                for probe in task['probe_sets']:
+                    if probe['id'] in synthesis:
+                        probe['synthesis'] = synthesis[probe['id']]
+        return result
+
+
+def read_synthesis(path, name):
+    """Map probe-set id → full L/R synthesis sequences from the pipeline's *_dual.csv."""
+    pairs = {}
+    if not path.is_file():
+        return pairs
+    with open(path, newline='') as handle:
+        for row in csv.DictReader(handle):
+            label, sequence = row.get('Probe ID', ''), row.get('Sequence', '')
+            match = re.fullmatch(re.escape(name) + r'-(\d+)-(L|R)(?:-.*)?', label)
+            if match:
+                pairs.setdefault(int(match.group(1)), {})[match.group(2)] = {'id': label, 'sequence': sequence}
+    return pairs
+
+
+def summarize(tasks):
+    keys = ('candidates', 'selected', 'cross_exact', 'excluded', 'unassessed')
+    return dict({key: sum(task.get(key, 0) for task in tasks) for key in keys},
+                genes=[task.get('gene_id') or task['name'] for task in tasks][:20])

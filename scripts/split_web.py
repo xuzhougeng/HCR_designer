@@ -1,14 +1,59 @@
-"""HTTP adapters for the shared single/batch guided interface."""
+"""HTTP adapters for the shared single/batch guided interface, background jobs and the job centre."""
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import io
+import threading
 
 from flask import jsonify, render_template, request, send_file, url_for
 from scripts.split_workflow import SplitWorkflow, InputError, DEFAULTS
 
 
+class JobRunner:
+    """One background worker: pair scans are CPU and memory heavy, so jobs run one at a time in order.
+
+    With inline=True (tests) a submitted job runs before submit() returns.
+    """
+
+    def __init__(self, logger, inline=False):
+        self.logger = logger
+        self.inline = inline
+        self.executor = None if inline else ThreadPoolExecutor(max_workers=1, thread_name_prefix='split-job')
+        self.pending = []
+        self.lock = threading.Lock()
+
+    def submit(self, service, identifier):
+        with self.lock:
+            self.pending.append(identifier)
+        if self.inline:
+            self._work(service, identifier)
+        else:
+            self.executor.submit(self._work, service, identifier)
+
+    def position(self, identifier):
+        """0 while running, n when n jobs are ahead in the queue, None when not tracked."""
+        with self.lock:
+            return self.pending.index(identifier) if identifier in self.pending else None
+
+    def _work(self, service, identifier):
+        try:
+            service.execute(identifier)
+        except Exception:
+            self.logger.exception('Dual-probe job %s failed', identifier)
+        finally:
+            with self.lock:
+                if identifier in self.pending:
+                    self.pending.remove(identifier)
+
+
 def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     def workflow():
         return SplitWorkflow(app.config['UPLOAD_FOLDER'], bridges, cdna, cds, aliases)
+
+    runner = JobRunner(app.logger, inline=app.config.get('SPLIT_JOBS_INLINE', False))
+    app.extensions['split_jobs'] = runner
+    recovered = workflow().recover()
+    if recovered:
+        app.logger.warning('Marked %d unfinished dual-probe jobs as interrupted', len(recovered))
 
     def api_errors(function):
         @wraps(function)
@@ -22,17 +67,24 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
                 return jsonify(error='设计未完成。请检查参考文件与比对环境后重试；已填写内容仍保留。'), 500
         return decorated
 
-    def result_links(result):
-        return dict(result, download_url=url_for('split_download', identifier=result['id']),
-                    result_url=url_for('split_result', identifier=result['id']))
+    def links(identifier):
+        return dict(status_url=url_for('split_status', identifier=identifier),
+                    result_url=url_for('split_result', identifier=identifier),
+                    download_url=url_for('split_download', identifier=identifier),
+                    run_url=url_for('split_run', identifier=identifier))
 
-    def page(mode='single', result=None):
+    def status_payload(service, identifier):
+        status = service.status(identifier)
+        status.update(links(identifier), queue_position=runner.position(identifier))
+        return status
+
+    def page(mode='single'):
         genomes = available_genomes()
         default_reference = next((g['filename'] for g in genomes if g['filename'] == 'bol_bju_cdna.fasta'), '')
         config = dict(mode=mode, defaults=DEFAULTS, bridges=bridges,
                       single_url=url_for('split'), batch_url=url_for('split_batch'),
-                      prepare_url=url_for('split_prepare'),
-                      default_reference=default_reference, result=result)
+                      prepare_url=url_for('split_prepare'), jobs_url=url_for('jobs'),
+                      default_reference=default_reference)
         return render_template('split.html', config=config, available_genomes=genomes)
 
     def legacy(mode):
@@ -62,13 +114,29 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     @app.post('/split/jobs/<identifier>/run')
     @api_errors
     def split_run(identifier):
-        return jsonify(result_links(workflow().run(identifier, request.get_json(silent=True))))
+        """Queue the job and answer at once; the browser follows status_url."""
+        service = workflow()
+        if service.queue(identifier, request.get_json(silent=True)):
+            runner.submit(service, identifier)
+            return jsonify(status_payload(service, identifier)), 202
+        return jsonify(status_payload(service, identifier)), 200
+
+    @app.get('/split/jobs/<identifier>/status')
+    @api_errors
+    def split_status(identifier):
+        return jsonify(status_payload(workflow(), identifier))
 
     @app.get('/split/results/<identifier>')
     @api_errors
     def split_result(identifier):
-        result = result_links(workflow().result(identifier))
-        return page(result['mode'], result)
+        service = workflow()
+        status = status_payload(service, identifier)
+        if request.accept_mimetypes.best == 'application/json':
+            return jsonify(dict(service.result(identifier), **links(identifier)))
+        result = dict(service.result(identifier), **links(identifier)) if status['status'] == 'completed' else None
+        if status['status'] == 'prepared':
+            raise InputError('该任务尚未生成完整结果。', status=409)
+        return render_template('split_result.html', status=status, result=result, jobs_url=url_for('jobs'))
 
     @app.get('/split/results/<identifier>/download')
     @api_errors
@@ -83,3 +151,13 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
         example = 'task_name,BP_ID,gene_id,max_selected,allowed_ids\nABCG13,BP_0079,BjuVA06G01970,5,\n'
         return send_file(io.BytesIO(example.encode('utf-8-sig')), mimetype='text/csv',
                          as_attachment=True, download_name='split_batch_template.csv')
+
+    @app.get('/jobs')
+    @api_errors
+    def jobs():
+        service = workflow()
+        listing = [dict(job, **links(job['id']), queue_position=runner.position(job['id']))
+                   for job in service.list_jobs()]
+        if request.accept_mimetypes.best == 'application/json':
+            return jsonify(jobs=listing)
+        return render_template('jobs.html', jobs=listing)

@@ -42,10 +42,11 @@ class GuidedWorkflowTests(unittest.TestCase):
         self.reference.write_text('>BjuTarget\n' + SEQ + '\n>BoOther\n' + SEQ + '\n')
         repository = Path(__file__).resolve().parents[1]
         self.app = Flask(__name__, template_folder=str(repository / 'templates'), static_folder=str(repository / 'static'))
-        self.app.config.update(TESTING=True, UPLOAD_FOLDER=str(self.root))
+        # Jobs run inside submit() so each request finishes before the test continues.
+        self.app.config.update(TESTING=True, UPLOAD_FOLDER=str(self.root), SPLIT_JOBS_INLINE=True)
         for endpoint in ['index', 'triplet', 'triplet_batch', 'bridge', 'bridge_list', 'bridge_query',
                          'bridge_sequence', 'bridge_analyze', 'bridge_validate', 'formatting',
-                         'probe_recommend', 'filter', 'help']:
+                         'probe_recommend', 'filter', 'help', 'orders']:
             self.app.add_url_rule('/' + endpoint, endpoint, lambda: 'placeholder')
         register_split_routes(self.app, {'BP_0079': 'A' * 19}, {'BjuTarget': 'T' * 80}, {}, {},
                               lambda: [{'filename': self.reference.name, 'display_name': 'Bo/Bju'}])
@@ -56,6 +57,14 @@ class GuidedWorkflowTests(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def run_job(self, prepared, parameters):
+        """Queue a job and return (run response, finished result JSON or None)."""
+        response = self.client.post(prepared['run_url'], json=parameters)
+        if response.status_code not in (200, 202):
+            return response, None
+        result = self.client.get(response.json['result_url'], headers={'Accept': 'application/json'})
+        return response, result.json if result.status_code == 200 else None
 
     def prepare(self, **overrides):
         response = self.client.post('/split/prepare', data=dict(self.input, **overrides))
@@ -173,13 +182,13 @@ class GuidedWorkflowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('two', response.json['error'])
         full = self.prepare(subgenome_map=(io.BytesIO(b'BjuTarget\tA\nBoOther\tB\n'), 'subgenomes.tsv'))
-        result = self.client.post(full['run_url'], json=dict(DEFAULTS, target_mode='subgenome', allowed_ids=''))
-        self.assertEqual(result.status_code, 200, result.json)
+        response, result = self.run_job(full, dict(DEFAULTS, target_mode='subgenome', allowed_ids=''))
+        self.assertEqual(response.status_code, 202, response.json)
         policy = design.call_args.kwargs['target_policy']
         self.assertEqual(policy['mode'], 'subgenome')
         self.assertEqual(policy['target_subgenome'], 'A')
         self.assertTrue(policy['subgenome_map'].endswith('subgenomes.tsv'))
-        self.assertEqual(result.json['tasks'][0]['target_policy'], policy)
+        self.assertEqual(result['tasks'][0]['target_policy'], policy)
 
     def test_target_mode_parameter_is_validated(self):
         self.assertEqual(parse_parameters({})['target_mode'], 'species')
@@ -227,9 +236,9 @@ class GuidedWorkflowTests(unittest.TestCase):
     @patch('scripts.split_workflow.design_split', side_effect=fake_design)
     def test_saved_results_download_and_duplicate_run_are_consistent(self, design):
         prepared = self.prepare()
-        response = self.client.post(prepared['run_url'], json=DEFAULTS)
-        self.assertEqual(response.status_code, 200, response.json)
-        result = response.json
+        response, result = self.run_job(prepared, DEFAULTS)
+        self.assertEqual(response.status_code, 202, response.json)
+        self.assertEqual(response.json['status'], 'completed')
         self.assertEqual(result['tasks'][0]['cross_exact'], 1)
         self.assertEqual(result['tasks'][0]['selected'], 0)
         self.assertEqual(result['tasks'][0]['excluded'], 1)
@@ -245,7 +254,7 @@ class GuidedWorkflowTests(unittest.TestCase):
             full = json.loads(z.read('ABCG13_filtered.json'))
             self.assertIn('blast_results', full['probe_sets'][0]['left_probe'])
         archive.close()
-        self.assertEqual(self.client.post(prepared['run_url'], json=DEFAULTS).status_code, 200)
+        self.assertEqual(self.client.post(prepared['run_url'], json=DEFAULTS).status_code, 200)  # already done
         self.assertEqual(design.call_count, 1)
         self.assertEqual(self.client.post(prepared['run_url'], json=dict(DEFAULTS, min_gap=3)).status_code, 409)
 
@@ -284,10 +293,17 @@ class GuidedWorkflowTests(unittest.TestCase):
         with patch('scripts.split_workflow.design_split', side_effect=RuntimeError('engine failed')):
             with self.assertLogs(self.app.logger, level='ERROR'):
                 response = self.client.post(prepared['run_url'], json={})
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(self.client.get('/split/results/' + prepared['id']).status_code, 409)
+        self.assertEqual(response.status_code, 202)
+        status = self.client.get(response.json['status_url']).json
+        self.assertEqual(status['status'], 'failed')
+        self.assertIn('RuntimeError', status['error'])
+        self.assertEqual(self.client.get('/split/results/' + prepared['id'],
+                                         headers={'Accept': 'application/json'}).status_code, 409)
+        self.assertIn('id="progress-panel"', self.client.get('/split/results/' + prepared['id']).text)
         with patch('scripts.split_workflow.design_split', side_effect=fake_design):
-            self.assertEqual(self.client.post(prepared['run_url'], json={}).status_code, 200)
+            response, result = self.run_job(prepared, {})
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(result['status'], 'completed')
 
 
 if __name__ == '__main__':

@@ -23,6 +23,8 @@ PAGES = {
     '/probe_recommend': '探针数量推荐',
     '/filter': 'AI 筛选',
     '/help': '帮助',
+    '/jobs': '任务记录',
+    '/orders': '下单清单',
 }
 
 

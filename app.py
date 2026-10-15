@@ -646,6 +646,32 @@ def bridge_query():
     
     return render_template('bridge_query.html', query_type='bp_id', kmer=9)
 
+@app.route('/orders', methods=['GET'])
+def orders():
+    return render_template('orders.html')
+
+@app.route('/orders/check', methods=['POST'])
+def orders_check():
+    """Pairwise k-mer conflicts among the bridge probes planned for one experiment."""
+    data = request.get_json(silent=True) or {}
+    try:
+        k = min(15, max(3, int(data.get('kmer', 9))))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'k-mer 长度需为 3–15 的整数'}), 400
+    ids = sorted({str(i).strip().upper() for i in data.get('bp_ids') or [] if str(i).strip()})
+    known = [i for i in ids if i in bridge_seq_dict]
+    conflicts, seen = [], set()
+    if len(known) > 1:
+        for item, others in analyze_input_conflicts(probe_table_file, '\n'.join(known), k):
+            for other, count, kmers in others:
+                pair = tuple(sorted((item, other)))
+                if pair not in seen:
+                    seen.add(pair)
+                    conflicts.append({'a': pair[0], 'b': pair[1], 'overlap': count, 'kmers': kmers})
+    conflicts.sort(key=lambda c: -c['overlap'])
+    return jsonify(kmer=k, checked=known, unknown=[i for i in ids if i not in bridge_seq_dict],
+                   conflicts=conflicts)
+
 @app.route('/bridge/list', methods=['GET'])
 def bridge_list():
     # 获取所有探针信息并按BP_ID排序

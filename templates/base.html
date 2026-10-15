@@ -24,14 +24,18 @@
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M4 5h2l2 10h10l2-7H7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19" r="1.4" fill="currentColor"/><circle cx="17" cy="19" r="1.4" fill="currentColor"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
 {% set endpoint = request.endpoint %}
 {% set nav_groups = [
   ('设计', [
-    ('split', '双探针设计', 'i-split', ['split', 'split_batch', 'split_result'], ''),
+    ('split', '双探针设计', 'i-split', ['split', 'split_batch'], ''),
     ('triplet', '三探针设计', 'i-triplet', ['triplet', 'triplet_batch'], ''),
+    ('jobs', '任务记录', 'i-clock', ['jobs', 'split_result'], ''),
+    ('orders', '下单清单', 'i-cart', ['orders'], '#count'),
   ]),
   ('桥接探针库', [
     ('bridge_list', '浏览探针库', 'i-library', ['bridge_list'], ''),
@@ -59,7 +63,7 @@
       <span>{{ group }}</span>
       {% for target, label, icon, matches, badge in items %}
       <a class="side-link" href="{{ url_for(target) }}"{% if endpoint in matches %} aria-current="page"{% endif %}>
-        <svg aria-hidden="true"><use href="#{{ icon }}"/></svg>{{ label }}{% if badge %}<em>{{ badge }}</em>{% endif %}
+        <svg aria-hidden="true"><use href="#{{ icon }}"/></svg>{{ label }}{% if badge == '#count' %}<b class="side-count" data-order-count hidden></b>{% elif badge %}<em>{{ badge }}</em>{% endif %}
       </a>
       {% endfor %}
     </nav>
