@@ -54,6 +54,30 @@ static string positions(const string& text, size_t start, const string& query) {
 }
 static int fail(int code, const string& message) { cerr << "paired_scan: " << message << "\n"; return code; }
 
+// Peak resident set of this process in kB. On Linux ru_maxrss survives exec, so a
+// scanner spawned from a large parent would report the parent's peak; VmHWM belongs
+// to the current address space and is reset by exec.
+static long long peak_rss_kb() {
+#ifdef __linux__
+    ifstream status("/proc/self/status");
+    string line;
+    while (getline(status, line)) {
+        if (line.compare(0, 6, "VmHWM:") == 0) {
+            istringstream s(line.substr(6));
+            long long kb;
+            if (s >> kb) return kb;
+        }
+    }
+#endif
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+#ifdef __APPLE__
+    return (long long)usage.ru_maxrss / 1024;   // bytes on macOS
+#else
+    return (long long)usage.ru_maxrss;          // kilobytes elsewhere
+#endif
+}
+
 int main(int argc, char** argv) {
     if (argc != 5) return fail(2, "usage: paired_scan queries.tsv reference.fasta output.tsv max_substitutions_per_arm");
     int K;
@@ -150,12 +174,7 @@ int main(int argc, char** argv) {
     }
     scan(id, seq);
     if (nseq == 0) return fail(9, "reference FASTA is empty");
-    struct rusage usage; getrusage(RUSAGE_SELF, &usage);
-#ifdef __APPLE__
-    long long peak_kb = usage.ru_maxrss / 1024;   // bytes on macOS
-#else
-    long long peak_kb = usage.ru_maxrss;          // kilobytes on Linux
-#endif
+    long long peak_kb = peak_rss_kb();
     out << "#DONE\tqueries=" << qs.size() << "\tsequences=" << nseq << "\tbases=" << nbases
         << "\tambiguous_bases=" << nambiguous << "\tverified_candidates=" << checks << "\tpaired_hits=" << nhits
         << "\tpeak_rss_kb=" << peak_kb << "\n";
