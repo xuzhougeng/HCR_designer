@@ -47,6 +47,15 @@ class WorkbenchShellTests(unittest.TestCase):
         page = self.client.get('/').get_data(as_text=True)
         self.assertIn('{:,} 条'.format(len(web.bridge_seq_dict)), page)
 
+    def test_home_does_not_list_every_reference(self):
+        """The production server has 52 references; the tile must stay one line."""
+        genomes = [{'filename': f'ref{i}.fa', 'display_name': f'ref{i:02d}'} for i in range(52)]
+        with patch.object(web, 'get_available_genomes', return_value=genomes):
+            page = self.client.get('/').get_data(as_text=True)
+        self.assertIn('<strong>52 个</strong>', page)
+        self.assertIn('ref00 · ref01 等', page)
+        self.assertNotIn('ref02', page)
+
 
 class LegacyToolTests(unittest.TestCase):
     def setUp(self):

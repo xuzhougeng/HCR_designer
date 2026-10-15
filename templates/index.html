@@ -56,7 +56,8 @@
 
 <section class="spec" aria-label="当前服务器数据">
   <div><span>桥接探针库</span><strong>{{ '{:,}'.format(bridge_count) }} 条</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
-  <div><span>可用参考库</span><strong>{{ genomes|length }} 个</strong><small>{% if genomes %}{{ genomes|map(attribute='display_name')|join(' · ') }}{% else %}尚未添加，可在设计时上传{% endif %}</small></div>
+  <div><span>可用参考库</span><strong>{{ genomes|length }} 个</strong>{% set names = genomes|map(attribute='display_name')|sort|list %}
+  <small>{% if not genomes %}尚未添加，可在设计时上传{% elif 'bol_bju_cdna' in names %}含 bol_bju_cdna{% if names|length > 1 %} 等{% endif %}{% else %}{{ names[:2]|join(' · ') }}{% if names|length > 2 %} 等{% endif %}{% endif %}</small></div>
   <div><span>双臂配对扫描</span><strong>每臂 ≤ 3</strong><small>替换错配 · 正向转录本 · 无缺口</small></div>
   <div><span>坐标约定</span><strong>1-based</strong><small>inclusive · 序列 5′ → 3′</small></div>
 </section>
