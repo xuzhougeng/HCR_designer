@@ -11,6 +11,8 @@ HCR_HOST=0.0.0.0 bash scripts/run_web.sh
 
 服务器现有 Python 3.10.12、Biopython 1.81、NumPy 1.26.4、Flask 3.0.0、pandas 2.1.1、Requests 2.31.0 满足当前代码依赖。BLAST+ 为 2.14.1；本地开发的 BLAST+ 为 2.17.0，部署前应在服务器版本上完成真实参考库测试，不直接复制 macOS 可执行文件。无需修改共享 Python 环境。
 
+2026-10-15 的部署（`5bdc4b7`）用 `git bundle` 把发布提交带到服务器，在 `HCR_designer_deployments/20261014-subgenome/staging` 的独立克隆里，用服务器的 Python 3.10、BLAST 2.14.1 和真实参考完成测试、历史回归和 HTTP 验证，再对运行目录做 `merge --ff-only`；扫描器在切换时预先编译，首个用户请求不承担编译耗时。该目录的 `before.bundle` 与 `before-code.tar.gz` 保存了部署前状态，回滚时 `git reset --keep f716f4a` 后按下面的命令重启即可，参考索引未变动，无需恢复。服务器上单次设计约 2 分钟，其中配对扫描约 32 s，仍是同步请求。
+
 双臂配对扫描器需要 C++17 编译器：首次运行会用 `c++ -std=c++17 -O2` 把 `src/common/paired_scan.cpp` 编译到 `.tools/paired_scan/<源码哈希>/`，该目录不随代码提交，应用进程需要对它有写权限。服务器没有编译器时，在同架构机器上编译后放到服务器并设置 `HCR_SCAN_BIN` 指向该文件；macOS 上编译的二进制不能复制到 Linux 服务器。两者都不可用时应用会直接报错，不会退回近似检索。部署前先在服务器上执行一次历史回归（`python -m scripts.recheck_historical_pairs --audit-file … --audit-sites …`），确认 155/326/372/388 与逐位点结果一致。
 
 本轮升级需要带原始序列编号的 BLAST 索引。`uploads/bol_bju_cdna.fasta` 保持原文件，SHA256 应为 `5de12a5800a09889b73b901b12787c16fb6461d1c5a2de42e1864109726921d0`。在独立部署目录用以下命令生成新索引，验证后再替换索引文件；旧索引与代码一起备份：
