@@ -10,10 +10,72 @@
   });
   const saved = sessionStorage.getItem('reference-library-message');
   if (saved) { HCR.setAlert(message, saved); sessionStorage.removeItem('reference-library-message'); }
-  document.getElementById('reference-search').addEventListener('input', event => {
-    const query = event.target.value.trim().toLowerCase();
-    document.querySelectorAll('.reference-entry').forEach(row => { row.hidden = !(row.dataset.filename + ' ' + row.dataset.display).toLowerCase().includes(query); });
-  });
+  const entries = [...document.querySelectorAll('.reference-entry')];
+  const search = document.getElementById('reference-search');
+  const pageSize = document.getElementById('reference-page-size');
+  const pagers = [...document.querySelectorAll('.reference-pagination')];
+  const view = new URL(location.href);
+  search.value = view.searchParams.get('q') || '';
+  pageSize.value = ['10', '20', '50'].includes(view.searchParams.get('page_size')) ? view.searchParams.get('page_size') : '10';
+  let currentPage = Number(view.searchParams.get('page')) || 1;
+  if (!Number.isSafeInteger(currentPage)) currentPage = 1;
+
+  function renderPage() {
+    const query = search.value.trim().toLowerCase();
+    const matches = entries.filter(row => (row.dataset.filename + ' ' + row.dataset.display).toLowerCase().includes(query));
+    const size = Number(pageSize.value);
+    const pages = Math.max(1, Math.ceil(matches.length / size));
+    currentPage = Math.min(Math.max(1, currentPage), pages);
+    const start = (currentPage - 1) * size;
+    const visible = new Set(matches.slice(start, start + size));
+    entries.forEach(row => { row.hidden = !visible.has(row); });
+    document.getElementById('reference-no-results').hidden = !entries.length || !!matches.length;
+    const count = query ? `匹配 ${matches.length} / ${entries.length} 个` : `共 ${entries.length} 个`;
+    const summary = matches.length ? `显示 ${start + 1}–${Math.min(start + size, matches.length)} 个 · ${count} · 第 ${currentPage} / ${pages} 页` : count;
+    pagers.forEach((pager, index) => {
+      pager.hidden = !entries.length || (index > 0 && pages === 1);
+      pager.querySelector('[data-page-summary]').textContent = summary;
+      pager.querySelector('[data-page-step="-1"]').disabled = currentPage === 1;
+      pager.querySelector('[data-page-step="1"]').disabled = currentPage === pages;
+      const numbers = pager.querySelector('[data-page-numbers]');
+      numbers.replaceChildren();
+      let previous = 0;
+      for (let page = 1; page <= pages; page++) {
+        if (pages > 7 && page !== 1 && page !== pages && Math.abs(page - currentPage) > 1) continue;
+        if (page > previous + 1) {
+          const gap = document.createElement('span');
+          gap.textContent = '…';
+          numbers.append(gap);
+        }
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn small';
+        button.dataset.page = page;
+        button.textContent = page;
+        button.setAttribute('aria-label', `第 ${page} 页`);
+        if (page === currentPage) button.setAttribute('aria-current', 'page');
+        numbers.append(button);
+        previous = page;
+      }
+    });
+    // Keep the current view when saving settings, computing hashes or deleting a reference reloads the page.
+    const url = new URL(location.href);
+    [['q', search.value.trim()], ['page_size', size === 10 ? '' : size], ['page', currentPage === 1 ? '' : currentPage]].forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value); else url.searchParams.delete(key);
+    });
+    history.replaceState(null, '', url);
+  }
+  search.addEventListener('input', () => { currentPage = 1; renderPage(); });
+  pageSize.addEventListener('change', () => { currentPage = 1; renderPage(); });
+  pagers.forEach(pager => pager.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button || button.disabled) return;
+    currentPage = button.dataset.page ? Number(button.dataset.page) : currentPage + Number(button.dataset.pageStep);
+    renderPage();
+    pagers[0].querySelector('[aria-current="page"]').focus({preventScroll: true});
+    document.getElementById('reference-list').scrollIntoView({block: 'start'});
+  }));
+  renderPage();
   async function write(url, data, success) {
     document.querySelectorAll('form button').forEach(button => { button.disabled = true; });
     HCR.setAlert(message, '正在处理参考文件，请稍候……', 'busy');

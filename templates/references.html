@@ -6,6 +6,16 @@
 {% block head_actions %}{% if not can_delete %}<a class="btn" href="{{ url_for('admin_login', next='references') }}">管理员登录 · 删除参考</a>{% endif %}<a class="btn" href="{{ url_for('subgenomes') }}">生成亚基因组编号</a>{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/references.css') }}">{% endblock %}
 {% block content %}
+{% macro pagination(position) %}
+<nav class="reference-pagination" aria-label="参考库分页（{{ position }}）" hidden>
+  <p class="hint" data-page-summary{% if position == '顶部' %} role="status" aria-live="polite"{% endif %}></p>
+  <div class="reference-page-buttons">
+    <button class="btn small" type="button" data-page-step="-1">上一页</button>
+    <div class="reference-page-numbers" data-page-numbers></div>
+    <button class="btn small" type="button" data-page-step="1">下一页</button>
+  </div>
+</nav>
+{% endmacro %}
 <p class="alert" id="reference-message" role="status" hidden></p>
 {% if can_edit %}
 <form class="panel stack" id="reference-upload-form">
@@ -19,8 +29,9 @@
   <div class="actions"><span>首次上传时会检查已有参考的哈希，大文件可能需要一些时间。</span><button class="btn primary" type="submit">上传并检查重复</button></div>
 </form>
 {% else %}<p class="hint">可以查看并在设计页面选择参考库；上传、配置与删除由管理员操作。</p>{% endif %}
-<section class="panel stack">
-  <div class="panel-head"><div><h2>已有参考库 · {{ references|length }} 个</h2><p>旧参考自动显示，不改动 FASTA 或已有索引。尚未计算哈希的参考可单独计算，也会在下次上传去重时建立哈希记录。</p></div><label class="field">搜索<input type="search" id="reference-search" placeholder="参考名称或文件名"></label></div>
+<section class="panel stack" id="reference-list">
+  <div class="panel-head"><div><h2>已有参考库 · {{ references|length }} 个</h2><p>旧参考自动显示，不改动 FASTA 或已有索引。尚未计算哈希的参考可单独计算，也会在下次上传去重时建立哈希记录。</p></div><div class="reference-filters"><label class="field">搜索<input type="search" id="reference-search" placeholder="参考名称或文件名"></label><label class="field">每页显示<select id="reference-page-size"><option value="10">10 个</option><option value="20">20 个</option><option value="50">50 个</option></select></label></div></div>
+  {{ pagination('顶部') }}
   {% for reference in references %}
   <article class="reference-entry stack" data-filename="{{ reference.filename }}" data-display="{{ reference.display_name }}">
     <div class="reference-title"><strong>{{ reference.display_name }}</strong><span class="chip">{{ '多倍体' if reference.polyploid is sameas true else '非多倍体' if reference.polyploid is sameas false else '倍性未配置' }}</span></div>
@@ -31,12 +42,20 @@
     <form class="reference-settings grid-2">
       <label class="field">参考名称<input name="display_name" value="{{ reference.display_name }}" maxlength="120" required></label>
       <label class="field">是否为多倍体<select name="polyploid"><option value=""{% if reference.polyploid is none %} selected{% endif %}>尚未配置</option><option value="true"{% if reference.polyploid is sameas true %} selected{% endif %}>是，多倍体参考</option><option value="false"{% if reference.polyploid is sameas false %} selected{% endif %}>否，非多倍体参考</option></select></label>
-      <label class="field">{{ '更新' if reference.subgenome else '上传' }}亚基因组归属文件<input type="file" name="subgenome_map" accept=".csv,.tsv,.txt,.map"><small>未选择新文件时保留已有归属；可使用亚基因组编号工具生成的 CSV。</small></label>
-      <div class="head-actions"><button class="btn small" type="submit">保存配置</button><button class="btn small compute-hash" type="button">{{ '重新检查哈希' if reference.sha256 else '计算哈希与序列数' }}</button>{% if can_delete %}<button class="btn small delete-reference" type="button">删除参考及索引</button>{% endif %}</div>
+      <label class="field reference-annotation-field">{{ '更新' if reference.subgenome else '上传' }}亚基因组归属文件（可选）<input type="file" name="subgenome_map" accept=".csv,.tsv,.txt,.map"><small>未选择新文件时保留已有归属；可使用亚基因组编号工具生成的 CSV。</small></label>
+      <div class="reference-form-actions">
+        <div class="reference-secondary-actions">
+          <button class="btn compute-hash" type="button">{{ '重新检查哈希' if reference.sha256 else '计算哈希与序列数' }}</button>
+          {% if can_delete %}<button class="btn delete-reference" type="button">删除参考及索引</button>{% endif %}
+        </div>
+        <button class="btn primary" type="submit">保存配置</button>
+      </div>
     </form>
     {% endif %}
   </article>
   {% else %}<p class="empty">暂无共享参考库。</p>{% endfor %}
+  <p class="empty" id="reference-no-results" hidden>没有匹配的参考库，请尝试其他名称或文件名。</p>
+  {{ pagination('底部') }}
 </section>
 <p class="hint">选择多倍体参考时，分析页面会提示是否考虑多套染色体。勾选后使用本页保存的亚基因组归属，按目标所属亚基因组判定非目标配对；无需再次上传。共享参考及归属由管理员手动清理，不随分析结果的三个月保留期自动删除。</p>
 <script type="application/json" id="reference-config">{{ {'csrf': admin_csrf_token(), 'upload_url': url_for('reference_upload'), 'configure_url': url_for('reference_configure'), 'hash_url': url_for('reference_hash'), 'delete_url': url_for('admin_delete'), 'login_url': url_for('admin_login', next='references')}|tojson }}</script>

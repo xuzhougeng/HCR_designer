@@ -6,3 +6,45 @@
 .reference-entry details { font-size: 12px; color: var(--muted); }
 .reference-entry summary { cursor: pointer; }
 .reference-hash { margin-top: 8px; }
+.reference-settings {
+  gap: 18px 20px;
+  align-items: start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunk);
+}
+.reference-settings .field { gap: 8px; }
+.reference-settings input[name=display_name], .reference-settings select { height: 44px; }
+.reference-annotation-field, .reference-form-actions { grid-column: 1 / -1; }
+.reference-settings input[type=file] { padding: 10px; background: var(--surface); }
+.reference-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.reference-secondary-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reference-form-actions .btn { min-height: 38px; padding: 8px 14px; line-height: 1.4; }
+.reference-form-actions .primary { min-width: 100px; margin-left: auto; }
+.reference-form-actions .delete-reference { color: var(--bad); }
+.panel-head > .reference-filters { flex-direction: row; gap: 12px; flex-wrap: wrap; }
+.reference-filters .field { margin-bottom: 0; }
+.reference-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.reference-page-buttons, .reference-page-numbers { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.reference-page-numbers .btn[aria-current="page"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.reference-page-numbers > span { color: var(--muted); padding: 0 3px; }
+#reference-list { scroll-margin-top: 20px; }
+@media (max-width: 600px) {
+  .reference-settings { padding: 16px; gap: 16px; }
+  .reference-form-actions { align-items: stretch; }
+  .reference-secondary-actions { width: 100%; }
+  .reference-form-actions .primary { width: 100%; }
+  .reference-filters, .reference-pagination > .hint { width: 100%; }
+  .reference-filters .field:first-child { flex: 1; }
+  .reference-page-buttons { gap: 8px; }
+  .reference-page-numbers { gap: 4px; }
+}
