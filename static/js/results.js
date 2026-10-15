@@ -114,13 +114,18 @@
   }
   const span = p => [Math.min(p.left_probe.position.start, p.right_probe.position.start),
                      Math.max(p.left_probe.position.end, p.right_probe.position.end)];
-  const offTarget = p => (p.specificity?.paired_matches || []).filter(m => m.relation !== 'target');
   const risk = m => [Math.max(m.left_mismatches, m.right_mismatches), m.left_mismatches + m.right_mismatches];
   const byRisk = (a, b) => risk(a)[0] - risk(b)[0] || risk(a)[1] - risk(b)[1];
-  const closest = p => offTarget(p).sort(byRisk)[0] || null;
 
   function showResults(result) {
     let task = result.tasks[0], selected = null, range = null;
+    const polyploidAvailable = result.process_multiple_sets || result.parameters.target_mode === 'subgenome';
+    let polyploid = Boolean(polyploidAvailable), alignment = null, alignmentColumns = [], windowStart = 1;
+    let alignmentRequest = null, alignmentGeneration = 0;
+    const alignmentCache = new Map();
+    const compareMatches = (a, b) => HCRResults.compare(a, b, polyploid, task.subgenome);
+    const closest = probe => HCRResults.closest(probe, polyploid, task.subgenome);
+    byId('polyploid-controls').hidden = !polyploidAvailable;
 
     // summary
     const stats = byId('result-stats');
@@ -148,11 +153,28 @@
 
     const picker = byId('result-task');
     result.tasks.forEach((t, i) => { const o = el('option', t.name + ' · ' + t.gene_id + ' · ' + t.bridge_id); o.value = i; picker.append(o); });
-    picker.addEventListener('change', () => { task = result.tasks[Number(picker.value)]; selected = null; range = null; byId('evidence').hidden = true; render(); });
+    picker.addEventListener('change', () => { task = result.tasks[Number(picker.value)]; selected = null; range = null; alignment = null; alignmentColumns = []; windowStart = 1; byId('evidence').hidden = true; render(); loadAlignment(); });
     byId('result-filter').addEventListener('change', renderTable);
     byId('result-sort').addEventListener('change', renderTable);
     byId('close-evidence').addEventListener('click', () => { selected = null; byId('evidence').hidden = true; renderTrack(); renderTable(); });
     document.addEventListener('hcr:orders', renderTable);
+    byId('polyploid-view').addEventListener('change', event => {
+      polyploid = event.target.checked;
+      render();
+      if (selected) renderEvidence(selected, false);
+      loadAlignment();
+    });
+    byId('homolog-retry').addEventListener('click', () => loadAlignment());
+    byId('homolog-back').addEventListener('click', () => moveAlignmentWindow(-80));
+    byId('homolog-forward').addEventListener('click', () => moveAlignmentWindow(80));
+    byId('evidence-previous').addEventListener('click', () => moveEvidence(-1));
+    byId('evidence-next').addEventListener('click', () => moveEvidence(1));
+    document.addEventListener('keydown', event => {
+      if (byId('evidence').hidden || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+          || event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+      const direction = {ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1}[event.key];
+      if (direction) { event.preventDefault(); moveEvidence(direction); }
+    });
 
     function orderKey(probe) { return status.id + ':' + task.name + ':' + probe.id; }
     function orderItem(probe) {
@@ -167,7 +189,77 @@
               closest: near ? near.subject_id + ' L' + near.left_mismatches + '/R' + near.right_mismatches : (assessed(probe) ? '未检出' : '未评估')};
     }
 
-    function render() { byId('track-caption').textContent = task.gene_id + ' · ' + task.sequence_length.toLocaleString() + ' nt · 桥接 ' + task.bridge_id + ' · 点击候选或密度柱查看'; renderTrack(); renderTable(); }
+    function render() {
+      byId('track-caption').textContent = task.gene_id + ' · ' + task.sequence_length.toLocaleString() + ' nt · 桥接 ' + task.bridge_id + ' · 点击候选或密度柱查看';
+      byId('closest-caption').textContent = (polyploid ? '多倍体模式：优先展示跨物种，其次跨亚基因组的非目标配对；同类按错配数排序。' : '错配条按探针 5′ → 3′ 显示与最接近的非目标配对；') + '灰色为一致碱基，橙色为错配碱基';
+      renderTrack(); renderTable();
+    }
+
+    async function loadAlignment() {
+      const generation = ++alignmentGeneration;
+      alignmentRequest?.abort();
+      byId('homolog-panel').hidden = !polyploid;
+      byId('homolog-detail').hidden = true;
+      byId('homolog-retry').hidden = true;
+      if (!polyploid) return;
+      const index = result.tasks.indexOf(task);
+      byId('homolog-summary').textContent = '正在从其他已标注分组中查找最相似序列……';
+      try {
+        let data = alignmentCache.get(index);
+        if (!data) {
+          alignmentRequest = new AbortController();
+          const url = new URL(status.alignment_url, location.href); url.searchParams.set('task', index);
+          const response = await fetch(url, {headers: {Accept: 'application/json'}, signal: alignmentRequest.signal});
+          data = await response.json();
+          if (!response.ok) throw new Error(data.error || '同源序列比对未完成。');
+          alignmentCache.set(index, data);
+        }
+        if (generation !== alignmentGeneration) return;
+        alignment = data.status === 'completed' ? data : null;
+        alignmentColumns = alignment ? HCRResults.alignmentColumns(task.sequence, alignment) : [];
+        byId('homolog-summary').textContent = alignment
+          ? `${task.gene_id}（${data.target_group}） ↔ ${data.subject_id}（${data.subject_group}） · ${data.relation === 'cross_species' ? '跨物种' : '跨亚基因组'} · 相似度 ${data.identity.toFixed(1)}% · 目标覆盖 ${data.query_coverage.toFixed(1)}% · 方向 ${data.strand}`
+          : data.message;
+        byId('homolog-detail').hidden = !alignment;
+        if (selected) windowStart = Math.max(1, span(selected)[0] - 12);
+        renderTrack(); renderHomolog();
+      } catch (error) {
+        if (generation !== alignmentGeneration || error.name === 'AbortError') return;
+        alignment = null; alignmentColumns = [];
+        byId('homolog-summary').textContent = error.message;
+        byId('homolog-retry').hidden = false;
+        renderTrack();
+      }
+    }
+
+    function moveAlignmentWindow(delta) {
+      windowStart = Math.min(Math.max(1, task.sequence_length - 79), Math.max(1, windowStart + delta));
+      renderHomolog(); renderTrack();
+    }
+
+    function renderHomolog() {
+      if (!polyploid || !alignment) return;
+      windowStart = Math.min(Math.max(1, task.sequence_length - 79), Math.max(1, windowStart));
+      const end = Math.min(task.sequence_length, windowStart + 79);
+      const columns = alignmentColumns.filter(column => column.anchor >= windowStart && column.anchor <= end);
+      const subjectPositions = columns.map(column => column.subjectPos).filter(pos => pos !== null);
+      byId('homolog-window-label').textContent = `目标 ${windowStart}–${end} / ${task.sequence_length} nt` + (subjectPositions.length ? ` · 比对序列 ${subjectPositions[0]}–${subjectPositions[subjectPositions.length - 1]}` : ' · 此区域未覆盖');
+      byId('homolog-back').disabled = windowStart === 1;
+      byId('homolog-forward').disabled = end === task.sequence_length;
+      const view = byId('homolog-sequence'); view.replaceChildren();
+      const grid = el('div', undefined, 'seq-grid');
+      const ruler = el('div', undefined, 'seq-row ruler'), target = el('div', undefined, 'seq-row'), subject = el('div', undefined, 'seq-row');
+      columns.forEach(column => {
+        const side = !selected || !column.pos ? '' : column.pos >= selected.left_probe.position.start && column.pos <= selected.left_probe.position.end ? 'l'
+          : column.pos >= selected.right_probe.position.start && column.pos <= selected.right_probe.position.end ? 'r' : '';
+        ruler.append(el('span', column.pos && column.pos % 10 === 0 ? '|' : ''));
+        target.append(el('span', column.query, side || 'f'));
+        subject.append(el('span', column.subject, column.state === 'mismatch' ? 'x' : column.state === 'gap' ? 'homolog-gap' : column.state === 'match' ? 'same' : 'f'));
+      });
+      grid.append(el('span', '目标坐标 →', 'name'), ruler, el('span', task.gene_id, 'name'), target,
+        el('span', alignment.subject_id + ' · ' + alignment.subject_group, 'name'), subject);
+      view.append(grid);
+    }
 
     /* coordinate track: kept pairs to scale, candidate density by status below */
     function renderTrack() {
@@ -183,7 +275,8 @@
         counts[Math.min(bins - 1, Math.floor((mid - 1) / binSize))][stateOf(q)[0]]++;
       });
       const maxCount = Math.max(1, ...counts.map(c => c.keep + c.excluded + c.other + c.unknown));
-      const keptY = 28, densityTop = 64, densityHeight = 60, axisY = densityTop + densityHeight + 8, height = axisY + 26;
+      const keptY = 28, densityTop = 64, densityHeight = 60, axisY = densityTop + densityHeight + 8;
+      const hasAlignment = polyploid && alignment, height = axisY + (hasAlignment ? 62 : 26);
       svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
       if (range) svg.append(svgEl('rect', {class: 'range', x: x(range[0]), y: 4, width: Math.max(2, x(range[1]) - x(range[0])), height: axisY - 4}));
       if (selected) {
@@ -230,6 +323,25 @@
         const label = svgEl('text', {x: x(pos), y: axisY + 16, 'text-anchor': t === 0 ? 'start' : 'middle'}); label.textContent = pos; svg.append(label);
       }
       const end = svgEl('text', {x: left + inner, y: axisY + 16, 'text-anchor': 'end'}); end.textContent = length + ' nt'; svg.append(end);
+      if (hasAlignment) {
+        const y = axisY + 32, lane = svgEl('g', {class: 'homolog-lane'});
+        const label = svgEl('text', {class: 'lane-label', x: 0, y: y + 11}); label.textContent = '跨组比对'; svg.append(label);
+        lane.append(svgEl('rect', {class: 'homolog-background', x: left, y, width: inner, height: 14}));
+        alignmentColumns.forEach(column => {
+          if (column.state === 'unaligned') return;
+          const position = x(column.anchor);
+          if (!column.pos) lane.append(svgEl('line', {class: 'homolog-insertion', x1: position, x2: position, y1: y - 2, y2: y + 16}));
+          else lane.append(svgEl('rect', {class: 'homolog-' + column.state, x: position, y, width: Math.max(.5, inner / length), height: 14}));
+        });
+        lane.append(svgEl('rect', {class: 'homolog-window', x: x(windowStart), y: y - 2, width: Math.max(2, x(Math.min(length, windowStart + 79)) - x(windowStart)), height: 18}));
+        lane.addEventListener('click', event => {
+          const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+          const position = point.matrixTransform(svg.getScreenCTM().inverse()).x;
+          windowStart = Math.round(1 + (position - left) / inner * (length - 1)) - 40;
+          moveAlignmentWindow(0);
+        });
+        svg.append(lane);
+      }
     }
 
     function strip(probe) {
@@ -294,18 +406,32 @@
         row.append(id, el('td', a + '–' + b, 'num'), st, strip(q), el('td', REASONS[q.reason_code] || q.reason || '—'), actions);
         body.append(row);
       });
+      updateEvidenceNavigation(rows);
     }
 
     function select(probe) {
       selected = probe;
+      if (alignment) { windowStart = Math.max(1, span(probe)[0] - 12); renderHomolog(); }
       renderTrack(); renderTable(); renderEvidence(probe);
     }
 
-    function renderEvidence(probe) {
+    function updateEvidenceNavigation(rows = visible()) {
+      const index = rows.indexOf(selected);
+      byId('evidence-previous').disabled = index <= 0;
+      byId('evidence-next').disabled = index < 0 || index >= rows.length - 1;
+      byId('evidence-position').textContent = index < 0 ? '所选探针对不在当前筛选范围' : `第 ${index + 1} / ${rows.length} 对`;
+    }
+
+    function moveEvidence(direction) {
+      const next = HCRResults.neighbor(visible(), selected, direction);
+      if (next) select(next);
+    }
+
+    function renderEvidence(probe, focus = true) {
       const panel = byId('evidence');
       byId('evidence-title').textContent = task.name + '-' + probe.id + ' · 配对证据';
       const spec = probe.specificity || {};
-      const matches = [...(spec.paired_matches || [])].sort((a, b) => (a.relation === 'target' ? -1 : b.relation === 'target' ? 1 : byRisk(a, b)));
+      const matches = [...(spec.paired_matches || [])].sort((a, b) => (Number(b.relation === 'target') - Number(a.relation === 'target')) || compareMatches(a, b));
       byId('evidence-summary').textContent = assessed(probe)
         ? (spec.on_target_exact ? '已找到目标转录本上的双臂完全配对' : '未找到目标完全配对') + ' · 共 ' + matches.length + ' 个配对位点 · ' + (REASONS[probe.reason_code] || '')
         : '本对探针未完成配对特异性评估。';
@@ -340,7 +466,10 @@
         body.append(row);
       });
       panel.hidden = false;
-      panel.scrollIntoView({block: 'start', behavior: 'smooth'});
+      if (focus) {
+        panel.focus({preventScroll: true});
+        panel.scrollIntoView({block: 'start'});
+      }
     }
 
     /* sense-strand view: target footprint with flanks, off-target footprints aligned underneath */
@@ -379,7 +508,7 @@
       if (!others && assessed(probe)) view.append(el('p', '当前检索范围内没有非目标配对。', 'hint'));
     }
 
-    render();
+    render(); loadAlignment();
   }
 
   if (status.status !== 'completed') { followProgress(); return; }

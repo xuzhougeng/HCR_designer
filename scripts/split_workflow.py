@@ -17,6 +17,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from scripts.create_split_probe import main as design_split
 from scripts.utils import save_sequence
 from src.common.paired_specificity import load_reference, infer_species, MAX_SUBSTITUTIONS
+from src.common.homolog_alignment import AlignmentUnavailable, find_homolog
 from src.common.reference_annotation import (MAX_LABEL_LENGTH, format_subgenome_map,
                                              load_subgenome_map, parse_subgenome_map)
 
@@ -653,6 +654,28 @@ class SplitWorkflow:
                     if probe['id'] in synthesis:
                         probe['synthesis'] = synthesis[probe['id']]
         return result
+
+    def homolog_alignment(self, identifier, task_index):
+        """Review only: use the job's reference and membership snapshot, never current library settings."""
+        directory = self.job_dir(identifier)
+        manifest = self._manifest(directory)
+        if manifest.get('status') != 'completed':
+            raise InputError('任务完成后才能查看同源序列比对。', status=409)
+        if not (manifest.get('process_multiple_sets') or (manifest.get('parameters') or {}).get('target_mode') == 'subgenome'):
+            raise InputError('本次设计未启用多倍体模式。请使用已配置的归属文件重新设计。', status=409)
+        if not 0 <= task_index < len(manifest['tasks']):
+            raise InputError('找不到指定任务。', status=404)
+        task = manifest['tasks'][task_index]
+        # Locate the frozen copy inside this job, not the possibly stale absolute path in old manifests.
+        annotation = directory / 'subgenomes.tsv'
+        reference = manifest.get('reference_path')
+        if not reference or not Path(reference).is_file() or not annotation.is_file():
+            raise InputError('本次任务的参考或亚基因组归属快照已缺失，无法补充比对。', status=409)
+        try:
+            return find_homolog(reference, annotation, manifest['reference'].get('sha256'),
+                                task['gene_id'], task['sequence'])
+        except (AlignmentUnavailable, FileNotFoundError) as error:
+            raise InputError(str(error) if isinstance(error, AlignmentUnavailable) else '参考文件或 BLAST 程序不可用，无法补充比对。', status=409) from error
 
 
 def read_synthesis(path, name):

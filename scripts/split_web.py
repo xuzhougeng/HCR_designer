@@ -80,6 +80,7 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     def links(identifier):
         return dict(status_url=url_for('split_status', identifier=identifier),
                     result_url=url_for('split_result', identifier=identifier),
+                    alignment_url=url_for('split_alignment', identifier=identifier),
                     download_url=url_for('split_download', identifier=identifier),
                     run_url=url_for('split_run', identifier=identifier))
 
@@ -154,6 +155,15 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
         if status['status'] == 'prepared':
             raise InputError('该任务尚未生成完整结果。', status=409)
         return render_template('split_result.html', status=status, result=result, jobs_url=url_for('jobs'))
+
+    @app.get('/split/results/<identifier>/alignment')
+    @api_errors
+    def split_alignment(identifier):
+        # The slow, read-only BLAST request must not hold the shared job/storage lock.
+        index = request.args.get('task', '0')
+        if not index.isdecimal() or len(index) > 6:
+            raise InputError('请选择有效的任务编号。')
+        return jsonify(workflow().homolog_alignment(identifier, int(index)))
 
     @app.get('/split/results/<identifier>/download')
     @api_errors

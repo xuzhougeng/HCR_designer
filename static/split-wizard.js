@@ -43,7 +43,7 @@
     byId('multiple-sets-field').hidden = !polyploid;
     if (!hasAnnotation) field('process_multiple_sets').checked = false;
     byId('multiple-sets-hint').textContent = hasAnnotation
-      ? '勾选后使用参考库中已保存的亚基因组归属信息；本次无需再次上传。'
+      ? '使用参考库已保存的亚基因组归属；结果页提供跨组同源比对与跨物种优先的配对证据，无需再次上传。'
       : '此参考库尚无有效的亚基因组归属文件，请先到参考库管理页上传，刷新本页后即可勾选。';
     byId('subgenome-note').hidden = refMode === 'none';
     field('existing_ref_genome').disabled = busy || refMode !== 'existing';
