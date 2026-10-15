@@ -1,0 +1,8 @@
+.reference-entry { padding: 20px 0; border-top: 1px solid var(--line); }
+.reference-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.reference-title strong { font-size: 16px; }
+.reference-entry .field { margin-bottom: 0; }
+.reference-entry > .mono, .reference-hash { overflow-wrap: anywhere; }
+.reference-entry details { font-size: 12px; color: var(--muted); }
+.reference-entry summary { cursor: pointer; }
+.reference-hash { margin-top: 8px; }

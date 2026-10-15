@@ -27,6 +27,7 @@
   <p class="empty" id="job-empty" hidden>还没有提交过任务。<a href="{{ url_for('split') }}">开始一次双探针设计</a></p>
 </section>
 <p class="hint">仅显示已提交计算的任务；只做了输入检查、未提交的任务不在此列。服务重启时未完成的任务会标记为“已中断”，可在任务页按原参数重新运行。</p>
+<p class="hint">分析结果保留 3 个月，到期后定期清理。请及时下载需要长期保存的 ZIP 文件。</p>
 <script type="application/json" id="jobs-data">{{ jobs|tojson }}</script>
 {% endblock %}
 

@@ -1,0 +1,8 @@
+.rule-table { min-width: 420px; }
+.rule-table td:last-child { width: 60px; }
+#file-labels td:first-child { overflow-wrap: anywhere; }
+#file-labels input { min-width: 100px; }
+#subgenome-result .panel-head { margin-bottom: 0; }
+#subgenome-result h3 { font-size: 15px; margin-bottom: 12px; }
+#subgenome-preview td:first-child, #subgenome-issues td:first-child { font-family: var(--mono); overflow-wrap: anywhere; }
+#accept-unmatched-box { color: var(--warn); }

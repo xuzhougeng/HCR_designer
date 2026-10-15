@@ -91,6 +91,8 @@
     <div class="tool-group">
       <h3>序列工具</h3>
       <a class="tool" href="{{ url_for('formatting') }}"><svg aria-hidden="true"><use href="#i-format"/></svg><strong>FASTA 格式化</strong><span>清理标题、统一大写、过滤无效序列、去除转录本变体重复。</span></a>
+      <a class="tool" href="{{ url_for('subgenomes') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>亚基因组编号</strong><span>按 FASTA 文件或编号特征生成亚基因组归属 CSV。</span></a>
+      <a class="tool" href="{{ url_for('references') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>参考库管理</strong><span>上传共享参考、配置多倍体并按 SHA-256 避免重复。</span></a>
       <a class="tool" href="{{ url_for('probe_recommend') }}"><svg aria-hidden="true"><use href="#i-bars"/></svg><strong>探针数量推荐</strong><span>由 CDS 与 counts 计算 TPM，按表达量推荐每个基因的探针数。</span></a>
       <a class="tool" href="{{ url_for('filter') }}"><svg aria-hidden="true"><use href="#i-chip"/></svg><strong>AI 筛选 <span class="chip warn">实验</span></strong><span>用大语言模型对三探针结果 JSON 做二次筛选。</span></a>
     </div>

@@ -20,6 +20,8 @@ PAGES = {
     '/bridge': '推荐新探针',
     '/bridge/validate': '合规验证',
     '/formatting': 'FASTA 格式化',
+    '/subgenomes': '亚基因组编号',
+    '/references': '参考库管理',
     '/probe_recommend': '探针数量推荐',
     '/filter': 'AI 筛选',
     '/help': '帮助',

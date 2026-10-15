@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from pathlib import Path
 import tempfile
 import threading
@@ -9,6 +10,8 @@ from unittest.mock import patch
 from flask import Flask
 from scripts.split_web import register_split_routes
 from scripts.split_workflow import DEFAULTS, SplitWorkflow, read_synthesis
+from scripts.admin_web import register_admin
+from scripts.storage_maintenance import utcnow
 
 
 SEQ = 'ACGTTGCAAGGCTTACCGATGCATTAGCCGGATCCAATTGGCATCGATCGGATTACCGTAGCTAGGCTAACG'
@@ -40,7 +43,7 @@ class JobCenterTests(unittest.TestCase):
         self.app = Flask(__name__, template_folder=str(REPO / 'templates'), static_folder=str(REPO / 'static'))
         self.app.config.update(TESTING=True, UPLOAD_FOLDER=str(self.root))
         for endpoint in ['index', 'triplet', 'triplet_batch', 'bridge', 'bridge_list', 'bridge_query', 'bridge_sequence',
-                         'bridge_analyze', 'bridge_validate', 'formatting', 'probe_recommend', 'filter', 'help', 'orders']:
+                         'bridge_analyze', 'bridge_validate', 'formatting', 'subgenomes', 'references', 'probe_recommend', 'filter', 'help', 'orders']:
             self.app.add_url_rule('/' + endpoint, endpoint, lambda: 'placeholder')
         self.service_args = ({'BP_0079': 'A' * 19}, {'BjuTarget': SEQ}, {}, {})
         register_split_routes(self.app, *self.service_args, lambda: [])
@@ -138,6 +141,44 @@ class JobCenterTests(unittest.TestCase):
         path.write_text('Probe ID,Sequence\nA-1-L,AAA\nA-1-R-BP_1,CCC\nAB-2-L,GGG\n')
         self.assertEqual(read_synthesis(path, 'A'), {1: {'L': {'id': 'A-1-L', 'sequence': 'AAA'},
                                                          'R': {'id': 'A-1-R-BP_1', 'sequence': 'CCC'}}})
+
+    @patch('scripts.split_workflow.design_split', side_effect=fake_design)
+    def test_admin_cleanup_protects_running_jobs_and_references_then_removes_completed_results(self, design):
+        with tempfile.TemporaryDirectory() as config:
+            self.app.config['ADMIN_CREDENTIALS_FILE'] = str(Path(config) / 'admin.json')
+            register_admin(self.app)
+            initialized = self.app.test_cli_runner().invoke(
+                args=['init-admin', '--username', 'manager'], input='integration-password\nintegration-password\n')
+            self.assertEqual(initialized.exit_code, 0, initialized.output)
+            self.client.get('/admin/login')
+            with self.client.session_transaction() as session:
+                csrf = session['admin_csrf']
+            self.client.post('/admin/login', data=dict(username='manager', password='integration-password', csrf_token=csrf))
+            self.client.get('/admin')
+            with self.client.session_transaction() as session:
+                csrf = session['admin_csrf']
+            headers = {'X-CSRF-Token': csrf}
+            reference = self.root / 'reference.fasta'
+            reference.write_text('>BjuTarget\n' + SEQ + '\n')
+            prepared = self.client.post('/split/prepare', data=dict(
+                input_mode='single', name='slow', geneID='BjuTarget', bp_id='BP_0079',
+                sequenceType='reference', reference_mode='existing', existing_ref_genome=reference.name)).json
+            first = self.client.post(prepared['run_url'], json=DEFAULTS)
+            self.wait(first.json['status_url'], until=('running',), stage='selection')
+            key = 'split_results/' + prepared['id']
+            for entry in (key, reference.name):
+                self.assertEqual(self.client.post('/admin/delete', json={'keys': [entry]}, headers=headers).status_code, 409)
+            report = self.app.extensions['storage_maintenance'].cleanup(now=utcnow() + timedelta(days=100))
+            self.assertEqual(report['skipped'], [key])
+            release.set()
+            done = self.wait(first.json['status_url'])
+            self.assertEqual(done['status'], 'completed')
+            removed = self.client.post('/admin/delete', json={'keys': [key]}, headers=headers)
+            self.assertEqual(removed.status_code, 200)
+            self.assertTrue(reference.exists())
+            for route in (done['status_url'], done['result_url'], done['download_url']):
+                self.assertEqual(self.client.get(route).status_code, 404)
+            self.assertEqual(self.client.get('/jobs', headers={'Accept': 'application/json'}).json['jobs'], [])
 
 
 class OrderCheckTests(unittest.TestCase):

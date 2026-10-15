@@ -6,6 +6,15 @@ import threading
 
 from flask import jsonify, render_template, request, send_file, url_for
 from scripts.split_workflow import SplitWorkflow, InputError, DEFAULTS
+from scripts.storage_maintenance import STORAGE_LOCK
+
+
+def storage_locked(function):
+    @wraps(function)
+    def decorated(*args, **kwargs):
+        with STORAGE_LOCK:
+            return function(*args, **kwargs)
+    return decorated
 
 
 class JobRunner:
@@ -47,7 +56,8 @@ class JobRunner:
 
 def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     def workflow():
-        return SplitWorkflow(app.config['UPLOAD_FOLDER'], bridges, cdna, cds, aliases)
+        return SplitWorkflow(app.config['UPLOAD_FOLDER'], bridges, cdna, cds, aliases,
+                             reference_library=app.extensions.get('reference_library'))
 
     runner = JobRunner(app.logger, inline=app.config.get('SPLIT_JOBS_INLINE', False))
     app.extensions['split_jobs'] = runner
@@ -89,8 +99,10 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
 
     def legacy(mode):
         service = workflow()
-        prepared = service.prepare(request.form, request.files, mode=mode)
-        service.run(prepared['id'], request.form.to_dict())
+        with STORAGE_LOCK:
+            prepared = service.prepare(request.form, request.files, mode=mode)
+            service.queue(prepared['id'], request.form.to_dict())
+        service.execute(prepared['id'])
         return send_file(service.job_dir(prepared['id']) / 'results.zip', as_attachment=True,
                          download_name=f"split_{mode}_results_{prepared['id']}.zip")
 
@@ -107,7 +119,8 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     @app.post('/split/prepare')
     @api_errors
     def split_prepare():
-        prepared = workflow().prepare(request.form, request.files)
+        with STORAGE_LOCK:
+            prepared = workflow().prepare(request.form, request.files)
         prepared['run_url'] = url_for('split_run', identifier=prepared['id'])
         return jsonify(prepared)
 
@@ -116,18 +129,22 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     def split_run(identifier):
         """Queue the job and answer at once; the browser follows status_url."""
         service = workflow()
-        if service.queue(identifier, request.get_json(silent=True)):
+        with STORAGE_LOCK:
+            queued = service.queue(identifier, request.get_json(silent=True))
+        if queued:
             runner.submit(service, identifier)
             return jsonify(status_payload(service, identifier)), 202
         return jsonify(status_payload(service, identifier)), 200
 
     @app.get('/split/jobs/<identifier>/status')
     @api_errors
+    @storage_locked
     def split_status(identifier):
         return jsonify(status_payload(workflow(), identifier))
 
     @app.get('/split/results/<identifier>')
     @api_errors
+    @storage_locked
     def split_result(identifier):
         service = workflow()
         status = status_payload(service, identifier)
@@ -140,6 +157,7 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
 
     @app.get('/split/results/<identifier>/download')
     @api_errors
+    @storage_locked
     def split_download(identifier):
         service = workflow()
         service.result(identifier)
@@ -154,6 +172,7 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
 
     @app.get('/jobs')
     @api_errors
+    @storage_locked
     def jobs():
         service = workflow()
         listing = [dict(job, **links(job['id']), queue_position=runner.position(job['id']))

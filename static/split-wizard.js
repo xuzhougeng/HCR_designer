@@ -37,17 +37,33 @@
     byId('existing-reference-field').hidden = refMode !== 'existing';
     byId('upload-reference-field').hidden = refMode !== 'upload';
     byId('subgenome-files-field').hidden = refMode !== 'subgenome_files';
-    byId('subgenome-map-field').hidden = refMode !== 'existing' && refMode !== 'upload';
+    const selectedReference = field('existing_ref_genome').selectedOptions[0];
+    const polyploid = refMode === 'existing' && selectedReference?.dataset.ploidy === 'true';
+    const hasAnnotation = polyploid && selectedReference?.dataset.subgenomeReady === 'true';
+    byId('multiple-sets-field').hidden = !polyploid;
+    if (!hasAnnotation) field('process_multiple_sets').checked = false;
+    byId('multiple-sets-hint').textContent = hasAnnotation
+      ? '勾选后使用参考库中已保存的亚基因组归属信息；本次无需再次上传。'
+      : '此参考库尚无有效的亚基因组归属文件，请先到参考库管理页上传，刷新本页后即可勾选。';
     byId('subgenome-note').hidden = refMode === 'none';
     field('existing_ref_genome').disabled = busy || refMode !== 'existing';
     field('ref_genome').disabled = busy || refMode !== 'upload';
     field('subgenome_files').disabled = busy || refMode !== 'subgenome_files';
-    field('subgenome_map').disabled = busy || (refMode !== 'existing' && refMode !== 'upload');
+    field('process_multiple_sets').disabled = busy || !hasAnnotation;
+    const useAnnotation = hasAnnotation && field('process_multiple_sets').checked;
+    const subgenomeOption = field('target_mode').querySelector('option[value="subgenome"]');
+    subgenomeOption.disabled = !useAnnotation && refMode !== 'subgenome_files';
+    if (useAnnotation) field('target_mode').value = 'subgenome';
+    else if (subgenomeOption.disabled && field('target_mode').value === 'subgenome') field('target_mode').value = 'species';
+    field('target_mode').disabled = busy || useAnnotation;
     const bridge = field('bp_id').value.trim().toUpperCase();
     byId('bridge-sequence').textContent = config.bridges[bridge] || '编号不在当前桥接探针库中';
     byId('reference-note').textContent = refMode === 'none'
       ? '本次只做质量筛选，结果将标记“特异性未评估”。用于物种来源判定时请选择参考库。'
       : '参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。';
+    if (refMode === 'existing' && field('existing_ref_genome').selectedOptions[0]?.dataset.ploidy === 'true') {
+      byId('reference-note').textContent += ' 此参考已配置为多倍体，可为本次任务选择是否考虑多套染色体。';
+    }
   }
   function invalidate() {
     prepared = null;
@@ -71,6 +87,7 @@
     if (!reference) return '未指定参考库 · 特异性未评估';
     const species = Object.entries(reference.species_counts).map(([key, value]) => key + ' ' + value.toLocaleString()).join(' / ');
     let text = reference.name + ' · ' + reference.sequence_count.toLocaleString() + ' 条序列\n' + species;
+    if (reference.polyploid !== undefined && reference.polyploid !== null) text += '\n参考配置：' + (reference.polyploid ? '多倍体' : '非多倍体');
     const sub = reference.subgenome;
     if (sub) {
       const counts = Object.entries(sub.subgenome_counts).map(([key, value]) => key + ' ' + value.toLocaleString()).join(' / ');
@@ -79,7 +96,7 @@
     return text;
   }
   function renderPrepared() {
-    byId('reference-summary').textContent = referenceText(prepared.reference);
+    byId('reference-summary').textContent = referenceText(prepared.reference) + (prepared.reference?.polyploid ? '\n使用参考库的亚基因组归属：' + (prepared.process_multiple_sets ? '是' : '否') : '');
     const body = byId('prepared-tasks'); body.replaceChildren();
     prepared.tasks.forEach(task => {
       const row = element('tr');
@@ -100,7 +117,7 @@
     if (refMode !== 'existing') data.delete('existing_ref_genome');
     if (refMode !== 'upload') data.delete('ref_genome');
     if (refMode !== 'subgenome_files') data.delete('subgenome_files');
-    if (refMode !== 'existing' && refMode !== 'upload') data.delete('subgenome_map');
+    if (refMode === 'none') data.delete('process_multiple_sets');
     setBusy(true, '正在核对目标、桥接探针和参考序列……大文件首次检查可能需要一些时间。');
     let error;
     try {
@@ -143,18 +160,24 @@
   byId('step-1').addEventListener('input',() => {if (!busy) invalidate();});
   byId('step-1').addEventListener('change',() => {if (!busy) invalidate();});
   field('max_selected').addEventListener('input',() => {if (prepared) renderPrepared();});
+  function defaultMultipleSets() {
+    field('process_multiple_sets').checked = false;
+  }
+  field('existing_ref_genome').addEventListener('change', defaultMultipleSets);
   root.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click',() => {mode = b.dataset.mode;invalidate();}));
   root.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click',() => {if (!busy) {showMessage('');setStep(Number(b.dataset.step));}}));
   root.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click',() => {showMessage('');setStep(1);}));
   byId('fill-example').addEventListener('click',() => {
     field('name').value = 'ABCG13_demo';field('geneID').value = 'BjuVA06G01970';field('bp_id').value = 'BP_0079';field('sequenceType').value = 'reference';
-    field('batch_file').value = '';field('batch_text').value = 'task_name,BP_ID,gene_id,max_selected,allowed_ids\nABCG13,BP_0079,BjuVA06G01970,5,';field('allowed_ids').value = '';field('subgenome_map').value = '';field('subgenome_files').value = '';
+    field('batch_file').value = '';field('batch_text').value = 'task_name,BP_ID,gene_id,max_selected,allowed_ids\nABCG13,BP_0079,BjuVA06G01970,5,';field('allowed_ids').value = '';field('subgenome_files').value = '';
     if (config.default_reference) {field('reference_mode').value = 'existing';field('existing_ref_genome').value = config.default_reference;}
+    defaultMultipleSets();
     invalidate();
   });
   byId('prepare-button').addEventListener('click',prepare);
   byId('run-button').addEventListener('click',run);
   field('existing_ref_genome').value = config.default_reference;
+  defaultMultipleSets();
   if (!config.default_reference && field('existing_ref_genome').options.length === 1) field('reference_mode').value = 'upload';
   syncInput();setStep(1);
 })();

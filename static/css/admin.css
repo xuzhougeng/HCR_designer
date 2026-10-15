@@ -1,0 +1,6 @@
+.admin-table { min-width: 820px; }
+.admin-table th:first-child, .admin-table td:first-child { width: 36px; }
+.admin-table td:nth-child(2) { max-width: 390px; overflow-wrap: anywhere; }
+.admin-table input[type=checkbox], #select-visible { accent-color: var(--accent); width: 16px; height: 16px; }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.danger:hover { background: var(--bad-soft); }

@@ -45,6 +45,8 @@
   ]),
   ('序列工具', [
     ('formatting', 'FASTA 格式化', 'i-format', ['formatting'], ''),
+    ('subgenomes', '亚基因组编号', 'i-library', ['subgenomes'], ''),
+    ('references', '参考库管理', 'i-library', ['references'], ''),
     ('probe_recommend', '探针数量推荐', 'i-bars', ['probe_recommend'], ''),
     ('filter', 'AI 筛选', 'i-chip', ['filter'], '实验'),
   ]),
@@ -68,6 +70,14 @@
       {% endfor %}
     </nav>
     {% endfor %}
+    {% if admin_csrf_token is defined %}
+    <nav class="side-group" aria-label="管理">
+      <span>管理</span>
+      <a class="side-link" href="{{ url_for('admin') }}"{% if endpoint in ['admin', 'admin_login'] %} aria-current="page"{% endif %}>
+        <svg aria-hidden="true"><use href="#i-check"/></svg>空间管理
+      </a>
+    </nav>
+    {% endif %}
     <div class="side-foot">坐标 1-based inclusive<br>序列方向 5′ → 3′<br>结果为计算候选，需实验验证</div>
   </aside>
   <div class="main">

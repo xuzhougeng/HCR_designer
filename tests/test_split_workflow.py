@@ -10,6 +10,8 @@ from zipfile import ZipFile
 from flask import Flask
 from scripts.split_web import register_split_routes
 from scripts.split_workflow import InputError, parse_parameters, DEFAULTS
+from scripts.reference_library import ReferenceLibrary
+from werkzeug.datastructures import FileStorage
 
 
 SEQ = 'ACGT' * 20
@@ -45,8 +47,8 @@ class GuidedWorkflowTests(unittest.TestCase):
         # Jobs run inside submit() so each request finishes before the test continues.
         self.app.config.update(TESTING=True, UPLOAD_FOLDER=str(self.root), SPLIT_JOBS_INLINE=True)
         for endpoint in ['index', 'triplet', 'triplet_batch', 'bridge', 'bridge_list', 'bridge_query',
-                         'bridge_sequence', 'bridge_analyze', 'bridge_validate', 'formatting',
-                         'probe_recommend', 'filter', 'help', 'orders']:
+                         'bridge_sequence', 'bridge_analyze', 'bridge_validate', 'formatting', 'subgenomes',
+                         'probe_recommend', 'filter', 'help', 'orders', 'references']:
             self.app.add_url_rule('/' + endpoint, endpoint, lambda: 'placeholder')
         register_split_routes(self.app, {'BP_0079': 'A' * 19}, {'BjuTarget': 'T' * 80}, {}, {},
                               lambda: [{'filename': self.reference.name, 'display_name': 'Bo/Bju'}])
@@ -90,6 +92,52 @@ class GuidedWorkflowTests(unittest.TestCase):
         manifest = json.loads((self.root / 'split_results' / prepared['id'] / 'request.json').read_text())
         self.assertEqual(manifest['tasks'][0]['sequence'], SEQ)  # not the conflicting internal cDNA
         self.assertEqual(prepared['reference']['species_counts'], {'Bju': 1, 'Bo': 1})
+
+    @patch('scripts.split_workflow.design_split', side_effect=fake_design)
+    def test_multiple_chromosome_sets_use_saved_library_annotation_and_snapshot(self, design):
+        library = ReferenceLibrary(self.root, self.root / 'instance' / 'references.json')
+        self.app.extensions['reference_library'] = library
+        library.configure(self.reference.name, 'Bo/Bju', True,
+                          FileStorage(stream=io.BytesIO(b'BjuTarget,A\nBoOther,C\n'), filename='groups.csv'))
+        prepared = self.prepare(process_multiple_sets='on')
+        self.assertTrue(prepared['process_multiple_sets'])
+        directory = self.root / 'split_results' / prepared['id']
+        manifest = json.loads((directory / 'request.json').read_text())
+        self.assertTrue(manifest['process_multiple_sets'])
+        self.assertEqual(prepared['tasks'][0]['subgenome'], 'A')
+        # Subsequent edits in the shared library do not alter a prepared task.
+        library.configure(self.reference.name, 'Bo/Bju', True,
+                          FileStorage(stream=io.BytesIO(b'BjuTarget,B\nBoOther,C\n'), filename='updated.csv'))
+        response, result = self.run_job(prepared, DEFAULTS)
+        self.assertEqual(response.status_code, 202, response.json)
+        policy = design.call_args.kwargs['target_policy']
+        self.assertEqual(policy['mode'], 'subgenome')
+        self.assertEqual(policy['target_subgenome'], 'A')
+        self.assertEqual(Path(policy['subgenome_map']), (directory / 'subgenomes.tsv').resolve())
+        self.assertIn('BjuTarget\tA', Path(policy['subgenome_map']).read_text())
+        self.assertEqual(result['parameters']['target_mode'], 'subgenome')
+        self.assertEqual(self.client.post(prepared['run_url'], json=DEFAULTS).status_code, 200)
+        plain = self.prepare()
+        self.assertFalse(plain['process_multiple_sets'])
+        self.assertIsNone(plain['tasks'][0]['subgenome'])
+        self.assertFalse((self.root / 'split_results' / plain['id'] / 'subgenomes.tsv').exists())
+        response, _ = self.run_job(plain, DEFAULTS)
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(design.call_args.kwargs['target_policy']['mode'], 'species')
+        page = self.client.get('/split').text
+        self.assertIn('是否考虑多套染色体', page)
+        self.assertNotIn('name="subgenome_map"', page)
+
+    def test_multiple_sets_reject_missing_ploidy_annotation_and_target_membership(self):
+        library = ReferenceLibrary(self.root, self.root / 'instance' / 'references.json')
+        self.app.extensions['reference_library'] = library
+        for ploidy, annotation in [(False, None), (True, None),
+                                  (True, FileStorage(stream=io.BytesIO(b'BoOther,C\n'), filename='groups.csv'))]:
+            library.configure(self.reference.name, 'Bo/Bju', ploidy, annotation)
+            response = self.client.post('/split/prepare', data=dict(self.input, process_multiple_sets='on'))
+            self.assertEqual(response.status_code, 400, response.json)
+            self.assertEqual(response.json['field'], 'process_multiple_sets')
+        self.assertEqual(len(list((self.root / 'split_results').iterdir())), 0)
 
     def test_pasted_sequence_keeps_target_id_and_is_not_overwritten(self):
         pasted = 'G' * 40

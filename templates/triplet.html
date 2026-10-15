@@ -64,8 +64,8 @@ task2,BP_1102,WUS,8</pre>
   <section class="panel" aria-labelledby="reference-title">
     <div class="panel-head"><div><h2 id="reference-title"><span class="step-no">2</span>背景序列</h2><p>用于 BLAST 检查探针在其他序列上的结合；不选则跳过特异性检查。</p></div></div>
     <div class="grid-2">
-      <label class="field">已有参考库<select name="existing_ref_genome" id="existing-reference"><option value="">不使用 / 改为上传</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}</option>{% endfor %}</select></label>
-      <label class="field">或上传参考 FASTA<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"><small>FASTA 或 gzip；选择文件后将忽略左侧参考库</small></label>
+      <label class="field">已有参考库<select name="existing_ref_genome" id="existing-reference"><option value="">不使用 / 改为上传</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}{{ ' · 多倍体' if genome.polyploid is sameas true else '' }}</option>{% endfor %}</select><small><a href="{{ url_for('references') }}" target="_blank" rel="noopener">打开参考库管理</a>，上传并配置共享参考。</small></label>
+      <label class="field">或上传参考 FASTA<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"{% if reference_can_edit is defined and not reference_can_edit() %} disabled{% endif %}><small>上传时按哈希去重；也可前往参考库管理页上传并配置多倍体。</small></label>
     </div>
   </section>
 

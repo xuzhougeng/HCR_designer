@@ -2,7 +2,7 @@ import os
 import shutil
 import gzip
 from datetime import datetime
-from werkzeug.utils import secure_filename
+from pathlib import Path
 from zipfile import ZipFile
 import csv
 import re
@@ -23,7 +23,7 @@ from src.common.sequence_utils import calculate_tm, calculate_gc_content, is_val
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'fasta', 'fa', 'gz'}
+ALLOWED_EXTENSIONS = {'fasta', 'fa', 'fna', 'gz'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -56,6 +56,8 @@ for line in open(probe_table_file):
 
 def get_available_genomes():
     """获取可用的参考基因组列表"""
+    if 'reference_library' in app.extensions:
+        return app.extensions['reference_library'].list()
     genome_dir = os.path.join(app.config['UPLOAD_FOLDER'])
     genomes = []
     if os.path.exists(genome_dir):
@@ -198,6 +200,38 @@ from scripts.split_web import register_split_routes
 
 register_split_routes(app, bridge_seq_dict, cdna_dict, cds_dict, gene_alias, get_available_genomes)
 
+from scripts.admin_web import register_admin
+
+register_admin(app)
+
+from scripts.subgenome_web import register_subgenome_routes
+
+register_subgenome_routes(app)
+
+from scripts.reference_web import register_reference_routes
+
+register_reference_routes(app)
+
+
+def triplet_reference():
+    """Legacy triplet uploads use the same catalog and deduplication as the library page."""
+    library = app.extensions['reference_library']
+    uploaded = request.files.get('ref_genome')
+    if uploaded and uploaded.filename:
+        if not app.extensions['reference_can_edit']():
+            raise ValueError('共享参考需由管理员在“参考库管理”页面上传，请先登录管理员账号。')
+        name = Path(uploaded.filename).name
+        if name.lower().endswith('.gz'):
+            name = name[:-3]
+        result = library.upload(uploaded, Path(name).stem, None)
+        path = library.path(result['reference']['filename'])
+    else:
+        existing = request.form.get('existing_ref_genome', '')
+        if not existing:
+            return None
+        path = library.path(existing)
+    return create_blast_db(str(path))
+
 @app.route('/triplet', methods=['GET', 'POST'])
 def triplet():
     if request.method == 'POST':
@@ -207,32 +241,8 @@ def triplet():
         os.makedirs(output_dir, exist_ok=True)
 
         # 处理参考基因组/BLAST数据库
-        blast_db = None
-        error_message = None
         try:
-            if 'ref_genome' in request.files:
-                file = request.files['ref_genome']
-                if file and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(file_path)
-
-                    if filename.endswith('.gz'):
-                        decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
-                        with gzip.open(file_path, 'rb') as f_in:
-                            with open(decompressed_path, 'wb') as f_out:
-                                shutil.copyfileobj(f_in, f_out)
-                        os.remove(file_path)
-                        file_path = decompressed_path
-                    
-                    # Create BLAST database if needed
-                    blast_db = create_blast_db(file_path)
-
-            if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-                existing_genome = request.form['existing_ref_genome']
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-                # Create BLAST database if needed
-                blast_db = create_blast_db(file_path)
+            blast_db = triplet_reference()
         except ValueError as e:
             return jsonify({'error': f'参考序列无法建立比对库：{e}'}), 400
 
@@ -333,35 +343,9 @@ def triplet_batch():
         os.makedirs(output_dir, exist_ok=True)
 
         # 处理参考基因组/BLAST数据库
-        blast_db = None
-        ref_genome_path = None
-        error_message = None
         try:
-            if 'ref_genome' in request.files:
-                file = request.files['ref_genome']
-                if file and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(file_path)
-
-                    if filename.endswith('.gz'):
-                        decompressed_path = os.path.join(app.config['UPLOAD_FOLDER'], filename[:-3])
-                        with gzip.open(file_path, 'rb') as f_in:
-                            with open(decompressed_path, 'wb') as f_out:
-                                shutil.copyfileobj(f_in, f_out)
-                        os.remove(file_path)
-                        file_path = decompressed_path
-                    
-                    # Create BLAST database if needed
-                    blast_db = create_blast_db(file_path)
-                    ref_genome_path = file_path
-
-            if 'existing_ref_genome' in request.form and request.form['existing_ref_genome'] != '':
-                existing_genome = request.form['existing_ref_genome']
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_genome)
-                # Create BLAST database if needed
-                blast_db = create_blast_db(file_path)
-                ref_genome_path = blast_db
+            blast_db = triplet_reference()
+            ref_genome_path = blast_db
         except ValueError as e:
             return jsonify({'error': f'参考序列无法建立比对库：{e}'}), 400
 

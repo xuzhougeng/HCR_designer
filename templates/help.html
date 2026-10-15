@@ -21,7 +21,9 @@
         <tr><td><a href="{{ url_for('bridge_query') }}">冲突检查</a></td><td>按 BP_ID、按新序列或多条互查共享 k-mer（含反向互补）</td><td>页面表格 + TSV</td></tr>
         <tr><td><a href="{{ url_for('bridge') }}">推荐新探针</a></td><td>挑选与在用探针及彼此之间都无冲突的新探针</td><td>页面表格 + TSV</td></tr>
         <tr><td><a href="{{ url_for('bridge_validate') }}">合规验证</a></td><td>按长度、GC、Tm、连续同碱基检查一批序列</td><td>页面表格 + CSV</td></tr>
-        <tr><td rowspan="3">序列工具</td><td><a href="{{ url_for('formatting') }}">FASTA 格式化</a></td><td>清理标题、大写、过滤无效序列、去除转录本变体重复</td><td>FASTA + 统计</td></tr>
+        <tr><td rowspan="5">序列工具</td><td><a href="{{ url_for('formatting') }}">FASTA 格式化</a></td><td>清理标题、大写、过滤无效序列、去除转录本变体重复</td><td>FASTA + 统计</td></tr>
+        <tr><td><a href="{{ url_for('subgenomes') }}">亚基因组编号</a></td><td>按文件或编号特征提取亚基因组归属，预览未匹配和冲突</td><td>两列 CSV + 问题编号 CSV</td></tr>
+        <tr><td><a href="{{ url_for('references') }}">参考库管理</a></td><td>共享参考上传去重、多倍体及亚基因组归属配置</td><td>FASTA 目录 + SHA-256</td></tr>
         <tr><td><a href="{{ url_for('probe_recommend') }}">探针数量推荐</a></td><td>由 CDS 与 counts 计算 TPM 并推荐探针数</td><td>页面表格 + CSV</td></tr>
         <tr><td><a href="{{ url_for('filter') }}">AI 筛选</a> <span class="chip warn">实验</span></td><td>大语言模型对三探针结果给出保留建议</td><td>页面表格</td></tr>
       </tbody>
@@ -66,7 +68,7 @@ task2,BP_1102,AT2G17950,8</pre>
     </div>
     <div class="prose">
       <h3>亚基因组归属文件</h3>
-      <p class="hint">两列：转录本编号、所属亚基因组；制表符、逗号或空格分隔，可带表头。也可以按亚基因组分多个 FASTA 上传。</p>
+      <p class="hint">两列：转录本编号、所属亚基因组；制表符、逗号或空格分隔，可带表头。在参考库管理页上传并保存；分析选择多倍体参考后，只需勾选“是否考虑多套染色体”即可使用。也可以为单次任务按亚基因组分多个 FASTA 上传。</p>
     </div>
     <div class="prose">
       <h3>表达量文件</h3>

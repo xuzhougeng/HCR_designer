@@ -107,7 +107,7 @@ def task_policy(task, parameters, manifest=None):
     """Subgenome mode wins; otherwise explicit allowed transcripts make it an allowlist."""
     allowed = task.get('allowed_ids') or []
     threshold = parameters['exclusion_max_mismatches']
-    if parameters['target_mode'] == 'subgenome':
+    if (manifest or {}).get('process_multiple_sets') or parameters['target_mode'] == 'subgenome':
         return {'mode': 'subgenome', 'allowed_ids': allowed, 'exclusion_max_mismatches': threshold,
                 'subgenome_map': (manifest or {}).get('subgenome_map'),
                 'target_subgenome': task.get('subgenome')}
@@ -122,11 +122,12 @@ def write_json(path, data):
 
 
 class SplitWorkflow:
-    def __init__(self, upload_root, bridges, cdna, cds, aliases):
+    def __init__(self, upload_root, bridges, cdna, cds, aliases, reference_library=None):
         self.upload_root = Path(upload_root).resolve()
         self.root = self.upload_root / 'split_results'
         self.bridges = bridges
         self.cdna, self.cds, self.aliases = cdna, cds, aliases
+        self.reference_library = reference_library
 
     def job_dir(self, identifier):
         if not re.fullmatch('[a-f0-9]{32}', identifier):
@@ -224,10 +225,15 @@ class SplitWorkflow:
             if hasattr(files, 'getlist') else []
         map_upload = files.get('subgenome_map')
         has_map = bool(map_upload and map_upload.filename)
+        multiple_sets = form.get('process_multiple_sets') in ('on', 'true', '1', True)
         mode = form.get('reference_mode') or ('subgenome_files' if subgenome_files else
                                               'upload' if has_upload else 'existing' if existing else 'none')
         if mode not in ('existing', 'upload', 'subgenome_files', 'none'):
             raise InputError('请选择有效的参考库来源。', 'reference_mode')
+        if multiple_sets and (mode != 'existing' or not self.reference_library):
+            raise InputError('请先在参考库管理页配置多倍体及亚基因组归属，再选择该参考库。', 'process_multiple_sets')
+        if multiple_sets and has_map:
+            raise InputError('本次分析使用参考库中已保存的归属信息，请在参考库管理页更新文件。', 'process_multiple_sets')
         if existing and has_upload:
             raise InputError('已有参考库和上传参考文件只能选择一项。', 'existing_ref_genome')
         if subgenome_files and (existing or has_upload or has_map):
@@ -272,6 +278,23 @@ class SplitWorkflow:
         info = {'name': label, 'sequence_count': len(references),
                 'species_counts': dict(Counter(infer_species(key) or '其他/未知' for key in references)),
                 'sha256': digest.hexdigest()}
+        if mode == 'existing' and self.reference_library:
+            metadata = next((entry for entry in self.reference_library.list() if entry['filename'] == path.name), None)
+            if metadata:
+                info['display_name'] = metadata['display_name']
+                info['polyploid'] = metadata['polyploid']
+                info['subgenome_available'] = metadata['subgenome_ready']
+            if multiple_sets:
+                if not metadata or metadata['polyploid'] is not True:
+                    raise InputError('所选参考库未配置为多倍体，请先到参考库管理页配置。', 'process_multiple_sets')
+                try:
+                    data, annotation_info = self.reference_library.annotation(path.name)
+                except ValueError as error:
+                    raise InputError(str(error), 'process_multiple_sets') from error
+                map_path = directory / 'subgenomes.tsv'
+                map_path.write_bytes(data)
+                map_label = annotation_info['source']
+                info['subgenome_sha256'] = annotation_info['sha256']
         fingerprint = {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size}
         annotation = None
         if map_path:
@@ -389,7 +412,13 @@ class SplitWorkflow:
                     errors.append(f'第 {line} 行：{error}')
             if errors:
                 raise InputError('\n'.join(errors), 'batch_file')
+            if form.get('process_multiple_sets') in ('on', 'true', '1', True):
+                missing = [task['gene_id'] for task in tasks if not task['subgenome']]
+                if missing:
+                    raise InputError('参考库的归属文件缺少以下目标编号，请先补充配置：' + '、'.join(missing),
+                                     'process_multiple_sets')
             manifest = {'id': identifier, 'status': 'prepared', 'mode': mode,
+                        'process_multiple_sets': bool(reference_path) and form.get('process_multiple_sets') in ('on', 'true', '1', True),
                         'created_at': datetime.now(timezone.utc).isoformat(),
                         'reference_path': reference_path, 'reference': reference_info,
                         'subgenome_map': str(directory / 'subgenomes.tsv') if annotation else None,
@@ -404,6 +433,7 @@ class SplitWorkflow:
     def preview(manifest):
         reference = manifest['reference']
         return {'id': manifest['id'], 'mode': manifest['mode'],
+                'process_multiple_sets': manifest.get('process_multiple_sets', False),
                 'reference': {k: v for k, v in reference.items() if k != 'fingerprint'} if reference else None,
                 'tasks': [{k: v for k, v in task.items() if k != 'sequence'} for task in manifest['tasks']]}
 
@@ -428,6 +458,8 @@ class SplitWorkflow:
         parameters = parse_parameters(values)
         directory = self.job_dir(identifier)
         manifest = self._manifest(directory)
+        if manifest.get('process_multiple_sets'):
+            parameters['target_mode'] = 'subgenome'
         if manifest['status'] == 'completed':
             if self.result(identifier)['parameters'] != parameters:
                 raise InputError('这个任务已完成；修改参数后请重新检查输入以创建新任务。', status=409)
@@ -435,13 +467,16 @@ class SplitWorkflow:
         if manifest['status'] in ('queued', 'running') or (directory / 'running.lock').exists():
             raise InputError('该任务已在排队或计算中，请在任务记录中查看进度，不要重复提交。', status=409)
         if manifest['reference_path']:
-            stat = Path(manifest['reference_path']).stat()
+            try:
+                stat = Path(manifest['reference_path']).stat()
+            except FileNotFoundError:
+                raise InputError('参考库已被清理，请返回第一步重新选择参考库。')
             if {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size} != manifest['reference']['fingerprint']:
                 raise InputError('参考库在输入检查后发生变化，请返回第一步重新检查。')
         if parameters['target_mode'] == 'subgenome':
             if not manifest.get('subgenome_map'):
-                raise InputError('亚基因组模式需要在第一步提供亚基因组归属：按亚基因组分文件上传，'
-                                 '或为单一参考附带两列归属文件。', 'target_mode')
+                raise InputError('亚基因组模式需要归属信息：请在第一步勾选使用多倍体参考库中已配置的归属，'
+                                 '或按亚基因组分文件上传。', 'target_mode')
             missing = [task['name'] for task in manifest['tasks'] if not task.get('subgenome')]
             if missing:
                 raise InputError('这些任务的目标转录本在归属文件中没有亚基因组，无法确定允许集合：'
@@ -555,7 +590,7 @@ class SplitWorkflow:
         manifest = self._manifest(directory)
         progress_path = directory / 'progress.json'
         progress = json.loads(progress_path.read_text()) if progress_path.is_file() else None
-        keys = ('id', 'status', 'mode', 'created_at', 'queued_at', 'started_at', 'completed_at',
+        keys = ('id', 'status', 'mode', 'process_multiple_sets', 'created_at', 'queued_at', 'started_at', 'completed_at',
                 'failed_at', 'error', 'summary', 'parameters')
         return dict({k: manifest.get(k) for k in keys}, progress=progress,
                     reference=(manifest.get('reference') or {}).get('name'),

@@ -43,12 +43,12 @@
         <section class="input-card reference-card">
           <h3>参考与特异性检查</h3>
           <label class="field">参考库来源<select name="reference_mode" id="reference-mode"><option value="existing">已有参考库</option><option value="upload">上传参考 FASTA</option><option value="subgenome_files">按亚基因组分多个文件上传</option><option value="none">不做特异性检查</option></select></label>
-          <label class="field" id="existing-reference-field">选择参考库<select name="existing_ref_genome" id="existing-reference"><option value="">请选择参考序列</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}</option>{% endfor %}</select></label>
+          <label class="field" id="existing-reference-field">选择参考库<select name="existing_ref_genome" id="existing-reference"><option value="">请选择参考序列</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}" data-subgenome-ready="{{ 'true' if genome.subgenome_ready else 'false' }}" data-ploidy="{{ 'true' if genome.polyploid is sameas true else 'false' if genome.polyploid is sameas false else '' }}">{{ genome.display_name }}{{ ' · 多倍体' if genome.polyploid is sameas true else '' }}</option>{% endfor %}</select><small>共享参考可在<a href="{{ url_for('references') }}" target="_blank" rel="noopener">参考库管理</a>页面上传和配置。</small></label>
           <label class="field" id="upload-reference-field" hidden>上传参考序列<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"><small>支持 FASTA 或 gzip 压缩文件；只需上传一次</small></label>
           <label class="field" id="subgenome-files-field" hidden>按亚基因组上传（可多选）<input type="file" name="subgenome_files" id="subgenome-files" accept=".fa,.fasta,.fna,.gz" multiple><small>每个文件视为一个亚基因组，名称取自文件名；至少两个文件，编号不得在文件之间重复</small></label>
-          <label class="field" id="subgenome-map-field">亚基因组归属文件（可选）<input type="file" name="subgenome_map" id="subgenome-map" accept=".tsv,.txt,.csv,.map"><small>两列文本：第一列转录本编号，第二列所属亚基因组；制表符、逗号或空格分隔，可带表头</small></label>
+          <label class="check-card" id="multiple-sets-field" hidden><input type="checkbox" name="process_multiple_sets" id="process-multiple-sets">是否考虑多套染色体<small id="multiple-sets-hint">勾选后使用参考库中已保存的亚基因组归属信息；本次无需再次上传。</small></label>
           <div class="reference-note" id="reference-note">参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。</div>
-          <div class="reference-note" id="subgenome-note">亚基因组归属可用两种方式提供：按亚基因组分多个文件上传，或为单一参考附带两列归属文件。提供后可在第二步选择亚基因组模式。</div>
+          <div class="reference-note" id="subgenome-note">参考库、倍性与亚基因组归属文件可在参考库管理页配置；编号归属 CSV 可由<a href="{{ url_for('subgenomes') }}" target="_blank" rel="noopener">亚基因组编号工具</a>单独生成。</div>
           <div class="scope-note"><h4>结果如何理解</h4><p>双臂配对按完整无缺口扫描检出（每臂最多 3 个替换，正向转录本）；非允许转录本上的完全配对会被排除，近似配对保留证据供复核。</p><p>插入缺失未复核；候选保留不代表已经通过实验特异性验证。</p></div>
         </section>
       </div>
@@ -63,7 +63,7 @@
         <div class="field-grid">
           <label class="field">每个基因最多保留（对）<input type="number" name="max_selected" value="5" min="1" max="10" step="1" data-parameter><small>不足时保留实际数量；CSV 第 4 列优先</small></label>
           <label class="field">已选组合之间的间距（nt）<input type="number" name="min_gap" value="2" min="0" max="10000" step="1" data-parameter><small>同一对 L/R 两臂间隔固定为 0 nt</small></label>
-          <label class="field">目标判定模式<select name="target_mode" data-parameter><option value="species">物种模式：同物种其他转录本只参与排序</option><option value="transcript">严格模式：目标之外的完全配对一律排除</option><option value="subgenome">亚基因组模式：只允许目标所属亚基因组</option></select><small>亚基因组模式需要第一步提供归属信息；选择它时第一步填写的允许转录本作为额外允许项。其余情况下，填写了允许转录本的任务按允许集合判定</small></label>
+          <label class="field">目标判定模式<select name="target_mode" data-parameter><option value="species">物种模式：同物种其他转录本只参与排序</option><option value="transcript">严格模式：目标之外的完全配对一律排除</option><option value="subgenome">亚基因组模式：只允许目标所属亚基因组</option></select><small>勾选“是否考虑多套染色体”后，自动使用参考库已保存的归属并启用亚基因组模式；允许共同检测的编号作为额外允许项。未启用时按所选模式判定</small></label>
           <label class="field">非允许配对排除阈值（每臂最多错配）<input type="number" name="exclusion_max_mismatches" value="0" min="0" max="3" step="1" data-parameter><small>0 表示只排除完全配对；提高后带错配的近似配对也会排除。阈值未经实验校准</small></label>
         </div>
         <details class="advanced-parameters"><summary>高级参数 <span>臂长、Tm、GC 与序列复杂度</span></summary>

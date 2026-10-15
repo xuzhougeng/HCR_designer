@@ -18,3 +18,6 @@ nohup.out
 outputs
 .venv/
 .tools/
+instance/
+.env
+.env.*
