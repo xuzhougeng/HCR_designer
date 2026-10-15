@@ -1,17 +1,12 @@
 {% extends "base.html" %}
-{% block language %}zh-CN{% endblock %}
 {% block title %}双探针设计 · Probe Designer{% endblock %}
 {% block body_class %}guided-page{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='split-wizard.css') }}">{% endblock %}
-{% block navigation %}
-<header class="wizard-header">
-  <a class="wizard-brand" href="{{ url_for('index') }}">Probe Designer</a>
-  <nav aria-label="工具导航"><a href="{{ url_for('split') }}" aria-current="page">双探针设计</a><a href="{{ url_for('triplet') }}">三探针设计</a><a href="{{ url_for('bridge_list') }}">桥接探针库</a><a href="{{ url_for('help') }}">帮助</a></nav>
-</header>
-{% endblock %}
+{% block eyebrow %}设计 · 序列输入 · 配对检查 · 候选复核{% endblock %}
+{% block heading %}双探针设计{% endblock %}
+{% block lede %}L/R 两臂相邻结合目标转录本。单条与批量共用同一个三步向导，每对候选都附带配对证据与筛选原因。{% endblock %}
 {% block content %}
-<main id="split-workspace" class="split-workspace">
-  <div class="wizard-title"><div><p class="eyebrow">序列输入 · 配对检查 · 候选复核</p><h1>双探针设计</h1></div><span class="workflow-label">分步引导</span></div>
+<div id="split-workspace" class="split-workspace">
   <nav class="wizard-steps" aria-label="设计步骤">
     <button type="button" data-step="1" aria-current="step"><span>1</span><div>序列与参考<small>确认目标和比对范围</small></div></button>
     <button type="button" data-step="2" disabled><span>2</span><div>参数与检查<small>确认本次设计条件</small></div></button>
@@ -93,7 +88,7 @@
     <p id="empty-results" class="empty-state" hidden></p>
     <section id="pair-evidence" class="evidence-panel" hidden aria-live="polite"><div class="section-heading"><div><h3 id="evidence-heading"></h3><p>坐标采用 1-based inclusive；靶向臂序列为 5′ → 3′。</p></div><button type="button" class="text-button" id="close-evidence">收起详情</button></div><div id="evidence-arms" class="field-grid"></div><div id="evidence-summary"></div><div class="table-scroll"><table class="wizard-table"><thead><tr><th>参考转录本</th><th>关系</th><th>L 坐标 / 错配</th><th>R 坐标 / 错配</th><th>方向 / 间隔</th></tr></thead><tbody id="evidence-matches"></tbody></table></div></section>
   </section>
-</main>
+</div>
 <script type="application/json" id="split-config">{{ config|tojson }}</script>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='split-wizard.js') }}" defer></script>{% endblock %}

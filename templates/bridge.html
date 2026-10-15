@@ -1,119 +1,66 @@
 {% extends "base.html" %}
-
-{% block title %}Bridge Probe System{% endblock %}
+{% from "partials/bridge.html" import kmer_field %}
+{% block title %}推荐新探针 · Probe Designer{% endblock %}
+{% block eyebrow %}桥接探针库{% endblock %}
+{% block heading %}推荐新探针{% endblock %}
+{% block lede %}给出已经在用的桥接探针，系统从库中挑选与它们、以及彼此之间都没有 k-mer 冲突的新探针。{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mb-4">Bridge Probe System</h1>
-    <div class="action-buttons">
-        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary">
-            切换到冲突查询系统
-        </a>
-        <a href="{{ url_for('bridge_list') }}" class="btn btn-outline-primary ms-2">
-            查看探针列表
-        </a>
+<form method="post" enctype="multipart/form-data" class="panel">
+  <div class="split">
+    <div>
+      <label class="field">已在使用的 BP_ID（逗号分隔）<textarea name="bp_ids" rows="3" spellcheck="false" placeholder="BP_0079, BP_1101, BP_1102">{{ bp_ids or '' }}</textarea></label>
+      <label class="field">或上传 BP_ID 文件<input type="file" name="bp_file" accept=".txt,.csv"><small>每行一个 BP_ID，与上方输入合并去重</small></label>
     </div>
-    
-
-    <form method="POST" enctype="multipart/form-data" class="form-section">
-        <div class="parameter-group">
-            <h3>Bridge Probe System</h3>
-            <div class="mb-3">
-                <label for="bp_range">BP Range (Optional):</label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="bp_start" name="bp_start" 
-                           placeholder="e.g., BP_0001" pattern="BP_[0-3][0-9]{3}"
-                           value="{{ bp_start if bp_start }}">
-                    <span class="input-group-text">to</span>
-                    <input type="text" class="form-control" id="bp_end" name="bp_end" 
-                           placeholder="e.g., BP_0048" pattern="BP_[0-3][0-9]{3}"
-                           value="{{ bp_end if bp_end }}">
-                </div>
-                <div class="form-text">Limit probe selection to a specific range (e.g., BP_0001-BP_0048)</div>
-            </div>
-
-            <div class="mb-3">
-                <label for="bp_file">Upload BP_ID file (Optional):</label>
-                <input type="file" class="form-control" id="bp_file" name="bp_file" accept=".txt,.csv">
-                <div class="form-text">Or upload a file with one BP_ID per line</div>
-            </div>
-
-            <div class="mb-3">
-                <label for="bp_ids">Or enter BP_IDs directly:</label>
-                <textarea class="form-control" id="bp_ids" name="bp_ids" rows="3" 
-                          placeholder="Enter BP_IDs separated by commas">{{ bp_ids if bp_ids }}</textarea>
-            </div>
-
-            <div class="mb-3">
-                <label for="number" class="form-label">需要的新探针数量</label>
-                <input type="number" class="form-control" id="number" name="number" value="{{ number }}" min="1" max="100">
-            </div>
-
-            <div class="mb-3">
-                <label for="kmer" class="form-label">k-mer长度</label>
-                <input type="number" class="form-control" id="kmer" name="kmer" value="{{ kmer }}" min="3" max="15">
-            </div>
-
-            <button type="submit" class="btn btn-primary">获取探针建议</button>
+    <div class="divider-left">
+      <div class="grid-2">
+        <label class="field">需要的新探针数<input type="number" name="number" value="{{ number or 1 }}" min="1" max="100" step="1"></label>
+        {{ kmer_field(kmer) }}
+      </div>
+      <div class="field">
+        <span>限定候选范围（可选）</span>
+        <div class="range-pair">
+          <input name="bp_start" value="{{ bp_start or '' }}" placeholder="BP_0001" pattern="BP_[0-9]{4}" autocomplete="off">
+          <span>至</span>
+          <input name="bp_end" value="{{ bp_end or '' }}" placeholder="BP_0048" pattern="BP_[0-9]{4}" autocomplete="off">
         </div>
-    </form>
-    {% if error %}
-    <div class="alert alert-danger" role="alert">
-        {{ error }}
+        <small>例如只在已合成的一批编号中挑选</small>
+      </div>
     </div>
-    {% endif %}
+  </div>
+  <div class="actions"><span>已在使用的探针会作为排除条件</span><div><button type="submit" class="btn primary">获取推荐</button></div></div>
+</form>
 
-    {% if result_probes %}
-    <div class="mb-4">
-        <h2>推荐的探针</h2>
-        <div class="action-buttons">
-            <button class="btn btn-success" onclick="downloadResults()">下载结果</button>
-        </div>
-        <table class="table table-striped result-table">
-            <thead>
-                <tr>
-                    <th>BP_ID</th>
-                    <th>序列</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for bp_id, sequence in result_probes %}
-                <tr>
-                    <td>{{ bp_id }}</td>
-                    <td class="sequence-cell">{{ sequence }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        
-        
-    </div>
-    {% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
-</div>
+{% if result_probes %}
+<section class="panel">
+  <div class="panel-head">
+    <div><h2>推荐结果</h2><p>{{ result_probes|length }} 条 · k = {{ kmer }}{% if bp_start and bp_end %} · 范围 {{ bp_start }}–{{ bp_end }}{% endif %}</p></div>
+    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+  </div>
+  <div class="table-wrap">
+    <table class="table" id="result-table">
+      <thead><tr><th>BP_ID</th><th>序列 5′ → 3′</th><th></th></tr></thead>
+      <tbody>
+      {% for bp_id, sequence in result_probes %}
+        <tr><td><code>{{ bp_id }}</code></td><td class="seq">{{ sequence }}</td><td><button type="button" class="text-button" data-copy="{{ sequence }}">复制</button></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% elif result_probes is defined %}
+<div class="alert notice">没有找到满足条件的新探针。可以放宽候选范围、减少需要的数量，或增大 k-mer 长度（冲突判定更宽松）。</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function downloadResults() {
-    const rows = document.querySelectorAll('table tbody tr');
-    let csv = 'BP_ID\tSequence\n';
-    
-    rows.forEach(row => {
-        const bp_id = row.cells[0].textContent;
-        const sequence = row.cells[1].textContent;
-        csv += `${bp_id}\t${sequence}\n`;
-    });
-    
-    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'suggested_probes.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-}
+document.getElementById('download-button')?.addEventListener('click', () => {
+  const rows = [['BP_ID', 'Sequence']];
+  document.querySelectorAll('#result-table tbody tr').forEach(row => rows.push([row.cells[0].textContent.trim(), row.cells[1].textContent.trim()]));
+  HCR.downloadRows(rows, 'suggested_probes.txt');
+});
 </script>
-{% endblock %} 
+{% endblock %}

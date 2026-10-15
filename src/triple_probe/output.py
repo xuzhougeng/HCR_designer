@@ -70,8 +70,9 @@ class ProbeOutputHandler:
             # 更新排序后的probe_sets
             probe_sets = [p[0] for p in scored_probes]
         else:
-            # 如果没有BLAST数据库，直接保存结果
-            self._save_detailed_results(probe_sets, output_prefix, None)
+            # 如果没有BLAST数据库，直接保存结果（没有比对证据，也不打分）
+            no_blast = {'left': None, 'middle': None, 'right': None}
+            self._save_detailed_results_with_cache([(p, None, no_blast) for p in probe_sets], output_prefix)
         
         # 保存其他格式
         self._save_bed_format(probe_sets, task_name, output_prefix)

@@ -1,121 +1,70 @@
 {% extends "base.html" %}
-
-{% block title %}Bridge Probe List{% endblock %}
+{% block title %}浏览桥接探针库 · Probe Designer{% endblock %}
+{% block eyebrow %}桥接探针库{% endblock %}
+{% block heading %}浏览探针库{% endblock %}
+{% block lede %}当前运行表 resources/probe_table.txt 中的全部桥接探针。Tm 与 GC 由本站算法即时计算。{% endblock %}
+{% block head_actions %}<button type="button" class="btn" id="export-button"><svg aria-hidden="true"><use href="#i-download"/></svg>导出当前列表 CSV</button>{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mb-4">Bridge Probe 列表</h1>
-    
-    <div class="action-buttons">
-        <a href="{{ url_for('bridge') }}" class="btn btn-outline-primary">
-            切换到设计系统
-        </a>
-        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary">
-            切换到查询系统
-        </a>
-    </div>
-
-    <div class="stats-box">
-        <h4>探针统计</h4>
-        <div class="stats-item">总数量: {{ probes|length }}</div>
-        <button class="btn btn-outline-primary ms-2" onclick="downloadProbes()">
-            下载已有探针序列
-        </button>
-    </div>
-
-    <div class="mb-3">
-        <input type="text" id="searchInput" class="form-control search-box" 
-               placeholder="搜索BP_ID..." onkeyup="filterTable()">
-    </div>
-
-    <div class="table-responsive">
-        <table class="table table-striped probe-table" id="probeTable">
-            <thead>
-                <tr>
-                    <th>BP_ID</th>
-                    <th>序列</th>
-                    <th>长度</th>
-                    <th>Tm (°C)</th>
-                    <th>GC (%)</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for probe in probes %}
-                <tr>
-                    <td>{{ probe.bp_id }}</td>
-                    <td class="sequence-cell">{{ probe.sequence }}</td>
-                    <td>{{ probe.length }}</td>
-                    <td class="stats-cell">
-                        <span class="tm-badge">{{ probe.tm }}</span>
-                    </td>
-                    <td class="stats-cell">
-                        <span class="gc-badge">{{ probe.gc }}</span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('bridge_query', bp_id=probe.bp_id) }}" 
-                           class="btn btn-sm btn-outline-primary">
-                            查看冲突
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+{% set tms = probes|map(attribute='tm')|list %}
+{% set gcs = probes|map(attribute='gc')|list %}
+<div class="stats">
+  <div class="stat"><span>探针总数</span><strong>{{ '{:,}'.format(probes|length) }}</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
+  <div class="stat"><span>长度</span><strong>{{ probes|map(attribute='length')|min }}{% if (probes|map(attribute='length')|max) != (probes|map(attribute='length')|min) %}–{{ probes|map(attribute='length')|max }}{% endif %} nt</strong><small>5′ → 3′</small></div>
+  <div class="stat"><span>Tm 范围</span><strong>{{ tms|min }}–{{ tms|max }} °C</strong><small>中位 {{ (tms|sort)[tms|length // 2] }} °C</small></div>
+  <div class="stat"><span>GC 范围</span><strong>{{ gcs|min }}–{{ gcs|max }}%</strong><small>中位 {{ (gcs|sort)[gcs|length // 2] }}%</small></div>
 </div>
+
+<section class="panel">
+  <div class="toolbar">
+    <label class="field">搜索<input type="search" id="search" placeholder="BP_ID 或序列片段，例如 BP_11 或 GGCCGAC" autocomplete="off" spellcheck="false"></label>
+    <span class="count" id="visible-count" aria-live="polite"></span>
+  </div>
+  <div class="table-wrap tall">
+    <table class="table" id="probe-table">
+      <thead><tr><th>BP_ID</th><th>序列 5′ → 3′</th><th>长度</th><th>Tm (°C)</th><th>GC (%)</th><th></th></tr></thead>
+      <tbody>
+        {% for probe in probes %}
+        <tr data-id="{{ probe.bp_id }}" data-seq="{{ probe.sequence }}">
+          <td><code>{{ probe.bp_id }}</code></td>
+          <td class="seq">{{ probe.sequence }}</td>
+          <td class="num">{{ probe.length }}</td>
+          <td class="num">{{ probe.tm }}</td>
+          <td class="num">{{ probe.gc }}</td>
+          <td style="white-space:nowrap"><button type="button" class="text-button" data-copy="{{ probe.sequence }}">复制</button> · <a href="{{ url_for('bridge_query', bp_id=probe.bp_id) }}" style="font-size:12.5px">查冲突</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="empty" id="no-match" hidden>没有匹配的探针。</p>
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function filterTable() {
-    const input = document.getElementById('searchInput');
-    const filter = input.value.toUpperCase();
-    const table = document.getElementById('probeTable');
-    const rows = table.getElementsByTagName('tr');
-
-    for (let i = 1; i < rows.length; i++) {
-        const bpId = rows[i].getElementsByTagName('td')[0];
-        if (bpId) {
-            const txtValue = bpId.textContent || bpId.innerText;
-            if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                rows[i].style.display = '';
-            } else {
-                rows[i].style.display = 'none';
-            }
-        }
+(() => {
+  const rows = [...document.querySelectorAll('#probe-table tbody tr')];
+  const search = document.getElementById('search');
+  const count = document.getElementById('visible-count');
+  function apply() {
+    const query = search.value.trim().toUpperCase();
+    let shown = 0;
+    for (const row of rows) {
+      const hit = !query || row.dataset.id.includes(query) || row.dataset.seq.includes(query);
+      row.hidden = !hit;
+      if (hit) shown++;
     }
-}
-
-function downloadProbes() {
-    const rows = document.querySelectorAll('#probeTable tbody tr');
-    let csv = 'BP_ID,Sequence,Length,Tm,GC%\n';
-    
-    rows.forEach(row => {
-        if (row.style.display !== 'none') {  // 只下载显示的行
-            const bp_id = row.cells[0].textContent.trim();
-            const sequence = row.cells[1].textContent.trim();
-            const length = row.cells[2].textContent.trim();
-            const tm = row.cells[3].querySelector('.tm-badge').textContent.trim();
-            const gc = row.cells[4].querySelector('.gc-badge').textContent.trim();
-            csv += `${bp_id},${sequence},${length},${tm},${gc}\n`;
-        }
-    });
-    
-    downloadFile(csv, 'bridge_probes.csv');
-}
-
-
-function downloadFile(content, filename) {
-    const blob = new Blob([content], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-}
+    count.textContent = '显示 ' + shown.toLocaleString() + ' / ' + rows.length.toLocaleString() + ' 条';
+    document.getElementById('no-match').hidden = shown > 0;
+  }
+  search.addEventListener('input', apply);
+  document.getElementById('export-button').addEventListener('click', () => {
+    const data = [['BP_ID', 'Sequence', 'Length', 'Tm', 'GC%']];
+    rows.filter(row => !row.hidden).forEach(row => data.push([...row.cells].slice(0, 5).map(cell => cell.textContent.trim())));
+    HCR.downloadRows(data, 'bridge_probes.csv');
+  });
+  apply();
+})();
 </script>
-{% endblock %} 
+{% endblock %}

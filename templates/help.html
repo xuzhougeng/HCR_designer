@@ -1,218 +1,100 @@
 {% extends "base.html" %}
-
-{% block title %}系统帮助文档{% endblock %}
+{% block title %}帮助 · Probe Designer{% endblock %}
+{% block eyebrow %}其他{% endblock %}
+{% block heading %}帮助{% endblock %}
+{% block lede %}各工具的用途、输入格式、默认参数，以及如何理解设计结果。{% endblock %}
 
 {% block content %}
-<div class="container help-container">
-    <h1 class="page-title">Probe Generator 帮助中心</h1>
-    
-    <div class="section">
-        <h2>主要功能模块</h2>
-        <div class="row">
-            <div class="col-md-4">
-                <div class="feature-card">
-                    <h3>探针设计系统</h3>
-                    <ul>
-                        <li>双探针设计（Split Probe）</li>
-                        <li>三探针设计（Triplet Probe）</li>
-                        <li>桥接探针设计（Bridge Probe）</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-card">
-                    <h3>分析验证系统</h3>
-                    <ul>
-                        <li>k-mer冲突检测</li>
-                        <li>BLAST同源分析</li>
-                        <li>序列合规性验证</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-card">
-                    <h3>数据管理系统</h3>
-                    <ul>
-                        <li>探针库浏览（Bridge List）</li>
-                        <li>批量处理功能</li>
-                        <li>结果导出（CSV/JSON）</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+<nav class="seg" aria-label="本页目录">
+  <a href="#tools">工具一览</a><a href="#parameters">默认参数</a><a href="#formats">输入格式</a><a href="#reading">结果解读</a><a href="#faq">常见问题</a>
+</nav>
+
+<section class="panel" id="tools" aria-labelledby="tools-title">
+  <div class="panel-head"><div><h2 id="tools-title">工具一览</h2><p>与左侧导航的分组一致</p></div></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>分组</th><th>工具</th><th>用途</th><th>输出</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="2">设计</td><td><a href="{{ url_for('split') }}">双探针设计</a></td><td>L/R 两臂相邻结合目标转录本；在参考库中做双臂配对扫描，按目标策略筛选</td><td>页面内逐对证据 + 结果 ZIP</td></tr>
+        <tr><td><a href="{{ url_for('triplet') }}">三探针设计</a></td><td>L/M/R 三段组合；特异性按单臂 BLAST 判定</td><td>结果 ZIP</td></tr>
+        <tr><td rowspan="4">桥接探针库</td><td><a href="{{ url_for('bridge_list') }}">浏览探针库</a></td><td>查看、搜索和导出全部桥接探针</td><td>CSV</td></tr>
+        <tr><td><a href="{{ url_for('bridge_query') }}">冲突检查</a></td><td>按 BP_ID、按新序列或多条互查共享 k-mer（含反向互补）</td><td>页面表格 + TSV</td></tr>
+        <tr><td><a href="{{ url_for('bridge') }}">推荐新探针</a></td><td>挑选与在用探针及彼此之间都无冲突的新探针</td><td>页面表格 + TSV</td></tr>
+        <tr><td><a href="{{ url_for('bridge_validate') }}">合规验证</a></td><td>按长度、GC、Tm、连续同碱基检查一批序列</td><td>页面表格 + CSV</td></tr>
+        <tr><td rowspan="3">序列工具</td><td><a href="{{ url_for('formatting') }}">FASTA 格式化</a></td><td>清理标题、大写、过滤无效序列、去除转录本变体重复</td><td>FASTA + 统计</td></tr>
+        <tr><td><a href="{{ url_for('probe_recommend') }}">探针数量推荐</a></td><td>由 CDS 与 counts 计算 TPM 并推荐探针数</td><td>页面表格 + CSV</td></tr>
+        <tr><td><a href="{{ url_for('filter') }}">AI 筛选</a> <span class="chip warn">实验</span></td><td>大语言模型对三探针结果给出保留建议</td><td>页面表格</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel" id="parameters" aria-labelledby="parameters-title">
+  <div class="panel-head"><div><h2 id="parameters-title">默认参数</h2><p>双探针与三探针共用的质量过滤条件</p></div></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>参数</th><th>默认值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>臂长</td><td class="num">15–20 nt</td><td>每个靶向臂的长度范围</td></tr>
+        <tr><td>Tm</td><td class="num">47–53 °C</td><td>单臂熔解温度</td></tr>
+        <tr><td>GC</td><td class="num">40–60%</td><td>单臂 GC 含量</td></tr>
+        <tr><td>连续同碱基阈值</td><td class="num">4</td><td>出现更长的单碱基重复则淘汰</td></tr>
+        <tr><td>重复片段</td><td class="num">8 nt / 2 次</td><td>同一 k-mer 重复出现即视为低复杂度</td></tr>
+        <tr><td>互补长度</td><td class="num">5 nt</td><td>检查探针间互补的最小长度</td></tr>
+        <tr><td>每个基因最多保留</td><td class="num">5</td><td>不足时保留实际数量；批量 CSV 第 4 列可覆盖</td></tr>
+        <tr><td>组合间距</td><td class="num">双探针 2 nt · 三探针单条 15 nt / 批量 2 nt</td><td>已选组合之间的最小距离</td></tr>
+        <tr><td>非允许配对排除阈值</td><td class="num">每臂 0 错配</td><td>仅双探针；0 表示只排除完全配对，阈值未经实验校准</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel" id="formats" aria-labelledby="formats-title">
+  <div class="panel-head"><div><h2 id="formats-title">输入格式</h2></div></div>
+  <div class="grid-2">
+    <div class="prose">
+      <h3>双探针批量 CSV</h3>
+      <p class="hint">UTF-8，可带表头。第 4 列覆盖保留数量，第 5 列用分号列出允许共同检测的转录本。</p>
+      <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">task_name,BP_ID,gene_id,max_selected,allowed_ids
+ABCG13,BP_0079,BjuVA06G01970,5,</pre>
     </div>
-
-    <div class="section">
-        <h2>使用指南</h2>
-        <div class="guide-steps">
-            <div class="step">
-                <div class="step-number">1</div>
-                <h4>输入准备</h4>
-                <p>支持多种输入方式：
-                    <ul>
-                        <li>直接输入DNA序列</li>
-                        <li>上传FASTA/CSV文件</li>
-                        <li>使用现有BP_ID查询</li>
-                    </ul>
-                </p>
-            </div>
-            
-            <div class="step">
-                <div class="step-number">2</div>
-                <h4>参数设置</h4>
-                <p>核心参数说明：
-                    <table class="parameter-table">
-                        <tr>
-                            <th>参数</th>
-                            <th>说明</th>
-                            <th>典型值</th>
-                        </tr>
-                        <tr>
-                            <td>探针长度</td>
-                            <td>15-50bp</td>
-                            <td>20-30bp</td>
-                        </tr>
-                        <tr>
-                            <td>GC含量</td>
-                            <td>30%-70%</td>
-                            <td>40%-60%</td>
-                        </tr>
-                        <tr>
-                            <td>Tm值</td>
-                            <td>45-65°C</td>
-                            <td>50-60°C</td>
-                        </tr>
-                    </table>
-                </p>
-            </div>
-        </div>
+    <div class="prose">
+      <h3>三探针批量 CSV</h3>
+      <p class="hint">无表头。第 4 列可选，为该任务最多保留的组合数。</p>
+      <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">task1,BP_1101,AT1G01010
+task2,BP_1102,AT2G17950,8</pre>
     </div>
-
-    <div class="section">
-        <h2>常见问题</h2>
-        <div class="faq">
-            <div class="faq-item">
-                <h4>如何选择参考基因组？</h4>
-                <p>系统预装了TAIR10基因组，也可通过「上传参考基因组」功能添加自定义基因组</p>
-            </div>
-            <div class="faq-item">
-                <h4>BLAST分析的作用？</h4>
-                <p>用于检测探针序列在参考基因组中的非特异性结合位点，建议至少设置8-mer长度分析</p>
-            </div>
-        </div>
+    <div class="prose">
+      <h3>亚基因组归属文件</h3>
+      <p class="hint">两列：转录本编号、所属亚基因组；制表符、逗号或空格分隔，可带表头。也可以按亚基因组分多个 FASTA 上传。</p>
     </div>
-
-    <div class="help-section" id="probe-recommend">
-        <h2>探针数量推荐系统</h2>
-        <div class="help-content">
-            <h3>功能介绍</h3>
-            <p>探针数量推荐系统可以根据基因的表达量自动推荐每个基因所需的探针数量。系统会分析基因的表达水平，并为每个基因推荐合适的探针数量。</p>
-
-            <h3>输入文件要求</h3>
-            <ul>
-                <li><strong>CDS序列文件 (cds.fasta)</strong>
-                    <ul>
-                        <li>FASTA格式文件</li>
-                        <li>包含所有目标基因的CDS序列</li>
-                        <li>序列ID需要与counts.txt中的基因ID对应</li>
-                    </ul>
-                </li>
-                <li><strong>表达量文件 (counts.txt)</strong>
-                    <ul>
-                        <li>制表符分隔的两列文本文件</li>
-                        <li>第一列：基因ID</li>
-                        <li>第二列：表达量count值</li>
-                        <li>不需要表头</li>
-                    </ul>
-                </li>
-                <li><strong>基因列表文件 (gene_list.txt)</strong>
-                    <ul>
-                        <li>单列文本文件</li>
-                        <li>每行一个基因ID</li>
-                        <li>基因ID需要与counts.txt中的ID对应</li>
-                    </ul>
-                </li>
-            </ul>
-
-            <h3>输出结果</h3>
-            <ul>
-                <li>系统将返回一个包含两列的结果：
-                    <ul>
-                        <li>基因ID</li>
-                        <li>推荐的探针数量</li>
-                    </ul>
-                </li>
-            </ul>
-
-            <h3>使用建议</h3>
-            <ul>
-                <li>确保所有文件中的基因ID格式一致</li>
-                <li>建议在使用前检查文件格式是否符合要求</li>
-                <li>如果基因没有表达量数据，系统将使用默认的探针数量</li>
-            </ul>
-        </div>
+    <div class="prose">
+      <h3>表达量文件</h3>
+      <p class="hint">两列文本：基因编号、read count，不需要表头；编号需与 CDS FASTA 的标题完全一致。</p>
     </div>
+  </div>
+</section>
 
-    <div class="quick-links">
-        <a href="{{ url_for('bridge_list') }}" class="btn btn-outline-primary">
-            <i class="bi bi-list-ul"></i> 探针库浏览
-        </a>
-        <a href="{{ url_for('bridge_validate') }}" class="btn btn-outline-primary">
-            <i class="bi bi-shield-check"></i> 序列验证
-        </a>
-    </div>
-</div>
+<section class="panel" id="reading" aria-labelledby="reading-title">
+  <div class="panel-head"><div><h2 id="reading-title">结果解读</h2></div></div>
+  <div class="prose">
+    <ul>
+      <li>坐标采用 1-based inclusive，序列方向 5′ → 3′。</li>
+      <li>双探针的配对扫描覆盖正向转录本、无缺口、每臂最多 3 个替换；插入缺失尚未复核。</li>
+      <li>目标判定模式决定哪些转录本上的配对算作预期信号：物种模式、严格模式、允许集合和亚基因组模式。</li>
+      <li>“当前检索未检出”与“保留待复核”都不等于特异性已经验证；排序分数不是结合概率。</li>
+      <li>结论受参考库收录范围限制：参考库中没有的转录本无法被检出。</li>
+    </ul>
+  </div>
+</section>
 
-<style>
-.help-container {
-    max-width: 1200px;
-    margin: 2rem auto;
-    padding: 2rem;
-    background: white;
-    border-radius: 15px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.feature-card {
-    background: #f8f9fa;
-    padding: 1.5rem;
-    border-radius: 10px;
-    height: 100%;
-}
-
-.parameter-table {
-    width: 100%;
-    background: white;
-    border-collapse: collapse;
-}
-.parameter-table th,
-.parameter-table td {
-    padding: 0.8rem;
-    border: 1px solid #dee2e6;
-}
-
-.guide-steps .step {
-    display: flex;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-.step-number {
-    width: 40px;
-    height: 40px;
-    background: #3498db;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-}
-
-.quick-links {
-    margin-top: 3rem;
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-}
-</style>
-{% endblock %} 
+<section class="panel" id="faq" aria-labelledby="faq-title">
+  <div class="panel-head"><div><h2 id="faq-title">常见问题</h2></div></div>
+  <div class="stack">
+    <details class="disclosure" open><summary>参考库从哪里来？</summary><p class="hint">服务器 uploads 目录中的 FASTA 会出现在“已有参考库”列表里；也可以在设计时直接上传，上传前建议先用 FASTA 格式化清理标题。</p></details>
+    <details class="disclosure"><summary>为什么双探针结果比三探针多了证据表？</summary><p class="hint">双探针已迁移到双臂配对扫描，能给出每个配对位点的坐标和错配；三探针仍是旧流程，只输出 BLAST 报告。</p></details>
+    <details class="disclosure"><summary>桥接探针冲突的 k-mer 长度怎么选？</summary><p class="hint">默认 9。k 越小，判定越严格，报告的冲突越多。</p></details>
+    <details class="disclosure"><summary>计算需要多久？</summary><p class="hint">在 Bo/Bju cDNA 参考上，单条双探针设计约 40 秒，其中配对扫描约 17 秒；批量任务按条数累加。期间请保持页面打开。</p></details>
+  </div>
+</section>
+{% endblock %}

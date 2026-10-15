@@ -187,7 +187,8 @@ def filter_probe_by_llm(probe_data):
 
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html')
+    return render_template('index.html', bridge_count=len(bridge_seq_dict),
+                           genomes=get_available_genomes())
 
 @app.route("/help", methods=['GET'])
 def help():
@@ -233,8 +234,7 @@ def triplet():
                 # Create BLAST database if needed
                 blast_db = create_blast_db(file_path)
         except ValueError as e:
-            error_message = str(e)
-            return render_template('triplet.html', error_message=error_message)
+            return jsonify({'error': f'参考序列无法建立比对库：{e}'}), 400
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -259,21 +259,21 @@ def triplet():
         # 获取probe sequence
         probe_seq = bridge_seq_dict.get(BP_ID, None)
         if probe_seq is None:
-            return jsonify({'error': f'BP_ID {BP_ID} not found in probe table'}), 400
+            return jsonify({'error': f'桥接探针编号 {BP_ID} 不在当前探针库中'}), 400
 
         if len(gene_id) > 0:
             sequence_type = request.form['sequenceType']
             if sequence_type == 'cds':
                 if gene_id not in cds_dict:
-                    return jsonify({'error': f'GeneID {gene_id} not found in CDS data'}), 400
+                    return jsonify({'error': f'内置 TAIR CDS 中没有 {gene_id}'}), 400
                 seq = cds_dict[gene_id]
             elif sequence_type == 'cdna':
                 if gene_id  not in cdna_dict:
-                    return jsonify({'error': f'GeneID {gene_id} not found in cDNA data'}), 400
+                    return jsonify({'error': f'内置 TAIR cDNA 中没有 {gene_id}'}), 400
                 seq = cdna_dict[gene_id]
 
         if len(seq) == 0:
-            return jsonify({'error': 'empty input sequences'}), 400
+            return jsonify({'error': '请填写基因编号或粘贴目标序列'}), 400
         
         create_triplet_probe(
             name=task_name,
@@ -321,9 +321,8 @@ def triplet():
         # 返回 ZIP 文件
         return send_file(zip_path, as_attachment=True)
     
-    # GET请求处理保持不变
-    available_genomes = get_available_genomes()
-    return render_template('triplet.html', available_genomes=available_genomes)
+    return render_template('triplet.html', mode='single', bridges=bridge_seq_dict,
+                           available_genomes=get_available_genomes())
 
 @app.route('/triplet/batch', methods=['GET', 'POST'])
 def triplet_batch():
@@ -364,8 +363,7 @@ def triplet_batch():
                 blast_db = create_blast_db(file_path)
                 ref_genome_path = blast_db
         except ValueError as e:
-            error_message = str(e)
-            return render_template('triplet_batch.html', error_message=error_message)
+            return jsonify({'error': f'参考序列无法建立比对库：{e}'}), 400
 
         # 获取通用参数
         min_length = int(request.form.get('min_length', 15))
@@ -403,9 +401,14 @@ def triplet_batch():
                     # upper all keys
                     ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
                 
-                for row in csv_reader:
-                    if len(row) >= 3:  # 至少需要3列
-                        task_name, bp_id, gene_id = row[:3]
+                completed, skipped = 0, []
+                for line_number, row in enumerate(csv_reader, start=1):
+                    if not any(cell.strip() for cell in row):
+                        continue
+                    if len(row) < 3:
+                        skipped.append((line_number, ','.join(row), '少于 3 列'))
+                    else:  # 至少需要3列
+                        task_name, bp_id, gene_id = [cell.strip() for cell in row[:3]]
                         gene_id = gene_id.upper()
                         
                         # 获取max_selected值,如果有第4列就使用第4列的值,否则使用默认值
@@ -419,6 +422,7 @@ def triplet_batch():
                         # 获取probe sequence
                         probe_seq = bridge_seq_dict.get(bp_id, None)
                         if probe_seq is None:
+                            skipped.append((line_number, task_name, f'桥接探针编号 {bp_id} 不在探针库中'))
                             continue
                             
                         # 获取序列，按优先级尝试不同来源
@@ -477,8 +481,18 @@ def triplet_batch():
                                 output_dir=task_dir,
                                 max_selected=max_selected  # 使用每行指定的max_selected值
                             )
+                            completed += 1
                         else:
-                            print(f"无法找到基因 {gene_id} 的序列")
+                            skipped.append((line_number, task_name, f'找不到 {gene_id} 的序列（别名、CDS、cDNA、参考库均未命中）'))
+
+                if completed == 0:
+                    shutil.rmtree(output_dir)
+                    reasons = '；'.join(f'第 {n} 行 {name}：{reason}' for n, name, reason in skipped[:10])
+                    return jsonify({'error': '没有可设计的任务。' + reasons}), 400
+                if skipped:
+                    with open(os.path.join(batch_dir, 'skipped_tasks.tsv'), 'w', encoding='utf-8') as handle:
+                        handle.write('line\ttask\treason\n')
+                        handle.writelines(f'{n}\t{name}\t{reason}\n' for n, name, reason in skipped)
                 
                 # 创建ZIP文件
                 zip_filename = f"triplet_batch_results_{unique_id}.zip"
@@ -495,11 +509,15 @@ def triplet_batch():
                 shutil.rmtree(output_dir)
                 
                 # 返回ZIP文件
-                return send_file(zip_path, as_attachment=True)
+                response = send_file(zip_path, as_attachment=True)
+                response.headers['X-Tasks-Completed'] = str(completed)
+                response.headers['X-Tasks-Skipped'] = str(len(skipped))
+                return response
 
-    # GET请求返回批量处理页面
-    available_genomes = get_available_genomes()
-    return render_template('triplet_batch.html', available_genomes=available_genomes)
+        return jsonify({'error': '请上传批量任务 CSV 文件'}), 400
+
+    return render_template('triplet.html', mode='batch', bridges=bridge_seq_dict,
+                           available_genomes=get_available_genomes())
 
 @app.route('/bridge', methods=['GET', 'POST'])
 def bridge():
@@ -1229,12 +1247,16 @@ def formatting():
             output.write(formatted_sequences.encode('utf-8'))
             output.seek(0)
 
-            return send_file(
+            response = send_file(
                 output,
                 as_attachment=True,
                 download_name=formatted_filename,
                 mimetype='text/plain'
             )
+            summary_keys = ['original_count', 'formatted_count', 'removed_count', 'headers_cleaned',
+                            'deduplicated_count', 'detected_type']
+            response.headers['X-Format-Stats'] = json.dumps({key: stats[key] for key in summary_keys})
+            return response
 
         except Exception as e:
             return jsonify({'error': str(e)}), 500

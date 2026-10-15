@@ -1,268 +1,100 @@
 {% extends "base.html" %}
-
-{% block title %}Probe Designer - Home{% endblock %}
+{% block title %}Probe Designer · HCR 探针设计工作台{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">{% endblock %}
 
 {% block content %}
-<div class="hero-section">
-    <h1>Welcome to Probe Designer</h1>
-    <p class="lead">A comprehensive suite of tools for designing DNA/RNA probes</p>
-</div>
-
-<div class="tools-grid">
-    <div class="tool-card">
-        <div class="tool-icon">
-            <i class="fas fa-microscope"></i>
-        </div>
-        <h2>Triplet Probe Designer</h2>
-        <p>Create triplets for in situ hybridization</p>
-        <ul class="feature-list">
-            <li>Triplet-specific parameters</li>
-            <li>Sequence specificity check</li>
-            <li>Multiple probe design</li>
-            <li>Cross-reactivity prevention</li>
-        </ul>
-        <a href="{{ url_for('triplet') }}" class="btn btn-primary">Start Designing</a>
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-copy">
+    <span class="hero-tag">HCR in situ · probe design workbench</span>
+    <h1 id="hero-title">从转录本到可复核的探针清单</h1>
+    <p>设计双探针与三探针，管理桥接探针库，预处理参考序列。每个候选都保留筛选原因与配对证据，便于下单前逐对复核。</p>
+    <div class="hero-cta">
+      <a class="btn primary" href="{{ url_for('split') }}">开始双探针设计</a>
+      <a class="btn" href="{{ url_for('bridge_list') }}">浏览桥接探针库</a>
     </div>
+  </div>
+  <figure class="hero-figure" aria-label="示意图：L、R 两臂相邻结合在 mRNA 上，桥接探针连接两臂的延伸端，并启动 HCR 发夹链式扩增产生荧光信号">
+    <svg viewBox="0 0 520 290" role="img">
+      <title>双探针、桥接探针与 HCR 扩增示意</title>
+      <!-- mRNA backbone with base ticks -->
+      <line x1="20" y1="240" x2="500" y2="240" stroke="var(--h-rna)" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="20" y1="245" x2="500" y2="245" stroke="var(--h-rna)" stroke-width="6" stroke-dasharray="1 5" opacity=".55"/>
+      <!-- L and R target arms, adjacent with a 0 nt gap -->
+      <line x1="150" y1="233" x2="244" y2="233" stroke="var(--h-l)" stroke-width="12" stroke-dasharray="1.2 5" opacity=".5"/>
+      <line x1="252" y1="233" x2="346" y2="233" stroke="var(--h-r)" stroke-width="12" stroke-dasharray="1.2 5" opacity=".5"/>
+      <line x1="150" y1="226" x2="244" y2="226" stroke="var(--h-l)" stroke-width="5" stroke-linecap="round"/>
+      <line x1="252" y1="226" x2="346" y2="226" stroke="var(--h-r)" stroke-width="5" stroke-linecap="round"/>
+      <!-- linkers and overhangs -->
+      <path d="M244 226 C244 198 236 190 236 168 L196 168" fill="none" stroke="var(--h-l)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M252 226 C252 198 260 190 260 168 L300 168" fill="none" stroke="var(--h-r)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- bridge probe hybridised to both overhangs -->
+      <line x1="198" y1="161" x2="234" y2="161" stroke="var(--h-b)" stroke-width="10" stroke-dasharray="1.2 5" opacity=".45"/>
+      <line x1="262" y1="161" x2="298" y2="161" stroke="var(--h-b)" stroke-width="10" stroke-dasharray="1.2 5" opacity=".45"/>
+      <line x1="192" y1="154" x2="304" y2="154" stroke="var(--h-b)" stroke-width="5" stroke-linecap="round"/>
+      <line x1="248" y1="154" x2="248" y2="122" stroke="var(--h-b)" stroke-width="3" stroke-linecap="round"/>
+      <!-- HCR hairpin polymer with fluorophores -->
+      <polyline points="248,122 276,106 304,120 332,100 360,114 388,92 416,106 444,84 472,98" fill="none" stroke="var(--h-b)" stroke-width="3" stroke-linejoin="round" opacity=".8"/>
+      <g fill="var(--h-glow)">
+        <circle class="glow" cx="276" cy="106" r="9" opacity=".18"/><circle cx="276" cy="106" r="3.6"/>
+        <circle class="glow" cx="332" cy="100" r="9" opacity=".18"/><circle cx="332" cy="100" r="3.6"/>
+        <circle class="glow" cx="388" cy="92" r="9" opacity=".18"/><circle cx="388" cy="92" r="3.6"/>
+        <circle class="glow" cx="444" cy="84" r="9" opacity=".18"/><circle cx="444" cy="84" r="3.6"/>
+      </g>
+      <!-- scanning cursor along the transcript -->
+      <rect class="scan" x="20" y="198" width="2" height="56" fill="var(--h-b)" opacity=".8"/>
+      <!-- labels -->
+      <text x="20" y="232">mRNA</text>
+      <text x="20" y="266">5′</text><text x="500" y="266" text-anchor="end">3′</text>
+      <text class="lbl-l" x="197" y="266" text-anchor="middle">L 臂</text>
+      <text class="lbl-r" x="299" y="266" text-anchor="middle">R 臂</text>
+      <text x="248" y="282" text-anchor="middle">两臂间隔 0 nt</text>
+      <text class="lbl-b" x="184" y="150" text-anchor="end">桥接探针 BP</text>
+      <text class="lbl-g" x="472" y="66" text-anchor="end">HCR 发夹链式扩增 → 荧光</text>
+    </svg>
+  </figure>
+</section>
 
-    <div class="tool-card">
-        <div class="tool-icon">
-            <i class="fas fa-dna"></i>
-        </div>
-        <h2>Split Probe Designer</h2>
-        <p>Design split probes for RNA detection</p>
-        <ul class="feature-list">
-            <li>Split probe optimization</li>
-            <li>Sequence validation</li>
-            <li>Customizable parameters</li>
-            <li>Specificity analysis</li>
-        </ul>
-        <a href="{{ url_for('split') }}" class="btn btn-primary">Start Designing</a>
+<section class="spec" aria-label="当前服务器数据">
+  <div><span>桥接探针库</span><strong>{{ '{:,}'.format(bridge_count) }} 条</strong><small>BP_0001–1000 · BP_1101–2578</small></div>
+  <div><span>可用参考库</span><strong>{{ genomes|length }} 个</strong><small>{% if genomes %}{{ genomes|map(attribute='display_name')|join(' · ') }}{% else %}尚未添加，可在设计时上传{% endif %}</small></div>
+  <div><span>双臂配对扫描</span><strong>每臂 ≤ 3</strong><small>替换错配 · 正向转录本 · 无缺口</small></div>
+  <div><span>坐标约定</span><strong>1-based</strong><small>inclusive · 序列 5′ → 3′</small></div>
+</section>
+
+<section aria-labelledby="pipeline-title">
+  <div class="section-title"><h2 id="pipeline-title">双探针设计流程</h2><p>三步向导，结果附带每一对的证据</p></div>
+  <ol class="pipeline">
+    <li><strong>目标序列</strong><span>从参考库提取或直接粘贴，核对编号与桥接探针</span></li>
+    <li><strong>候选生成</strong><span>臂长、Tm、GC、连续同碱基与重复片段过滤</span></li>
+    <li><strong>配对扫描</strong><span>在参考库中查找两臂同时命中的位置与错配</span></li>
+    <li><strong>策略筛选</strong><span>物种、严格、允许集合或亚基因组模式</span></li>
+    <li><strong>复核导出</strong><span>逐对证据、筛选原因与完整结果 ZIP</span></li>
+  </ol>
+</section>
+
+<section aria-labelledby="tools-title">
+  <div class="section-title"><h2 id="tools-title">全部工具</h2><p>左侧导航可随时切换</p></div>
+  <div class="tool-index">
+    <div class="tool-group">
+      <h3>设计</h3>
+      <a class="tool" href="{{ url_for('split') }}"><svg aria-hidden="true"><use href="#i-split"/></svg><strong>双探针设计</strong><span>L/R 两臂配对，单条与批量共用一个向导，逐对给出配对证据和筛选原因。</span></a>
+      <a class="tool" href="{{ url_for('triplet') }}"><svg aria-hidden="true"><use href="#i-triplet"/></svg><strong>三探针设计 <span class="chip warn">旧规则</span></strong><span>L/M/R 三段组合，单条或 CSV 批量；特异性仍按单臂 BLAST 判定。</span></a>
     </div>
-
-    <div class="tool-card">
-        <div class="tool-icon">
-            <i class="fas fa-project-diagram"></i>
-        </div>
-        <h2>Bridge Probe System</h2>
-        <p>Get suggestions for non-overlapping bridge probes</p>
-        <ul class="feature-list">
-            <li>K-mer based analysis</li>
-            <li>Multiple probe suggestion</li>
-            <li>Sequence uniqueness check</li>
-            <li>Batch processing support</li>
-        </ul>
-        <a href="{{ url_for('bridge') }}" class="btn btn-primary">Start Designing</a>
+    <div class="tool-group">
+      <h3>桥接探针库</h3>
+      <a class="tool" href="{{ url_for('bridge_list') }}"><svg aria-hidden="true"><use href="#i-library"/></svg><strong>浏览探针库</strong><span>{{ '{:,}'.format(bridge_count) }} 条桥接序列及长度、Tm、GC，可搜索、复制与导出。</span></a>
+      <a class="tool" href="{{ url_for('bridge_query') }}"><svg aria-hidden="true"><use href="#i-conflict"/></svg><strong>冲突检查</strong><span>按 BP_ID、新序列或多条输入互查 k-mer 重叠。</span></a>
+      <a class="tool" href="{{ url_for('bridge') }}"><svg aria-hidden="true"><use href="#i-plus"/></svg><strong>推荐新探针</strong><span>挑选与已用探针没有 k-mer 冲突的新桥接探针。</span></a>
+      <a class="tool" href="{{ url_for('bridge_validate') }}"><svg aria-hidden="true"><use href="#i-check"/></svg><strong>合规验证</strong><span>按长度、GC、Tm 与连续碱基规则检查一批序列。</span></a>
     </div>
-
-    <div class="tool-card">
-        <h2>Probe Number Recommendation System</h2>
-        <p>Automatically recommend the number of probes needed for each gene based on expression levels.</p>
-        <ul>
-            <li>Upload CDS sequence file (FASTA format)</li>
-            <li>Upload expression file (two-column text file: gene ID and count value)</li>
-            <li>Upload target gene list (single-column text file)</li>
-        </ul>
-        <a href="{{ url_for('probe_recommend') }}" class="btn">Start Designing</a>
+    <div class="tool-group">
+      <h3>序列工具</h3>
+      <a class="tool" href="{{ url_for('formatting') }}"><svg aria-hidden="true"><use href="#i-format"/></svg><strong>FASTA 格式化</strong><span>清理标题、统一大写、过滤无效序列、去除转录本变体重复。</span></a>
+      <a class="tool" href="{{ url_for('probe_recommend') }}"><svg aria-hidden="true"><use href="#i-bars"/></svg><strong>探针数量推荐</strong><span>由 CDS 与 counts 计算 TPM，按表达量推荐每个基因的探针数。</span></a>
+      <a class="tool" href="{{ url_for('filter') }}"><svg aria-hidden="true"><use href="#i-chip"/></svg><strong>AI 筛选 <span class="chip warn">实验</span></strong><span>用大语言模型对三探针结果 JSON 做二次筛选。</span></a>
     </div>
-</div>
+  </div>
+</section>
 
-<div class="features-section">
-    <h2>Key Features</h2>
-    <div class="features-grid">
-        <div class="feature-item">
-            <i class="fas fa-check-circle"></i>
-            <h3>Optimized Parameters</h3>
-            <p>Automatically calculate and optimize probe parameters for best performance</p>
-        </div>
-        <div class="feature-item">
-            <i class="fas fa-database"></i>
-            <h3>Reference Genomes</h3>
-            <p>Built-in support for common reference genomes and custom genome upload</p>
-        </div>
-        <div class="feature-item">
-            <i class="fas fa-chart-line"></i>
-            <h3>Performance Analysis</h3>
-            <p>Analyze probe performance metrics and predict experimental outcomes</p>
-        </div>
-        <div class="feature-item">
-            <i class="fas fa-file-export"></i>
-            <h3>Export Options</h3>
-            <p>Export results in multiple formats for downstream analysis</p>
-        </div>
-    </div>
-</div>
-
-<a href="{{ url_for('bridge') }}" class="nav-link">Bridge Probe System</a>
-{% endblock %}
-
-{% block extra_css %}
-<style>
-/* Hero Section */
-.hero-section {
-    text-align: center;
-    padding: 4rem 2rem;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    border-radius: 8px;
-    margin-bottom: 3rem;
-}
-
-.hero-section h1 {
-    font-size: 2.5rem;
-    color: #2c3e50;
-    margin-bottom: 1rem;
-}
-
-.hero-section .lead {
-    font-size: 1.25rem;
-    color: #34495e;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-/* Tools Grid */
-.tools-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-    margin-bottom: 3rem;
-}
-
-.tool-card {
-    background: white;
-    border-radius: 8px;
-    padding: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.tool-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-}
-
-.tool-icon {
-    font-size: 2.5rem;
-    color: #3498db;
-    margin-bottom: 1rem;
-    text-align: center;
-}
-
-.tool-card h2 {
-    color: #2c3e50;
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-}
-
-.tool-card p {
-    color: #7f8c8d;
-    margin-bottom: 1.5rem;
-    line-height: 1.6;
-}
-
-.feature-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1.5rem 0;
-}
-
-.feature-list li {
-    color: #34495e;
-    padding: 0.5rem 0;
-    padding-left: 1.5rem;
-    position: relative;
-}
-
-.feature-list li::before {
-    content: "•";
-    color: #3498db;
-    position: absolute;
-    left: 0;
-}
-
-/* Features Section */
-.features-section {
-    padding: 3rem 0;
-    background: #f8f9fa;
-    border-radius: 8px;
-    margin-top: 3rem;
-}
-
-.features-section h2 {
-    text-align: center;
-    color: #2c3e50;
-    margin-bottom: 2rem;
-}
-
-.features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 2rem;
-    padding: 0 2rem;
-}
-
-.feature-item {
-    text-align: center;
-    padding: 1.5rem;
-}
-
-.feature-item i {
-    font-size: 2rem;
-    color: #3498db;
-    margin-bottom: 1rem;
-}
-
-.feature-item h3 {
-    color: #2c3e50;
-    font-size: 1.25rem;
-    margin-bottom: 0.5rem;
-}
-
-.feature-item p {
-    color: #7f8c8d;
-    line-height: 1.6;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .hero-section {
-        padding: 3rem 1rem;
-    }
-
-    .hero-section h1 {
-        font-size: 2rem;
-    }
-
-    .tools-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Button Styles */
-.btn {
-    display: inline-block;
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-    font-weight: 600;
-    text-align: center;
-    text-decoration: none;
-    border-radius: 4px;
-    transition: all 0.3s ease;
-    cursor: pointer;
-}
-
-.btn-primary {
-    background-color: #3498db;
-    color: white;
-    border: none;
-}
-
-.btn-primary:hover {
-    background-color: #2980b9;
-    transform: translateY(-2px);
-}
-</style>
+<div class="alert notice">结果解读：双臂配对扫描不含插入缺失；“当前检索未检出”和“保留待复核”都不等于特异性已验证。三探针尚未迁移到双臂配对判定。</div>
 {% endblock %}

@@ -1,130 +1,68 @@
 {% extends "base.html" %}
-
-{% block title %}Bridge Probe Sequence Analysis{% endblock %}
+{% from "partials/bridge.html" import conflict_modes, kmer_cell, kmer_field %}
+{% block title %}冲突检查 · Probe Designer{% endblock %}
+{% block eyebrow %}桥接探针库 · 冲突检查{% endblock %}
+{% block heading %}冲突检查{% endblock %}
+{% block lede %}检查尚未入库的新序列是否与已有桥接探针共享 k-mer。{% endblock %}
+{% block head_actions %}{{ conflict_modes('sequence') }}{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mb-4">Bridge Probe 序列分析</h1>
-    
-    <div class="action-buttons">
-        <a href="{{ url_for('bridge') }}" class="btn btn-outline-primary">
-            切换到设计系统
-        </a>
-        <a href="{{ url_for('bridge_query') }}" class="btn btn-outline-primary ms-2">
-            切换到BP_ID查询
-        </a>
-        <a href="{{ url_for('bridge_list') }}" class="btn btn-outline-primary ms-2">
-            查看探针列表
-        </a>
+<form method="post" class="panel">
+  <div class="split">
+    <label class="field">待检查序列（每行一条）<textarea name="sequences" rows="6" spellcheck="false" placeholder="ACTATCGCGGCCGACTGTA&#10;GCTAGCTAGGATCCAATCG" required>{{ sequences or '' }}</textarea></label>
+    <div>
+      {{ kmer_field(kmer) }}
+      <button type="submit" class="btn primary">检查冲突</button>
     </div>
+  </div>
+</form>
 
-    <form method="POST" enctype="multipart/form-data" class="query-form">
-        <div class="mb-3">
-            <label for="sequences" class="form-label">输入要分析的序列（每行一个）</label>
-            <textarea class="form-control" id="sequences" name="sequences" rows="5"
-                      placeholder="例如:&#10;ATCGATCG&#10;GCTAGCTA" required>{{ sequences if sequences }}</textarea>
-        </div>
+{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
-        <div class="mb-3">
-            <label for="kmer" class="form-label">k-mer长度</label>
-            <input type="number" class="form-control" id="kmer" name="kmer" value="{{ kmer }}" min="3" max="15">
-        </div>
-
-        <button type="submit" class="btn btn-primary">分析序列冲突</button>
-    </form>
-
-    {% if error %}
-    <div class="alert alert-danger mt-4" role="alert">
-        {{ error }}
+{% if sequence_results %}
+<section class="panel">
+  <div class="panel-head">
+    <div><h2>检查结果</h2><p>k = {{ kmer }} · {{ sequence_results|length }} 条输入 · {{ sequence_results|selectattr(1)|list|length }} 条存在冲突</p></div>
+    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+  </div>
+  <div class="stack">
+  {% for sequence, conflicts in sequence_results %}
+    <div class="result-block" data-input="{{ sequence }}">
+      <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px">
+        <span class="chip {{ 'bad' if conflicts else 'ok' }}">{{ '冲突 ' ~ conflicts|length ~ ' 条' if conflicts else '无冲突' }}</span>
+        <span class="hint">输入 {{ loop.index }}</span><code class="seq">{{ sequence }}</code>
+      </div>
+      {% if conflicts %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>BP_ID</th><th>序列</th><th>共享 k-mer 数</th><th>示例 k-mer</th></tr></thead>
+          <tbody>
+          {% for bp_id, bp_sequence, overlap_count, overlap_kmers in conflicts %}
+            <tr data-row="{{ [bp_id, bp_sequence, overlap_count, overlap_kmers|join(',')]|tojson|forceescape }}">
+              <td><code>{{ bp_id }}</code></td><td class="seq">{{ bp_sequence }}</td><td class="num">{{ overlap_count }}</td><td>{{ kmer_cell(overlap_kmers, overlap_count) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
-
-    {% if sequence_results %}
-    <div class="query-result">
-        <h3>序列分析结果</h3>
-        {% for sequence, conflicts in sequence_results %}
-        <div class="sequence-section mb-4">
-            <h4>输入序列 {{ loop.index }}</h4>
-            <div class="sequence-cell mb-3">{{ sequence }}</div>
-            
-            {% if conflicts %}
-            <table class="table table-striped conflict-table">
-                <thead>
-                    <tr>
-                        <th>BP_ID</th>
-                        <th>序列</th>
-                        <th>重叠k-mer数量</th>
-                        <th>示例k-mer</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for bp_id, bp_sequence, overlap_count, overlap_kmers in conflicts %}
-                    <tr>
-                        <td>{{ bp_id }}</td>
-                        <td class="sequence-cell">{{ bp_sequence }}</td>
-                        <td>{{ overlap_count }}</td>
-                        <td>
-                            {% for kmer in overlap_kmers %}
-                            <span class="badge bg-info kmer-badge">{{ kmer }}</span>
-                            {% endfor %}
-                            {% if overlap_count > 3 %}
-                            <span class="badge bg-secondary">+{{ overlap_count - 3 }} more</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% else %}
-            <div class="alert alert-success">
-                该序列与现有探针没有k-mer重叠
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-        
-        <div class="action-buttons">
-            <button class="btn btn-success" onclick="downloadResults()">下载分析结果</button>
-        </div>
-    </div>
-    {% endif %}
-</div>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function downloadResults() {
-    const sections = document.querySelectorAll('.sequence-section');
-    let csv = 'Input_Sequence\tBP_ID\tBP_Sequence\tOverlap_Count\tExample_KMers\n';
-    
-    sections.forEach((section, index) => {
-        const sequence = section.querySelector('.sequence-cell').textContent;
-        const rows = section.querySelectorAll('table tbody tr');
-        
-        if (rows.length === 0) {
-            csv += `${sequence}\tNo conflicts\t-\t0\t-\n`;
-        } else {
-            rows.forEach(row => {
-                const bp_id = row.cells[0].textContent;
-                const bp_sequence = row.cells[1].textContent;
-                const overlap_count = row.cells[2].textContent;
-                const kmers = Array.from(row.cells[3].querySelectorAll('.kmer-badge'))
-                                  .map(span => span.textContent)
-                                  .join(',');
-                csv += `${sequence}\t${bp_id}\t${bp_sequence}\t${overlap_count}\t${kmers}\n`;
-            });
-        }
-    });
-    
-    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'sequence_analysis_results.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-}
+document.getElementById('download-button')?.addEventListener('click', () => {
+  const rows = [['Input_Sequence', 'BP_ID', 'BP_Sequence', 'Overlap_Count', 'Example_KMers']];
+  document.querySelectorAll('.result-block').forEach(block => {
+    const lines = block.querySelectorAll('tbody tr');
+    if (!lines.length) rows.push([block.dataset.input, 'No conflicts', '-', 0, '-']);
+    lines.forEach(row => rows.push([block.dataset.input, ...JSON.parse(row.dataset.row)]));
+  });
+  HCR.downloadRows(rows, 'sequence_analysis_results.txt');
+});
 </script>
-{% endblock %} 
+{% endblock %}

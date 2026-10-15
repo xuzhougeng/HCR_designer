@@ -1,0 +1,16 @@
+{# Shared pieces for the bridge-probe library pages. #}
+{% macro conflict_modes(current) %}
+<nav class="seg" aria-label="检查方式">
+  <a href="{{ url_for('bridge_query') }}"{% if current == 'bp_id' %} aria-current="page"{% endif %}>按 BP_ID</a>
+  <a href="{{ url_for('bridge_sequence') }}"{% if current == 'sequence' %} aria-current="page"{% endif %}>按新序列</a>
+  <a href="{{ url_for('bridge_analyze') }}"{% if current == 'mutual' %} aria-current="page"{% endif %}>多条互查</a>
+</nav>
+{% endmacro %}
+
+{% macro kmer_cell(kmers, count) %}
+{% for kmer in kmers %}<span class="kmer">{{ kmer }}</span>{% endfor %}{% if count > kmers|length %}<span class="hint">另有 {{ count - kmers|length }} 个</span>{% endif %}
+{% endmacro %}
+
+{% macro kmer_field(kmer) %}
+<label class="field">k-mer 长度<input type="number" name="kmer" value="{{ kmer or 9 }}" min="3" max="15" step="1"><small>两条序列（含反向互补）共享任一该长度片段即记为冲突，3–15</small></label>
+{% endmacro %}

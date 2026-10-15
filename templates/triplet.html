@@ -1,482 +1,207 @@
 {% extends "base.html" %}
-
-{% block title %}Triplet Probe Generator{% endblock %}
-
-{% block content %}
-<div class="container mt-4">
-    <h2>Triplet Probe Design</h2>
-    
-    {% if error_message %}
-    <div class="alert alert-danger" role="alert">
-        {{ error_message }}
-    </div>
-    {% endif %}
-    
-    <div class="action-buttons mb-4">
-        <a href="{{ url_for('triplet_batch') }}" class="btn btn-outline-primary">
-            切换到批量处理
-        </a>
-    </div>
-    <form action="/triplet" method="post" enctype="multipart/form-data">
-        <!-- Single Processing Section -->
-        <div id="singleInputSection">
-            <div class="parameter-group">
-                <h3>Basic Information</h3>
-                <div class="form-group">
-                    <label for="name">Task Name:</label>
-                    <input type="text" id="name" name="name" class="form-control">
-                    <div class="parameter-description">Name for your output file</div>
-                </div>
-                <div class="form-group">
-                    <label for="bp_id">BP_ID:</label>
-                    <input type="text" id="bp_id" name="bp_id" class="form-control" pattern="BP_[0-2][0-9]{3}" value="BP_0001" required>
-                    <div class="parameter-description">Enter your BP ID (Valid ranges: BP_0001 to BP_1000 or BP_1101 to BP_2578)</div>
-                </div>
-
-                <div class="form-group">
-                    <label>Sequence Input:</label>
-                    <div class="tab">
-                        <button type="button" class="tablinks" data-tab="GeneID">GeneID</button>
-                        <button type="button" class="tablinks" data-tab="Sequence">Sequence</button>
-                    </div>
-
-                    <div id="GeneID" class="tabcontent">
-                        <div class="form-group">
-                            <input type="text" id="geneID" name="geneID" class="form-control">
-                            <div class="parameter-description">Enter your gene ID (e.g., AT1G01010)</div>
-
-                            <div class="mt-3" style="display: flex; gap: 20px;">
-                                <input type="radio" id="cdna" name="sequenceType" value="cdna" checked>
-                                <label for="cdna">cDNA</label>
-                                <input type="radio" id="cds" name="sequenceType" value="cds">
-                                <label for="cds">CDS</label>
-                            </div>
-                            <div class="parameter-description">Choose between cDNA (includes UTRs) or CDS (coding sequence only)</div>
-                        </div>
-                    </div>
-
-                    <div id="Sequence" class="tabcontent">
-                        <div class="form-group">
-                            <textarea id="seq" name="seq" rows="4" class="form-control"></textarea>
-                            <div class="parameter-description">Paste your DNA sequence here (ATCG only)</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="parameter-group">
-            <h3>Background sequence</h3>
-            <div class="flex-container">
-                <div class="form-group">
-                    <label for="existing_ref_genome">Choose Existing Background Sequence:</label>
-                    <select class="form-control" id="existing_ref_genome" name="existing_ref_genome" onchange="toggleInput(this)">
-                        <option value="">Select a genome</option>
-                        {% for genome in available_genomes %}
-                        <option value="{{ genome.filename }}">{{ genome.display_name }}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="parameter-description">Select from pre-loaded reference genomes for BLAST search</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="ref_genome">Or Upload New Reference Genome:</label>
-                    <input type="file" class="form-control-file" id="ref_genome" name="ref_genome" accept=".fa,.fasta,.fna,.gz" onchange="toggleFileInput()">
-                    <div class="parameter-description">Upload your own reference genome in FASTA format</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="parameter-group">
-            <h3>Advanced Options <button type="button" class="toggle-btn" onclick="toggleAdvancedOptions(this)">▼</button></h3>
-            <div id="advancedOptions" style="display: none;">
-                <!-- Probe Length Parameters -->
-                <div class="advanced-section">
-                    <h4>Probe Length Parameters</h4>
-                    <div class="flex-container">
-                        <div class="form-group">
-                            <label for="min_length">Minimum Probe Length:</label><br>
-                            <input type="number" id="min_length" name="min_length" value="15" class="form-control" min="15" max="20">
-                            <div class="parameter-description">Minimum length of probe sequence (15-20 bp)</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="max_length">Maximum Probe Length:</label><br>
-                            <input type="number" id="max_length" name="max_length" value="20" class="form-control" min="15" max="50">
-                            <div class="parameter-description">Maximum length of probe sequence (15-50 bp)</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Gap and Complementarity Parameters -->
-                <div class="advanced-section">
-                    <h4>Gap and Complementarity Parameters</h4>
-                    <div class="flex-container">
-                        <div class="form-group">
-                            <label for="min_gap">Minimum Gap:</label><br>
-                            <input type="number" id="min_gap" name="min_gap" value="15" class="form-control" min="0"><br>
-                            <div class="parameter-description">Minimum space between adjacent probes (≥0 bp)</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="min_complementary_length">Minimum Complementary Length:</label><br>
-                            <input type="number" id="min_complementary_length" name="min_complementary_length" value="5" class="form-control" min="4" max="8"><br>
-                            <div class="parameter-description">Minimum length of complementary sequence to check (4-8 bp)</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- GC Content Parameters -->
-                <div class="advanced-section">
-                    <h4>GC Content Parameters</h4>
-                    <div class="flex-container">
-                        <div class="form-group">
-                            <label for="min_gc">Minimum GC (%):</label><br>
-                            <input type="number" id="min_gc" name="min_gc" step="0.1" value="40.0" class="form-control" min="30.0" max="50.0">
-                            <div class="parameter-description">Minimum GC content (30-50%)</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="max_gc">Maximum GC (%):</label><br>
-                            <input type="number" id="max_gc" name="max_gc" step="0.1" value="60.0" class="form-control" min="50.0" max="70.0">
-                            <div class="parameter-description">Maximum GC content (50-70%)</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Melting Temperature Parameters -->
-                <div class="advanced-section">
-                    <h4>Melting Temperature Parameters</h4>
-                    <div class="flex-container">
-                        <div class="form-group">
-                            <label for="min_tm">Minimum Tm (°C):</label><br>
-                            <input type="number" id="min_tm" name="min_tm" step="0.1" value="47.0" class="form-control" min="40.0" max="50.0"><br>
-                            <div class="parameter-description">Minimum melting temperature (40-50°C)</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="max_tm">Maximum Tm (°C):</label><br>
-                            <input type="number" id="max_tm" name="max_tm" step="0.1" value="53.0" class="form-control" min="50.0" max="60.0"><br>
-                            <div class="parameter-description">Maximum melting temperature (50-60°C)</div>
-                        </div>
-                    </div>
-                </div>
-                <!--Low Complexity Parameters-->
-                <div class="advanced-section">
-                    <h4>Low Complexity Parameters</h4>
-                    <div class="flex-container">
-                        <div class="form-group">
-                            <label for="kmer_size">K-mer Size:</label><br>
-                            <input type="number" id="kmer_size" name="kmer_size" value="8" class="form-control" min="6" max="10"><br>
-                            <div class="parameter-description">Size of k-mer for checking sequence complexity (6-10 bp)</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="min_kmer_count">Minimum K-mer Count:</label><br>
-                            <input type="number" id="min_kmer_count" name="min_kmer_count" value="2" class="form-control" min="2" max="4"><br>
-                            <div class="parameter-description">Minimum count of repeated k-mer (2-4)</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Probe Selection Parameters -->
-                <div class="advanced-section">
-                    <h4>Probe Selection Parameters</h4>
-                    <div class="flex-container">
-                        <div class="form-group">
-                            <label for="max_selected">Number of Probe Sets:</label><br>
-                            <input type="number" id="max_selected" name="max_selected" value="5" class="form-control" min="1" max="10"><br>
-                            <div class="parameter-description">Number of probe sets to select (1-10)</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="submit-container">
-            <button id="submitBtn" type="submit" class="btn btn-primary">Submit</button>
-        </div>
-        <img id="loader" src="{{ url_for('static', filename='loader.gif') }}" style="display: none;">
-    </form>
-</div>
+{% set batch = mode == 'batch' %}
+{% block title %}三探针设计 · Probe Designer{% endblock %}
+{% block eyebrow %}设计{% endblock %}
+{% block heading %}三探针设计{% endblock %}
+{% block lede %}L/M/R 三段组合靶向同一转录本。单条按基因编号或序列设计，批量按 CSV 逐行设计，完成后下载结果 ZIP。{% endblock %}
+{% block head_actions %}
+<nav class="seg" aria-label="输入数量">
+  <a href="{{ url_for('triplet') }}"{% if not batch %} aria-current="page"{% endif %}>单条</a>
+  <a href="{{ url_for('triplet_batch') }}"{% if batch %} aria-current="page"{% endif %}>批量</a>
+</nav>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.flex-container {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-}
+{% block content %}
+<div class="alert notice">三探针仍使用单臂 BLAST 的旧判定，尚未迁移到双探针的双臂配对扫描。结果请按候选看待。</div>
 
-.flex-container > div {
-    flex: 1;
-    min-width: 200px;
-}
+<form id="triplet-form" class="stack" action="{{ url_for('triplet_batch' if batch else 'triplet') }}" method="post" enctype="multipart/form-data" novalidate>
+  {% if batch %}
+  <section class="panel is-current" aria-labelledby="input-title">
+    <div class="panel-head"><div><h2 id="input-title"><span class="step-no">1</span>批量任务</h2><p>每行一个任务，没有表头：任务名称、桥接探针编号、基因编号，可选第 4 列为该任务最多保留的组合数。</p></div><button type="button" class="btn small" id="template-button">下载 CSV 模板</button></div>
+    <div class="split">
+      <div>
+        <label class="dropzone" data-dropzone tabindex="0">
+          <svg aria-hidden="true"><use href="#i-upload"/></svg>
+          <strong data-file-label>点击选择或拖入 CSV 文件</strong>
+          <span class="hint">UTF-8 编码，逗号分隔</span>
+          <input type="file" name="batch_file" id="batch-file" accept=".csv,text/csv">
+        </label>
+      </div>
+      <div class="divider-left">
+        <p class="hint" style="margin-bottom:8px">示例</p>
+        <pre class="seq" style="margin:0 0 12px;padding:10px 12px;background:var(--sunk);border-radius:5px">task1,BP_1101,AT1G01010
+task2,BP_1102,WUS,8</pre>
+        <ul class="note-list">
+          <li>基因编号依次在别名表、内置 TAIR CDS、TAIR cDNA 和所选参考库中查找。</li>
+          <li>找不到序列或编号无效的行会跳过，并列在结果 ZIP 的 <code>skipped_tasks.tsv</code> 中。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  {% else %}
+  <section class="panel is-current" aria-labelledby="input-title">
+    <div class="panel-head"><div><h2 id="input-title"><span class="step-no">1</span>目标序列</h2><p>结果文件和探针编号使用任务名称。</p></div></div>
+    <div class="grid-2">
+      <label class="field">任务名称<input name="name" id="task-name" maxlength="80" placeholder="例如：WUS_triplet" autocomplete="off" required></label>
+      <label class="field">桥接探针编号<input name="bp_id" id="bridge-id" value="BP_1101" autocomplete="off" spellcheck="false" required><small>BP_0001–1000 或 BP_1101–2578</small></label>
+    </div>
+    <div class="seq-preview"><span>对应桥接序列 · 5′ → 3′</span><code class="seq" id="bridge-sequence"></code></div>
+    <div class="field">
+      <span>目标来源</span>
+      <div class="seg" role="group" aria-label="目标来源">
+        <button type="button" data-source="gene" aria-pressed="true">按基因编号</button>
+        <button type="button" data-source="sequence" aria-pressed="false">粘贴序列</button>
+      </div>
+    </div>
+    <div id="gene-source" class="grid-2">
+      <label class="field">基因编号<input name="geneID" id="gene-id" placeholder="例如：AT1G01010" autocomplete="off" spellcheck="false"><small>大小写不敏感</small></label>
+      <label class="field">序列类型<select name="sequenceType" id="sequence-type"><option value="cdna">内置 TAIR cDNA（含 UTR）</option><option value="cds">内置 TAIR CDS（仅编码区）</option></select></label>
+    </div>
+    <label class="field" id="sequence-source" hidden>目标序列<textarea name="seq" id="sequence-text" rows="5" spellcheck="false" placeholder="仅 A/T/C/G，5′ → 3′"></textarea></label>
+  </section>
+  {% endif %}
 
-.parameter-group {
-    background-color: #ffffff;
-    border: 1px solid #e9ecef;
-    border-radius: 5px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
+  <section class="panel" aria-labelledby="reference-title">
+    <div class="panel-head"><div><h2 id="reference-title"><span class="step-no">2</span>背景序列</h2><p>用于 BLAST 检查探针在其他序列上的结合；不选则跳过特异性检查。</p></div></div>
+    <div class="grid-2">
+      <label class="field">已有参考库<select name="existing_ref_genome" id="existing-reference"><option value="">不使用 / 改为上传</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}">{{ genome.display_name }}</option>{% endfor %}</select></label>
+      <label class="field">或上传参考 FASTA<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"><small>FASTA 或 gzip；选择文件后将忽略左侧参考库</small></label>
+    </div>
+  </section>
 
-.parameter-group h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    color: #2c3e50;
-    font-size: 1.2em;
-    border-bottom: 2px solid #3498db;
-    padding-bottom: 5px;
-}
+  <section class="panel" aria-labelledby="parameter-title">
+    <div class="panel-head"><div><h2 id="parameter-title"><span class="step-no">3</span>参数</h2><p>默认值适用于大多数转录本。</p></div></div>
+    <div class="grid-3">
+      <label class="field">最多保留组合数<input type="number" name="max_selected" value="5" min="1" max="10" step="1"><small>{% if batch %}CSV 第 4 列优先{% else %}1–10{% endif %}</small></label>
+      <label class="field">相邻组合最小间距（nt）<input type="number" name="min_gap" value="{{ 2 if batch else 15 }}" min="0" step="1"></label>
+      <label class="field">最小互补长度（nt）<input type="number" name="min_complementary_length" value="5" min="4" max="8" step="1"><small>4–8</small></label>
+    </div>
+    <details class="disclosure">
+      <summary>高级参数<span>臂长、Tm、GC 与序列复杂度</span></summary>
+      <div class="grid-3">
+        {% for name, label, value, minimum, maximum, step in [
+          ('min_length', '最小长度（nt）', 15, 15, 20, 1), ('max_length', '最大长度（nt）', 20, 15, 50, 1),
+          ('poly_n', '连续同碱基阈值', 4, 2, 20, 1),
+          ('min_tm', '最低 Tm（°C）', 47.0, 40, 50, 0.1), ('max_tm', '最高 Tm（°C）', 53.0, 50, 60, 0.1),
+          ('kmer_size', '重复片段长度（nt）', 8, 6, 10, 1),
+          ('min_gc', '最低 GC（%）', 40.0, 30, 50, 0.1), ('max_gc', '最高 GC（%）', 60.0, 50, 70, 0.1),
+          ('min_kmer_count', '重复次数阈值', 2, 2, 4, 1)] %}
+        <label class="field">{{ label }}<input type="number" name="{{ name }}" value="{{ value }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}"><small>{{ minimum }}–{{ maximum }}</small></label>
+        {% endfor %}
+      </div>
+    </details>
+    <div class="actions">
+      <span>计算在服务器上同步完成，期间请保持本页打开</span>
+      <div><button type="submit" class="btn primary" id="submit-button"><svg aria-hidden="true"><use href="#i-download"/></svg>开始设计并下载 ZIP</button></div>
+    </div>
+  </section>
+</form>
 
-.parameter-description {
-    font-size: 0.9em;
-    color: #666;
-    margin-top: 2px;
-    margin-bottom: 8px;
-    font-style: italic;
-}
+<div id="triplet-status" class="alert" role="status" aria-live="polite" hidden></div>
 
-.submit-container {
-    margin: 20px 0;
-    text-align: center;
-}
+<section class="panel" id="triplet-result" hidden aria-labelledby="result-title">
+  <div class="panel-head"><div><h2 id="result-title">设计完成</h2><p id="result-detail"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>再次下载</button></div>
+  <ul class="note-list">
+    <li>ZIP 内每个任务包含探针序列 CSV、BED 坐标与详细报告。</li>
+    <li>修改参数后可直接再次提交，不需要刷新页面。</li>
+  </ul>
+</section>
+{% endblock %}
 
-.tab {
-    overflow: hidden;
-    border: 1px solid #ccc;
-    background-color: #f1f1f1;
-    margin-bottom: 10px;
-    border-radius: 4px;
-}
-
-.tab button {
-    background-color: inherit;
-    float: left;
-    border: none;
-    outline: none;
-    cursor: pointer;
-    padding: 10px 16px;
-    transition: 0.3s;
-}
-
-.tab button:hover {
-    background-color: #ddd;
-}
-
-.tab button.active {
-    background-color: #ccc;
-}
-
-.tabcontent {
-    display: none;
-    padding: 6px 12px;
-    border: 1px solid #ccc;
-    border-top: none;
-    border-radius: 0 0 4px 4px;
-}
-
-/* Form Styles */
-.form-control {
-    display: block;
-    width: 100%;
-    padding: 0.375rem 0.75rem;
-    font-size: 1rem;
-    line-height: 1.5;
-    color: #495057;
-    background-color: #fff;
-    background-clip: padding-box;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.form-control:focus {
-    color: #495057;
-    background-color: #fff;
-    border-color: #80bdff;
-    outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
-}
-
-.form-control-file {
-    display: block;
-    width: 100%;
-}
-
-.btn {
-    display: inline-block;
-    font-weight: 400;
-    text-align: center;
-    vertical-align: middle;
-    user-select: none;
-    padding: 0.375rem 0.75rem;
-    font-size: 1rem;
-    line-height: 1.5;
-    border-radius: 0.25rem;
-    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.btn-primary {
-    color: #fff;
-    background-color: #007bff;
-    border-color: #007bff;
-}
-
-.btn-primary:hover {
-    color: #fff;
-    background-color: #0069d9;
-    border-color: #0062cc;
-}
-
-.mt-3 {
-    margin-top: 1rem;
-}
-
-/* Radio button styles */
-input[type="radio"] {
-    margin-right: 0.5rem;
-}
-
-input[type="radio"] + label {
-    margin-right: 1rem;
-}
-
-/* Select styles */
-select.form-control {
-    height: calc(1.5em + 0.75rem + 2px);
-}
-
-/* Textarea styles */
-textarea.form-control {
-    min-height: 100px;
-    resize: vertical;
-}
-
-.toggle-btn {
-    background: none;
-    border: none;
-    font-size: 1.2em;
-    color: #3498db;
-    cursor: pointer;
-    padding: 0 5px;
-    transition: transform 0.3s;
-}
-
-.toggle-btn.active {
-    transform: rotate(180deg);
-}
-
-.advanced-section {
-    border-bottom: 1px solid #eee;
-    padding: 15px 0;
-    margin-bottom: 15px;
-}
-
-.advanced-section:last-child {
-    border-bottom: none;
-}
-
-.advanced-section h4 {
-    color: #2c3e50;
-    font-size: 1.1em;
-    margin-bottom: 15px;
-}
-</style>
-
+{% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.tab button').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            var tabName = this.getAttribute('data-tab');
-            openTab(e, tabName);
-            
-            // 处理required属性
-            const geneIDInput = document.getElementById('geneID');
-            const seqInput = document.getElementById('seq');
-            
-            if (tabName === 'GeneID') {
-                geneIDInput.required = true;
-                seqInput.required = false;
-            } else {
-                geneIDInput.required = false;
-                seqInput.required = true;
-            }
-        });
+(() => {
+  'use strict';
+  const batch = {{ 'true' if batch else 'false' }};
+  const bridges = {{ bridges|tojson }};
+  const form = document.getElementById('triplet-form');
+  const status = document.getElementById('triplet-status');
+  const submit = document.getElementById('submit-button');
+  const existing = document.getElementById('existing-reference');
+  const upload = document.getElementById('reference-file');
+  let source = 'gene', lastFile = null;
+
+  function syncReference() {
+    existing.disabled = upload.files.length > 0;
+  }
+  upload.addEventListener('change', syncReference);
+
+  if (!batch) {
+    const bridgeInput = document.getElementById('bridge-id');
+    const preview = document.getElementById('bridge-sequence');
+    const showBridge = () => { preview.textContent = bridges[bridgeInput.value.trim().toUpperCase()] || '编号不在当前桥接探针库中'; };
+    bridgeInput.addEventListener('input', showBridge);
+    showBridge();
+    document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => {
+      source = button.dataset.source;
+      document.querySelectorAll('[data-source]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+      document.getElementById('gene-source').hidden = source !== 'gene';
+      document.getElementById('sequence-source').hidden = source !== 'sequence';
+    }));
+  } else {
+    document.getElementById('template-button').addEventListener('click', () => {
+      HCR.saveBlob(new Blob(['task1,BP_1101,AT1G01010\ntask2,BP_1102,AT2G17950,8\n'], {type: 'text/csv'}), 'triplet_batch_template.csv');
     });
+  }
 
-    function openTab(evt, tabName) {
-        var i, tabcontent, tablinks;
-        tabcontent = document.getElementsByClassName('tabcontent');
-        for (i = 0; i < tabcontent.length; i++) {
-            tabcontent[i].style.display = 'none';
-        }
-        tablinks = document.getElementsByClassName('tablinks');
-        for (i = 0; i < tablinks.length; i++) {
-            tablinks[i].classList.remove('active');
-        }
-        document.getElementById(tabName).style.display = 'block';
-        evt.currentTarget.classList.add('active');
+  function validate() {
+    for (const input of form.querySelectorAll('input[type=number]')) {
+      if (!input.value.trim() || !input.checkValidity()) {
+        input.closest('details')?.setAttribute('open', '');
+        input.focus();
+        return '请检查“' + input.closest('label').firstChild.textContent.trim() + '”的取值范围。';
+      }
     }
+    const value = name => Number(form.elements.namedItem(name).value);
+    if (value('min_length') > value('max_length')) return '最小长度不能大于最大长度。';
+    if (value('min_tm') > value('max_tm')) return '最低 Tm 不能高于最高 Tm。';
+    if (value('min_gc') > value('max_gc')) return '最低 GC 不能高于最高 GC。';
+    if (batch) return document.getElementById('batch-file').files.length ? '' : '请先选择批量任务 CSV 文件。';
+    if (!form.elements.namedItem('name').value.trim()) return '请填写任务名称。';
+    if (!bridges[form.elements.namedItem('bp_id').value.trim().toUpperCase()]) return '桥接探针编号不在当前探针库中。';
+    if (source === 'gene' && !form.elements.namedItem('geneID').value.trim()) return '请填写基因编号，或切换为粘贴序列。';
+    if (source === 'sequence' && !/^[ACGTacgt\s]+$/.test(form.elements.namedItem('seq').value)) return '粘贴的序列只能包含 A/T/C/G。';
+    return '';
+  }
 
-    // Open the first tab by default
-    document.querySelector('.tab button').click();
-});
-
-function toggleInput(state) {
-    document.getElementById("ref_genome").disabled = state.files.length > 0;
-    if (document.getElementById("ref_genome").selectedIndex !== 0) {
-        document.getElementById("ref_genome").value = "";
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const problem = validate();
+    if (problem) { HCR.setAlert(status, problem, 'error'); return; }
+    const data = new FormData(form);
+    if (!batch) {
+      data.set('bp_id', data.get('bp_id').trim().toUpperCase());
+      if (source === 'gene') data.set('seq', '');
+      else { data.set('geneID', ''); data.set('seq', data.get('seq').replace(/\s+/g, '').toUpperCase()); }
     }
-}
-
-function toggleFileInput() {
-    var hasFile = document.getElementById("ref_genome").files.length > 0;
-    document.getElementById("existing_ref_genome").disabled = hasFile;
-    if (hasFile) {
-        document.getElementById("existing_ref_genome").selectedIndex = 0;
+    if (upload.files.length) data.delete('existing_ref_genome');
+    const started = Date.now();
+    submit.disabled = true;
+    document.getElementById('triplet-result').hidden = true;
+    HCR.setAlert(status, '正在生成候选并检查背景序列……', 'busy');
+    const timer = setInterval(() => HCR.setAlert(status, '正在生成候选并检查背景序列……已用时 ' + Math.round((Date.now() - started) / 1000) + ' s', 'busy'), 1000);
+    try {
+      const result = await HCR.postForFile(form.action, data, batch ? 'triplet_batch_results.zip' : 'triplet_results.zip');
+      lastFile = result;
+      HCR.saveBlob(result.blob, result.filename);
+      const seconds = Math.round((Date.now() - started) / 1000);
+      const done = result.response.headers.get('X-Tasks-Completed');
+      const skipped = result.response.headers.get('X-Tasks-Skipped');
+      let detail = result.filename + ' · ' + Math.max(1, Math.round(result.blob.size / 1024)) + ' KB · 用时 ' + (seconds < 1 ? '不到 1' : seconds) + ' s';
+      if (done !== null) detail += ' · 完成 ' + done + ' 个任务' + (Number(skipped) ? '，跳过 ' + skipped + ' 个（见 skipped_tasks.tsv）' : '');
+      document.getElementById('result-detail').textContent = detail;
+      document.getElementById('triplet-result').hidden = false;
+      HCR.setAlert(status, '');
+    } catch (error) {
+      HCR.setAlert(status, error.message, 'error');
+    } finally {
+      clearInterval(timer);
+      submit.disabled = false;
     }
-}
+  });
 
-function toggleAdvancedOptions(btn) {
-    const advancedOptions = document.getElementById('advancedOptions');
-    const isVisible = advancedOptions.style.display !== 'none';
-    
-    advancedOptions.style.display = isVisible ? 'none' : 'block';
-    btn.classList.toggle('active');
-}
-
-function toggleInputMode(input) {
-    const singleInputSection = document.getElementById('singleInputSection');
-    const singleInputs = singleInputSection.querySelectorAll('input, textarea');
-    const geneIDInput = document.getElementById('geneID');
-    const seqInput = document.getElementById('seq');
-    
-    if (input.files.length > 0) {
-        // Batch mode - hide single input section and disable its inputs
-        singleInputSection.style.display = 'none';
-        singleInputs.forEach(input => {
-            input.required = false;
-        });
-    } else {
-        // Single mode - show single input section and enable its inputs
-        singleInputSection.style.display = 'block';
-        singleInputs.forEach(input => {
-            if (input.id === 'name' || input.id === 'bp_id') {
-                input.required = true;
-            }
-        });
-        
-        // 特殊处理GeneID和Sequence输入
-        const activeTab = document.querySelector('.tablinks.active');
-        if (activeTab) {
-            if (activeTab.getAttribute('data-tab') === 'GeneID') {
-                geneIDInput.required = true;
-                seqInput.required = false;
-            } else {
-                geneIDInput.required = false;
-                seqInput.required = true;
-            }
-        }
-    }
-}
+  document.getElementById('download-again').addEventListener('click', () => { if (lastFile) HCR.saveBlob(lastFile.blob, lastFile.filename); });
+  syncReference();
+})();
 </script>
 {% endblock %}

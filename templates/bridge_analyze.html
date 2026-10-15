@@ -1,121 +1,66 @@
 {% extends "base.html" %}
-
-{% block title %}Bridge Probe Conflict Analysis{% endblock %}
+{% from "partials/bridge.html" import conflict_modes, kmer_cell, kmer_field %}
+{% block title %}冲突检查 · Probe Designer{% endblock %}
+{% block eyebrow %}桥接探针库 · 冲突检查{% endblock %}
+{% block heading %}冲突检查{% endblock %}
+{% block lede %}一次输入多条 BP_ID 或序列，两两比较，找出计划在同一实验中使用的探针之间的冲突。{% endblock %}
+{% block head_actions %}{{ conflict_modes('mutual') }}{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mb-4">Bridge Probe Conflict Analysis</h1>
-    
-    <div class="input-form">
-        <form method="POST" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="input_file">Upload Input File:</label>
-                <input type="file" class="form-control" id="input_file" name="input_file" accept=".txt,.csv">
-                <div class="form-text">Upload a file with one BP_ID or sequence per line</div>
-            </div>
-            
-            <div class="mb-3">
-                <label for="input_content">Or Enter Content Directly:</label>
-                <textarea class="form-control" id="input_content" name="input_content" rows="5"
-                          placeholder="Enter BP_IDs or sequences (one per line)">{{ input_content if input_content }}</textarea>
-            </div>
-            
-            <div class="mb-3">
-                <label for="kmer">k-mer Length:</label>
-                <input type="number" class="form-control" id="kmer" name="kmer" 
-                       value="{{ kmer }}" min="3" max="15">
-            </div>
-            
-            <button type="submit" class="btn btn-primary">Analyze Conflicts</button>
-        </form>
+<form method="post" enctype="multipart/form-data" class="panel">
+  <div class="split">
+    <div>
+      <label class="field">BP_ID 或序列（每行一条，可混合）<textarea name="input_content" rows="7" spellcheck="false" placeholder="BP_0079&#10;BP_1101&#10;GCTAGCTAGGATCCAATCG">{{ input_content or '' }}</textarea></label>
+      <label class="field">或上传文本文件<input type="file" name="input_file" accept=".txt,.csv"><small>每行一个 BP_ID 或序列；选择文件后以文件内容为准</small></label>
     </div>
+    <div>
+      {{ kmer_field(kmer) }}
+      <button type="submit" class="btn primary">两两比较</button>
+    </div>
+  </div>
+</form>
 
-    {% if error %}
-    <div class="alert alert-danger" role="alert">
-        {{ error }}
-    </div>
-    {% endif %}
+{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
-    {% if results %}
-    <div class="analysis-result">
-        <h2>Analysis Results</h2>
-        <div class="action-buttons">
-            <button class="btn btn-success" onclick="downloadResults()">Download Results</button>
-        </div>
-        
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Input</th>
-                    <th>Conflicts</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for input_item, conflicts in results %}
-                <tr>
-                    <td class="sequence-cell">{{ input_item }}</td>
-                    <td>
-                        {% if conflicts %}
-                        <div class="has-conflicts">Found {{ conflicts|length }} conflicts:</div>
-                        {% for conflict_item, overlap_count, overlap_kmers in conflicts %}
-                        <div class="mb-2">
-                            <strong>With {{ conflict_item }}:</strong>
-                            <br>
-                            {{ overlap_count }} overlapping k-mers
-                            <br>
-                            Example k-mers:
-                            {% for kmer in overlap_kmers %}
-                            <span class="badge bg-info kmer-badge">{{ kmer }}</span>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                        {% else %}
-                        <div class="no-conflicts">No conflicts found</div>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-</div>
+{% if results %}
+{% set conflicted = results|selectattr(1)|list|length %}
+<section class="panel">
+  <div class="panel-head">
+    <div><h2>比较结果</h2><p>k = {{ kmer }} · {{ results|length }} 条输入 · {{ conflicted }} 条与其他输入存在冲突</p></div>
+    <button type="button" class="btn" id="download-button"><svg aria-hidden="true"><use href="#i-download"/></svg>下载结果</button>
+  </div>
+  <div class="table-wrap">
+    <table class="table" id="result-table">
+      <thead><tr><th>输入</th><th>状态</th><th>冲突对象与共享 k-mer</th></tr></thead>
+      <tbody>
+      {% for input_item, conflicts in results %}
+        <tr data-input="{{ input_item }}" data-conflicts="{{ conflicts|map('list')|list|tojson|forceescape }}">
+          <td class="seq">{{ input_item }}</td>
+          <td><span class="chip {{ 'bad' if conflicts else 'ok' }}">{{ '冲突 ' ~ conflicts|length if conflicts else '无冲突' }}</span></td>
+          <td>
+            {% for conflict_item, overlap_count, overlap_kmers in conflicts %}
+            <div style="margin-bottom:6px"><code>{{ conflict_item }}</code> <span class="hint">{{ overlap_count }} 个共享片段</span><br>{{ kmer_cell(overlap_kmers, overlap_count) }}</div>
+            {% else %}<span class="hint">—</span>{% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function downloadResults() {
-    const rows = document.querySelectorAll('table tbody tr');
-    let csv = 'Input\tConflicting_Input\tOverlap_Count\tExample_KMers\n';
-    
-    rows.forEach(row => {
-        const input = row.cells[0].textContent;
-        const conflicts = row.cells[1].querySelectorAll('div.mb-2');
-        
-        if (conflicts.length === 0) {
-            csv += `${input}\tNo conflicts\t0\t-\n`;
-        } else {
-            conflicts.forEach(conflict => {
-                const conflictText = conflict.textContent;
-                const conflictingInput = conflictText.match(/With (.*?):/)[1];
-                const overlapCount = conflictText.match(/(\d+) overlapping/)[1];
-                const kmers = Array.from(conflict.querySelectorAll('.kmer-badge'))
-                                 .map(span => span.textContent)
-                                 .join(',');
-                csv += `${input}\t${conflictingInput}\t${overlapCount}\t${kmers}\n`;
-            });
-        }
-    });
-    
-    const blob = new Blob([csv], { type: 'text/tab-separated-values' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'conflict_analysis_results.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-}
+document.getElementById('download-button')?.addEventListener('click', () => {
+  const rows = [['Input', 'Conflicting_Input', 'Overlap_Count', 'Example_KMers']];
+  document.querySelectorAll('#result-table tbody tr').forEach(row => {
+    const conflicts = JSON.parse(row.dataset.conflicts);
+    if (!conflicts.length) rows.push([row.dataset.input, 'No conflicts', 0, '-']);
+    conflicts.forEach(([item, count, kmers]) => rows.push([row.dataset.input, item, count, kmers.join(',')]));
+  });
+  HCR.downloadRows(rows, 'conflict_analysis_results.txt');
+});
 </script>
-{% endblock %} 
+{% endblock %}
