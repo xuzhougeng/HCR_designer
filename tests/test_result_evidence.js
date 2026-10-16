@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {closest, compare, alignmentColumns, neighbor} = require('../static/js/result-evidence.js');
+const {closest, compare, targetMismatchPositions, alignmentColumns, neighbor} = require('../static/js/result-evidence.js');
 const same = {subject_id: 'BjuB', relation: 'same_species_other', subject_subgenome: 'B', left_mismatches: 0, right_mismatches: 0};
 const cross = {subject_id: 'BoC', relation: 'cross_species', subject_subgenome: 'C', left_mismatches: 1, right_mismatches: 2};
 
@@ -16,6 +16,32 @@ test('within a tier the better worst-arm mismatch count wins; targets are never 
   const target = {...same, relation: 'target'};
   assert.equal(closest({specificity: {paired_matches: [cross, better, target]}}, true, 'A'), better);
   assert.equal(closest({specificity: {paired_matches: [target]}}, true, 'A'), null);
+});
+
+test('mismatch bars agree with sense-strand sequence evidence for unequal L/R arms', () => {
+  // Lj_AGL62-28: asymmetric mismatches expose a reversal within either arm.
+  const arms = [
+    {target: 'CTCTCTCTTCCCGTCCT', matched: 'TTCTCTCTTCCCTCCCT', positions: [4, 5, 17]},
+    {target: 'CCTTCTCGCTTCTAGTTC', matched: 'CCTTCTCCCTTCTCCTTC', positions: [4, 5, 11]}
+  ];
+  const bar = [], sequence = [];
+  arms.forEach(({target, matched, positions}) => {
+    const converted = targetMismatchPositions(target.length, positions);
+    const differences = [...matched].flatMap((base, i) => base === target[i] ? [] : [i + 1]);
+    assert.deepEqual(converted, differences);
+    bar.push(...[...target].map((_, i) => converted.includes(i + 1)));
+    sequence.push(...[...matched].map((base, i) => base !== target[i]));
+  });
+  assert.deepEqual(bar, sequence);
+  assert.equal(bar.filter(Boolean).length, 6);
+});
+
+test('sense-strand conversion handles end bases and empty hits without changing stored positions', () => {
+  const positions = Object.freeze([1, 3, 20]);
+  assert.deepEqual(targetMismatchPositions(20, positions), [1, 18, 20]);
+  assert.deepEqual(positions, [1, 3, 20]);
+  assert.deepEqual(targetMismatchPositions(17, []), []);
+  assert.deepEqual(targetMismatchPositions(18), []);
 });
 
 test('gapped alignment preserves target coordinates, reverse subject coordinates, and uncovered flanks', () => {

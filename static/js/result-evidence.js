@@ -16,6 +16,11 @@
     return [...(probe.specificity?.paired_matches || [])].filter(hit => hit.relation !== 'target')
       .sort((a, b) => compare(a, b, polyploid, group))[0] || null;
   }
+  function targetMismatchPositions(length, probePositions = []) {
+    // Each targeting arm is reverse-complementary to the target sense strand.
+    // Reverse positions within each arm, keeping the L/R order on the target.
+    return probePositions.map(pos => length - pos + 1).sort((a, b) => a - b);
+  }
   function alignmentColumns(sequence, alignment) {
     const columns = [];
     const unaligned = pos => ({pos, anchor: pos, query: sequence[pos - 1], subject: '·', subjectPos: null, state: 'unaligned'});
@@ -37,7 +42,7 @@
     const index = rows.indexOf(selected);
     return index < 0 ? null : rows[index + direction] || null;
   }
-  const api = {compare, closest, alignmentColumns, neighbor};
+  const api = {compare, closest, targetMismatchPositions, alignmentColumns, neighbor};
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.HCRResults = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -192,7 +192,7 @@
 
     function render() {
       byId('track-caption').textContent = task.gene_id + ' · ' + task.sequence_length.toLocaleString(HCR.locale) + HCR.t(" nt · 桥接 ") + task.bridge_id + HCR.t(" · 点击候选或密度柱查看");
-      byId('closest-caption').textContent = (polyploid ? HCR.t("多倍体模式：优先展示跨物种，其次跨亚基因组的非目标配对；同类按错配数排序。") : HCR.t("错配条按探针 5′ → 3′ 显示与最接近的非目标配对；")) + HCR.t("灰色为一致碱基，橙色为错配碱基");
+      byId('closest-caption').textContent = (polyploid ? HCR.t("多倍体模式：优先展示跨物种，其次跨亚基因组的非目标配对；同类按错配数排序。") : HCR.t("显示最接近的非目标配对。")) + HCR.t("错配条按目标正义链 5′ → 3′ 显示，与下方序列视图一致；灰色为一致碱基，橙色为错配碱基");
       renderTrack(); renderTable();
     }
 
@@ -352,7 +352,8 @@
       if (!near) { cell.append(el('span', HCR.t("当前检索未检出"), 'hint')); return cell; }
       const bar = el('span', undefined, 'strip');
       bar.setAttribute('aria-hidden', 'true');
-      const paint = (length, positions, side) => {
+      const paint = (length, probePositions, side) => {
+        const positions = HCRResults.targetMismatchPositions(length, probePositions);
         for (let i = 1; i <= length; i++) bar.append(el('i', undefined, positions.includes(i) ? 'x' : side));
       };
       paint(probe.left_probe.sequence.length, near.left_mismatch_positions_probe_5to3 || [], 'l');
