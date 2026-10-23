@@ -18,7 +18,8 @@ def create_config( min_length, max_length,
                 gc_min, gc_max, tm_min, tm_max,
                 min_gap, inner_gap,
                 min_complementary_length, poly_n, kmer_size, min_kmer_count,
-                output_dir, blast_db, max_selected=5, gc_junction_penalty=20.0, target_policy=None):
+                output_dir, blast_db, max_selected=5, gc_junction_penalty=20.0, target_policy=None,
+                candidate_mode='first_valid'):
     """创建双探针配置对象
 
     Args:
@@ -57,6 +58,7 @@ def create_config( min_length, max_length,
                             blast_db=blast_db,
                             max_selected=max_selected,
                             gc_junction_penalty=gc_junction_penalty,
+                            candidate_mode=candidate_mode,
                             target_policy=target_policy or {'mode': 'species', 'allowed_ids': [],
                                                             'exclusion_max_mismatches': 0})
 
@@ -159,6 +161,10 @@ def generate_dual_probe(sequence: str,
     # Preserve the exact serialized evidence, scores and 1-based coordinates.
     # Rebuilding this dictionary previously discarded BLAST and used rank as score.
     probe_sets_json = copy.deepcopy(output_handler.probe_data)
+    probe_sets_json['candidate_generation'] = {
+        'mode': config.candidate_mode, 'min_length': config.min_length,
+        'max_length': config.max_length, 'inner_gap': config.inner_gap,
+        'candidate_count': len(probe_sets_json['probe_sets'])}
     
     # 应用筛选并保存筛选结果
     report('selection')
@@ -226,6 +232,7 @@ def generate_dual_probe(sequence: str,
         f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         f.write(f"Parameters:\n")
         f.write(f"- Probe Length: {config.min_length}-{config.max_length} bp\n")
+        f.write(f"- Candidate generation: {config.candidate_mode}\n")
         f.write(f"- GC Content: {config.gc_min}%-{config.gc_max}%\n")
         f.write(f"- Melting Temperature: {config.tm_min}°C-{config.tm_max}°C\n")
         f.write(f"- Minimum Gap: {config.min_gap} bp\n")
@@ -269,7 +276,7 @@ def main( name, sequence, gene_id,
          max_selected: int = 5,
          gc_junction_penalty: float = 20.0,
          target_policy: dict = None,
-         progress=None):
+         progress=None, candidate_mode='first_valid'):
     """主函数
 
     Args:
@@ -298,6 +305,7 @@ def main( name, sequence, gene_id,
                            blast_db=blast_db,
                            max_selected=max_selected,
                            gc_junction_penalty=gc_junction_penalty,
+                           candidate_mode=candidate_mode,
                            target_policy=target_policy)
     
     # 设计探针
@@ -327,6 +335,8 @@ if __name__ == "__main__":
     parser.add_argument('--bridge-probe-id', required=True, help='桥接探针ID')
     parser.add_argument('--output-dir', required=True, help='输出目录')
     parser.add_argument('--max-selected', type=int, default=5, help='要选择的探针组合数量（默认：5）')
+    parser.add_argument('--candidate-mode', choices=['first_valid', 'exhaustive'], default='first_valid',
+                        help='候选生成：每起点首个合格长度，或完整臂长枚举')
     parser.add_argument('--gc-junction-penalty', type=float, default=20.0, help='Left探针G/C连接处的惩罚分数（默认：20.0，优先选择A/T开头探针）')
 
     args = parser.parse_args()
@@ -342,4 +352,4 @@ if __name__ == "__main__":
          args.ref_genome, args.bridge_probe, args.bridge_probe_id,
          args.output_dir,
          args.max_selected,
-         args.gc_junction_penalty)
+         args.gc_junction_penalty, candidate_mode=args.candidate_mode)

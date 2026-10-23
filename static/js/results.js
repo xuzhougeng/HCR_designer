@@ -147,6 +147,7 @@
       const sha = el('div'); sha.append(HCR.t("参考 SHA256："), el('code', result.reference.sha256)); settings.append(sha);
     }
     line(HCR.t("臂长 ") + p.min_length + '–' + p.max_length + ' nt · Tm ' + p.min_tm + '–' + p.max_tm + ' °C · GC ' + p.min_gc + '–' + p.max_gc + '%');
+    line(HCR.t("候选生成方式") + '：' + (p.candidate_mode === 'exhaustive' ? HCR.t("完整臂长枚举") : HCR.t("每个起点首个合格长度（原方式）")));
     line(HCR.t("默认最多 ") + p.max_selected + HCR.t(" 对/基因 · 组合间距 ") + p.min_gap + HCR.t(" nt · 臂内间隔 0 nt · 连续同碱基阈值 ") + p.poly_n);
     line(HCR.t("目标判定 ") + (MODES[p.target_mode] || p.target_mode) + HCR.t(" · 非允许配对排除阈值 每臂 ≤ ") + p.exclusion_max_mismatches + HCR.t(" 错配"));
     line(HCR.t("提交 ") + new Date(result.created_at).toLocaleString(HCR.locale) + HCR.t(" · 完成 ") + new Date(result.completed_at).toLocaleString(HCR.locale));

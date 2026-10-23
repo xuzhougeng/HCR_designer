@@ -61,6 +61,7 @@
       <div class="parameter-area">
         <h3>{{ _("常用参数") }}</h3>
         <div class="field-grid">
+          <label class="field">{{ _("候选生成方式") }}<select name="candidate_mode" data-parameter><option value="first_valid">{{ _("每个起点首个合格长度（原方式）") }}</option><option value="exhaustive">{{ _("完整臂长枚举") }}</option></select><small>{{ _("完整枚举会尝试允许范围内所有左右臂长度组合，保留原有过滤条件；计算时间和候选数量会增加。") }}</small></label>
           <label class="field">{{ _("每个基因最多保留（对）") }}<input type="number" name="max_selected" value="5" min="1" max="10" step="1" data-parameter><small>{{ _("不足时保留实际数量；CSV 第 4 列优先") }}</small></label>
           <label class="field">{{ _("已选组合之间的间距（nt）") }}<input type="number" name="min_gap" value="2" min="0" max="10000" step="1" data-parameter><small>{{ _("同一对 L/R 两臂间隔固定为 0 nt") }}</small></label>
           <label class="field">{{ _("目标判定模式") }}<select name="target_mode" data-parameter><option value="species">{{ _("物种模式：同物种其他转录本只参与排序") }}</option><option value="transcript">{{ _("严格模式：目标之外的完全配对一律排除") }}</option><option value="subgenome">{{ _("亚基因组模式：只允许目标所属亚基因组") }}</option></select><small>{{ _("勾选“是否考虑多套染色体”后，自动使用参考库已保存的归属并启用亚基因组模式；允许共同检测的编号作为额外允许项。未启用时按所选模式判定") }}</small></label>

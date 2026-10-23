@@ -25,7 +25,8 @@ from src.common.reference_annotation import (MAX_LABEL_LENGTH, format_subgenome_
 DEFAULTS = dict(min_length=15, max_length=20, min_gc=40., max_gc=60.,
                 min_tm=47., max_tm=53., min_gap=2, max_selected=5, poly_n=4,
                 kmer_size=8, min_kmer_count=2, min_complementary_length=5,
-                gc_junction_penalty=20., exclusion_max_mismatches=0, target_mode='species')
+                gc_junction_penalty=20., exclusion_max_mismatches=0, target_mode='species',
+                candidate_mode='first_valid')
 LIMITS = dict(min_length=(15, 20), max_length=(15, 50), min_gc=(0, 100),
               max_gc=(0, 100), min_tm=(0, 100), max_tm=(0, 100), min_gap=(0, 10000),
               max_selected=(1, 10), poly_n=(2, 20), kmer_size=(6, 10),
@@ -76,6 +77,10 @@ def parse_parameters(values):
     if mode not in TARGET_MODES:
         raise InputError('请选择有效的目标判定模式。', 'target_mode')
     result['target_mode'] = mode
+    candidate_mode = str(values.get('candidate_mode', DEFAULTS['candidate_mode']) or '').strip()
+    if candidate_mode not in ('first_valid', 'exhaustive'):
+        raise InputError('请选择有效的候选生成方式。', 'candidate_mode')
+    result['candidate_mode'] = candidate_mode
     for low, high in [('min_length', 'max_length'), ('min_gc', 'max_gc'), ('min_tm', 'max_tm')]:
         if result[low] > result[high]:
             raise InputError(f'{LABELS[low]}不能大于{LABELS[high]}。', low)
@@ -462,7 +467,9 @@ class SplitWorkflow:
         if manifest.get('process_multiple_sets'):
             parameters['target_mode'] = 'subgenome'
         if manifest['status'] == 'completed':
-            if self.result(identifier)['parameters'] != parameters:
+            previous = dict(self.result(identifier)['parameters'])
+            previous.setdefault('candidate_mode', 'first_valid')
+            if previous != parameters:
                 raise InputError('这个任务已完成；修改参数后请重新检查输入以创建新任务。', status=409)
             return False
         if manifest['status'] in ('queued', 'running') or (directory / 'running.lock').exists():
@@ -525,6 +532,7 @@ class SplitWorkflow:
                              bridge_probe=task['bridge_sequence'], bridge_probe_id=task['bridge_id'],
                              output_dir=str(task_dir), max_selected=count,
                              gc_junction_penalty=parameters['gc_junction_penalty'],
+                             candidate_mode=parameters.get('candidate_mode', 'first_valid'),
                              target_policy=task_policy(task, parameters, manifest), progress=report)
                 save_sequence(task['gene_id'] or task['name'], task['sequence'], str(task_dir / 'target.fasta'))
                 data = json.loads((task_dir / (task['name'] + '_filtered.json')).read_text())
@@ -545,6 +553,7 @@ class SplitWorkflow:
                                     excluded=sum(p.get('reason_code', '').endswith('_pair') and p.get('reason_code') != 'no_exact_on_target_pair' for p in probes),
                                     unassessed=sum(p.get('specificity', {}).get('status') != 'completed' for p in probes),
                                     target_policy=data.get('target_policy') or task_policy(task, parameters, manifest),
+                                    candidate_generation=data.get('candidate_generation'),
                                     search={k: v for k, v in search.items() if k not in ('reference', 'executable')},
                                     probe_sets=compact))
             self._progress(directory, 'packaging', total, total)

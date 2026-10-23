@@ -899,5 +899,9 @@
   "↓ 下一对": "↓ Next pair",
   "按当前筛选与排序切换，支持 ↑ ↓ 或 ← →": "Navigate the current filtered and sorted list with ↑ ↓ or ← →",
   "启用多倍体模式（是否考虑多套染色体）": "Enable polyploid mode (use multiple chromosome sets)",
-  "使用参考库已保存的亚基因组归属；结果页提供跨组同源比对与跨物种优先的配对证据。": "Use saved reference subgenome assignments. Results include cross-group homolog alignments and cross-species-first paired evidence."
+  "使用参考库已保存的亚基因组归属；结果页提供跨组同源比对与跨物种优先的配对证据。": "Use saved reference subgenome assignments. Results include cross-group homolog alignments and cross-species-first paired evidence.",
+  "候选生成方式": "Candidate generation",
+  "每个起点首个合格长度（原方式）": "First valid length at each start (original)",
+  "完整臂长枚举": "Enumerate all arm lengths",
+  "完整枚举会尝试允许范围内所有左右臂长度组合，保留原有过滤条件；计算时间和候选数量会增加。": "Try every allowed left/right arm length combination with the same filters. This increases runtime and the number of candidates."
 }

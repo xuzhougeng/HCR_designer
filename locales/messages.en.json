@@ -215,5 +215,6 @@
   "归属文件中没有可用于比对的其他分组序列。": "No sequences from other annotated groups are available for alignment.",
   "同源序列比对超时，请稍后重试。": "Homolog alignment timed out. Please retry later.",
   "同源序列比对未完成，请检查 BLAST 环境后重试。": "Homolog alignment failed. Check the BLAST environment and retry.",
-  "在其他已标注分组中未检出显著相似的序列（E ≤ 1e-5）。": "No significantly similar sequences were detected in other annotated groups (E ≤ 1e-5)."
+  "在其他已标注分组中未检出显著相似的序列（E ≤ 1e-5）。": "No significantly similar sequences were detected in other annotated groups (E ≤ 1e-5).",
+  "请选择有效的候选生成方式。": "Please choose a valid candidate generation mode."
 }
