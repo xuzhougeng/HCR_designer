@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -66,6 +67,13 @@ class SeedVerificationTests(unittest.TestCase):
                  patch('src.common.paired_specificity.subprocess.run', side_effect=subprocess.CalledProcessError(1, ['blastn'])):
                 with self.assertRaises(subprocess.CalledProcessError):
                     analyze_probe_sequences([reverse_complement(LEFT)], fasta)
+                with patch.dict(os.environ, {'HCR_BLAST_WORKERS': '4'}):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        analyze_probe_sequences([reverse_complement(LEFT), reverse_complement(RIGHT)], fasta)
+            for workers in ('0', '33', 'invalid'):
+                with patch.dict(os.environ, {'HCR_BLAST_WORKERS': workers}):
+                    with self.assertRaises(ValueError):
+                        analyze_probe_sequences([reverse_complement(LEFT)], fasta)
 
 
 class PairedAssessmentTests(unittest.TestCase):
