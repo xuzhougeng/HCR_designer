@@ -3,10 +3,12 @@ from dataclasses import replace
 from pathlib import Path
 import tempfile
 import unittest
+import gzip
+import json
 from unittest.mock import patch
 
 from Bio.Seq import Seq
-from src.dual_probe import DualProbeConfig, DualProbeDesigner
+from src.dual_probe import DualProbeConfig, DualProbeDesigner, ProbeSet, ProbeOutputHandler
 from src.common.sequence_utils import calculate_kmer_count, is_valid_probe, has_low_complexity, has_dimer_issues
 from src.common.paired_specificity import TargetPolicy
 
@@ -85,6 +87,30 @@ class FullEnumerationTests(unittest.TestCase):
             for subject in ('BjuVB_copy', 'BjuV_contig'):
                 self.assertEqual(policy.relation(subject, 'BjuVA_target', 'Bju'), 'allowed')
             self.assertIn(policy.relation('BoC_copy', 'BjuVA_target', 'Bju'), policy.non_allowed_relations())
+
+    def test_compact_arm_evidence_keeps_full_hits_once_and_preserves_score(self):
+        left, right = SEQ[:15], SEQ[15:30]
+        probe = ProbeSet((left, 0, 15, 50, 50), (right, 15, 30, 50, 50))
+        evidence = {'status': 'completed', 'mismatch_stats': {0: 2},
+                    'detailed_matches': [{'subject_id': 'BjuTarget'}, {'subject_id': 'BoOther'}]}
+        cache = {left: evidence, right: evidence}
+        geometry = (str(Seq(left).reverse_complement()), str(Seq(right).reverse_complement()), 0)
+        scan = ({geometry: []}, {'status': 'completed', 'max_substitutions_per_arm': 3})
+        with tempfile.TemporaryDirectory() as tmp:
+            output = ProbeOutputHandler(Path(tmp))
+            with patch('src.dual_probe.output.analyze_probe_sequences', return_value=cache), \
+                 patch('src.common.paired_specificity.scan_pairs', return_value=scan):
+                output.save_probe_sets([probe, probe], 'test', 'dual_probe', 'reference.fa',
+                                       target_gene_id='BjuTarget', compact_arm_evidence=True)
+            with gzip.open(Path(tmp)/'single_arm_blast.json.gz', 'rt') as handle: saved = json.load(handle)
+            self.assertEqual(set(saved), {left, right})
+            self.assertEqual(saved[left]['detailed_matches'], evidence['detailed_matches'])
+            for p in output.probe_data['probe_sets']:
+                self.assertEqual(p['evaluation']['quality_score'], 10)
+                arm = p['left_probe']['blast_results']
+                self.assertEqual(arm['details_key'], left)
+                self.assertEqual(arm['detailed_match_count'], 2)
+                self.assertNotIn('detailed_matches', arm)
 
 
 if __name__ == '__main__':

@@ -84,6 +84,7 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
                     result_url=url_for('split_result', identifier=identifier),
                     alignment_url=url_for('split_alignment', identifier=identifier),
                     download_url=url_for('split_download', identifier=identifier),
+                    task_url_prefix=url_for('split_result', identifier=identifier) + '/tasks/',
                     run_url=url_for('split_run', identifier=identifier))
 
     def status_payload(service, identifier):
@@ -152,11 +153,18 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
         service = workflow()
         status = status_payload(service, identifier)
         if request.accept_mimetypes.best == 'application/json':
-            return jsonify(dict(service.result(identifier), **links(identifier)))
-        result = dict(service.result(identifier), **links(identifier)) if status['status'] == 'completed' else None
+            data = service.result_index(identifier) if request.args.get('summary') == '1' else service.result(identifier)
+            return jsonify(dict(data, **links(identifier)))
+        result = dict(service.result_index(identifier), **links(identifier)) if status['status'] == 'completed' else None
         if status['status'] == 'prepared':
             raise InputError('该任务尚未生成完整结果。', status=409)
         return render_template('split_result.html', status=status, result=result, jobs_url=url_for('jobs'))
+
+    @app.get('/split/results/<identifier>/tasks/<int:index>')
+    @api_errors
+    @storage_locked
+    def split_task_result(identifier, index):
+        return jsonify(workflow().task_result(identifier, index))
 
     @app.get('/split/results/<identifier>/alignment')
     @api_errors
@@ -172,7 +180,7 @@ def register_split_routes(app, bridges, cdna, cds, aliases, available_genomes):
     @storage_locked
     def split_download(identifier):
         service = workflow()
-        service.result(identifier)
+        service.result_index(identifier)
         return send_file(service.job_dir(identifier) / 'results.zip', as_attachment=True,
                          download_name=f'split_results_{identifier}.zip')
 

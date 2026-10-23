@@ -291,6 +291,13 @@ class GuidedWorkflowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(design.call_args.kwargs['candidate_mode'], 'exhaustive')
         self.assertEqual(result['parameters']['candidate_mode'], 'exhaustive')
+        summary = self.client.get(result['result_url'] + '?summary=1', headers={'Accept': 'application/json'}).json
+        self.assertTrue(summary['lazy_tasks'])
+        self.assertNotIn('probe_sets', summary['tasks'][0])
+        task = self.client.get(summary['task_url_prefix'] + '0')
+        self.assertEqual(task.status_code, 200)
+        self.assertEqual(task.json, result['tasks'][0])
+        self.assertEqual(self.client.get(summary['task_url_prefix'] + '13').status_code, 404)
         archive = self.client.get(result['download_url'])
         with ZipFile(io.BytesIO(archive.data)) as z:
             self.assertEqual(json.loads(z.read('run_summary.json'))['parameters']['candidate_mode'], 'exhaustive')

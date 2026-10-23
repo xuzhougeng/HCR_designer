@@ -4,6 +4,7 @@ from pathlib import Path
 import csv
 import logging
 import copy
+import gzip
 from ..common.blast_utils import analyze_blast_results
 from ..common.paired_specificity import analyze_probe_sequences, assess_pair, assess_probe_sets, TargetPolicy
 import json
@@ -22,7 +23,8 @@ class ProbeOutputHandler:
         
     def save_probe_sets(self, probe_sets: List[ProbeSet], 
                        task_name: str, output_prefix: str,
-                       blast_db: str = None, target_gene_id: str = None, target_policy=None):
+                       blast_db: str = None, target_gene_id: str = None, target_policy=None,
+                       compact_arm_evidence=False):
         """保存探针组合结果，并根据质量得分排序
 
         Args:
@@ -36,12 +38,18 @@ class ProbeOutputHandler:
             List[ProbeSet]: 按质量得分排序后的探针组合列表
         """
         self.target_policy = TargetPolicy.from_dict(target_policy)
+        self.compact_arm_evidence = compact_arm_evidence
         # 如果有BLAST数据库，先计算所有探针的BLAST结果并排序
         if blast_db:
             # 存储所有探针的BLAST结果，避免重复计算
             blast_cache = analyze_probe_sequences(
                 [sequence for p in probe_sets for sequence in (p.left_probe[0], p.right_probe[0])],
                 blast_db)
+            if compact_arm_evidence:
+                # Every unique arm's full evidence is retained once. Thousands of
+                # overlapping candidates otherwise duplicate it into multi-GB JSON.
+                with gzip.open(self.output_dir / 'single_arm_blast.json.gz', 'wt', encoding='utf-8') as handle:
+                    json.dump(blast_cache, handle, ensure_ascii=False)
             scored_probes = []
             
             for probe_set in probe_sets:
@@ -399,7 +407,12 @@ class ProbeOutputHandler:
         }
         
         if blast_results:
-            data["blast_results"] = copy.deepcopy(blast_results)
+            if getattr(self, 'compact_arm_evidence', False) and blast_results.get('status') == 'completed':
+                data['blast_results'] = {k: v for k, v in blast_results.items() if k != 'detailed_matches'}
+                data['blast_results'].update(details_file='single_arm_blast.json.gz', details_key=sequence,
+                                             detailed_match_count=len(blast_results.get('detailed_matches', [])))
+            else:
+                data["blast_results"] = copy.deepcopy(blast_results)
         
         return data
     
@@ -457,7 +470,10 @@ class ProbeOutputHandler:
         file.write(f"Tm值: {tm:.1f}°C\n")
         
         if blast_results:
-            self._write_blast_results(file, blast_results)
+            if getattr(self, 'compact_arm_evidence', False) and blast_results.get('status') == 'completed':
+                file.write('Single-arm evidence: single_arm_blast.json.gz; key=' + sequence + '\n')
+            else:
+                self._write_blast_results(file, blast_results)
             
         file.write("\n")
 

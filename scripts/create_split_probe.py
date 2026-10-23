@@ -155,7 +155,7 @@ def generate_dual_probe(sequence: str,
     report('specificity')
     probe_sets = output_handler.save_probe_sets(
         probe_sets, task_name, "dual_probe", config.blast_db, target_gene_id=target_gene_id,
-        target_policy=config.target_policy)
+        target_policy=config.target_policy, compact_arm_evidence=config.candidate_mode == 'exhaustive')
     
     # 将探针组合转换为JSON格式用于筛选
     # Preserve the exact serialized evidence, scores and 1-based coordinates.

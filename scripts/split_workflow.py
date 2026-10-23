@@ -556,6 +556,7 @@ class SplitWorkflow:
                                     candidate_generation=data.get('candidate_generation'),
                                     search={k: v for k, v in search.items() if k not in ('reference', 'executable')},
                                     probe_sets=compact))
+                write_json(task_dir / 'task_result.json', results[-1])
             self._progress(directory, 'packaging', total, total)
             exhaustive = bool(manifest['reference_path']) and all(
                 t['search'].get('status') == 'completed' and t['unassessed'] == 0 for t in results)
@@ -575,6 +576,8 @@ class SplitWorkflow:
                             relative = Path(*relative.parts[1:])
                         archive.write(path, str(relative))
             write_json(directory / 'result.json', result)
+            index = dict(result, lazy_tasks=True, tasks=[{k: v for k, v in t.items() if k != 'probe_sets'} for t in results])
+            write_json(directory / 'result_index.json', index)
             manifest.update(status='completed', completed_at=result['completed_at'], summary=summarize(results))
             write_json(directory / 'request.json', manifest)
             self._progress(directory, 'completed', total, total)
@@ -663,6 +666,23 @@ class SplitWorkflow:
                     if probe['id'] in synthesis:
                         probe['synthesis'] = synthesis[probe['id']]
         return result
+
+    def result_index(self, identifier):
+        """Small browser summary; old jobs retain their existing result behavior."""
+        path = self.job_dir(identifier) / 'result_index.json'
+        return json.loads(path.read_text()) if path.is_file() else self.result(identifier)
+
+    def task_result(self, identifier, index):
+        summary = self.result_index(identifier)
+        if not 0 <= index < len(summary['tasks']):
+            raise InputError('请选择有效的任务编号。', status=404)
+        if not summary.get('lazy_tasks'):
+            return summary['tasks'][index]
+        task = summary['tasks'][index]
+        path = self.job_dir(identifier) / 'output' / task['name'] / 'task_result.json'
+        if not path.is_file():
+            raise InputError('该任务尚未生成完整结果。', status=409)
+        return json.loads(path.read_text())
 
     def homolog_alignment(self, identifier, task_index):
         """Review only: use the job's reference and membership snapshot, never current library settings."""

@@ -450,8 +450,8 @@
   "管理员登录 · 删除参考": "Administrator login · Delete references",
   "生成亚基因组编号": "Generate subgenome IDs",
   "顶部": "top",
-  "上一页": "Previous",
-  "下一页": "Next",
+  "上一页": "Previous page",
+  "下一页": "Next page",
   "上传参考 FASTA": "Upload reference FASTA",
   "内容相同的文件即使名称或 gzip 压缩方式不同，也只保存一份；同名但内容不同的文件会使用新文件名。": "Identical contents are saved only once, even with different filenames or gzip compression. Files with the same name but different contents receive a new filename.",
   "FASTA 文件": "FASTA file",
@@ -903,5 +903,8 @@
   "候选生成方式": "Candidate generation",
   "每个起点首个合格长度（原方式）": "First valid length at each start (original)",
   "完整臂长枚举": "Enumerate all arm lengths",
-  "完整枚举会尝试允许范围内所有左右臂长度组合，保留原有过滤条件；计算时间和候选数量会增加。": "Try every allowed left/right arm length combination with the same filters. This increases runtime and the number of candidates."
+  "完整枚举会尝试允许范围内所有左右臂长度组合，保留原有过滤条件；计算时间和候选数量会增加。": "Try every allowed left/right arm length combination with the same filters. This increases runtime and the number of candidates.",
+  "重新加载候选": "Reload candidates",
+  "正在加载该基因的候选与证据……": "Loading candidates and evidence for this gene…",
+  "候选加载失败，请重试。": "Could not load candidates. Please try again."
 }
