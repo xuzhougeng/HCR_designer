@@ -133,7 +133,7 @@ class StorageMaintenance:
             base = path.name[:-3] if path.name.lower().endswith('.gz') else path.name
             if Path(base).suffix.lower() not in ('.fa', '.fasta', '.fna') or path.name in consumed:
                 continue
-            paths = [p for p in children if p.name in (base, base + '.subgenomes.tsv') or
+            paths = [p for p in children if p.name in (base, base + '.subgenomes.tsv', base + '.blastdb.json') or
                      (p.name.lower().endswith('.gz') and p.name[:-3] == base) or
                      (p.name.startswith(base) and BLAST_SUFFIX.fullmatch(p.name[len(base):]))]
             consumed.update(p.name for p in paths)
