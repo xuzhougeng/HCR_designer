@@ -5,12 +5,15 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import tempfile
 import threading
 import uuid
 from Bio import SeqIO
 from Bio.Blast.Applications import NcbimakeblastdbCommandline
 from src.common.blast_runtime import blast_executable
+from src.common.job_errors import (ReferenceChangedError, ReferenceFastaError, ReferenceMissingError,
+                                   ToolFailedError, ToolUnavailableError)
 import os
 
 try:
@@ -176,14 +179,15 @@ def _build_lock(fasta_path):
 def _validate_reference(fasta_path):
     sequences = load_fasta(fasta_path)
     if not sequences:
-        raise ValueError("FASTA file contains no sequences")
+        raise ReferenceFastaError("FASTA file contains no sequences", 'no_sequences')
     for seq_id, seq in sequences.items():
         if not seq:
-            raise ValueError(f"Sequence {seq_id} is empty")
+            raise ReferenceFastaError(f"Sequence {seq_id} is empty", 'empty_sequence', seq_id)
         # Check if sequence contains only nucleotide codes (either case)
-        invalid = set(seq.upper()) - REFERENCE_ALPHABET
+        invalid = ''.join(sorted(set(seq.upper()) - REFERENCE_ALPHABET))
         if invalid:
-            raise ValueError(f"Sequence {seq_id} contains invalid DNA characters: {''.join(sorted(invalid))}")
+            raise ReferenceFastaError(f"Sequence {seq_id} contains invalid DNA characters: {invalid}",
+                                      'invalid_characters', seq_id, invalid)
 
 
 def _build_blast_db(fasta_path):
@@ -201,20 +205,28 @@ def _build_blast_db(fasta_path):
     # volumes by basename, so the files stay valid after moving next to the FASTA.
     build_dir = tempfile.mkdtemp(dir=directory, prefix='.' + base + _BUILD_PREFIX)
     try:
+        try:
+            makeblastdb = blast_executable('makeblastdb')
+        except FileNotFoundError as error:
+            raise ToolUnavailableError('makeblastdb', str(error)) from error
         cline = NcbimakeblastdbCommandline(
-            cmd=blast_executable('makeblastdb'),
+            cmd=makeblastdb,
             dbtype="nucl",
             input_file=fasta_path,
             out=os.path.join(build_dir, base),
             parse_seqids=True
         )
-        cline()
+        try:
+            cline()
+        except subprocess.CalledProcessError as error:  # Bio's ApplicationError
+            raise ToolFailedError('makeblastdb', error.returncode, error.cmd, error.output, error.stderr,
+                                  f"makeblastdb failed (exit {error.returncode}): {(error.stderr or '').strip()}") from error
         built = {name: os.path.getsize(os.path.join(build_dir, name)) for name in os.listdir(build_dir)
                  if name.startswith(base) and BLAST_INDEX_SUFFIX.fullmatch(name[len(base):])}
         if not ({base + '.nin', base + '.nhr', base + '.nsq'} <= built.keys() or base + '.nal' in built):
-            raise RuntimeError(f"makeblastdb did not produce a complete index for {fasta_path}")
+            raise ToolFailedError('makeblastdb', 0, message=f"makeblastdb did not produce a complete index for {fasta_path}")
         if _fasta_fingerprint(fasta_path) != before:
-            raise RuntimeError(f"{fasta_path} changed while its BLAST index was being built; retry")
+            raise ReferenceChangedError(f"{fasta_path} changed while its BLAST index was being built; retry")
 
         # The record goes first and comes back last, so a crash in between leaves an
         # index without a record, which the next call rebuilds instead of trusting.
@@ -261,7 +273,7 @@ def create_blast_db(fasta_path):
     """
     path = os.path.abspath(fasta_path)
     if not os.path.isfile(path):
-        raise FileNotFoundError(f"Reference FASTA not found: {fasta_path}")
+        raise ReferenceMissingError(f"Reference FASTA not found: {fasta_path}")
     if _index_is_current(path, _read_index_record(path)):
         return fasta_path
     with _build_lock(path):

@@ -42,6 +42,13 @@
   };
 
   /* ---------------- progress ---------------- */
+  // Which task and stage a failed job stopped at; jobs saved before this was recorded have neither.
+  function failurePlace(job) {
+    const stage = job.failed_stage_label ? HCR.t(job.failed_stage_label) : '';
+    if (job.failed_task) return HCR.t("失败位置：任务 {v0} · {v1}", {v0: job.failed_task, v1: stage || HCR.t("计算中")});
+    return stage ? HCR.t("失败位置：{v0}", {v0: stage}) : '';
+  }
+
   function followProgress() {
     let current = status, timer = null;
     const started = () => Date.parse(current.started_at || current.queued_at || current.created_at);
@@ -65,7 +72,7 @@
       let detail;
       if (state === 'queued') detail = current.queue_position ? HCR.t("前面还有 ") + current.queue_position + HCR.t(" 个任务") : HCR.t("等待后台开始");
       else if (state === 'running') detail = (progress.task_name ? progress.task_name + ' · ' : '') + (HCR.t(progress.label) || HCR.t("计算中"));
-      else if (state === 'failed') detail = HCR.t("任务失败");
+      else if (state === 'failed') detail = failurePlace(current) || HCR.t("任务失败");
       else if (state === 'interrupted') detail = HCR.t("任务被中断");
       else detail = HCR.t("已完成，正在打开结果……");
       byId('progress-detail').textContent = detail;

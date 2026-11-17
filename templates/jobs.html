@@ -63,6 +63,10 @@
       const state = el('td'); state.append(el('span', label, 'chip ' + cls));
       if (job.status === 'running' && job.progress) state.append(el('div', (job.progress.task_total > 1 ? job.progress.task_index + '/' + job.progress.task_total + ' · ' : '') + HCR.t(job.progress.label), 'hint'));
       if (job.status === 'queued' && job.queue_position) state.append(el('div', HCR.t("前面 ") + job.queue_position + HCR.t(" 个"), 'hint'));
+      if (job.status === 'failed' && (job.failed_task || job.failed_stage_label)) {
+        const stage = job.failed_stage_label ? HCR.t(job.failed_stage_label) : HCR.t("计算中");
+        state.append(el('div', job.failed_task ? HCR.t("失败位置：任务 {v0} · {v1}", {v0: job.failed_task, v1: stage}) : HCR.t("失败位置：{v0}", {v0: stage}), 'hint'));
+      }
       if (job.error) state.append(el('div', job.error, 'hint'));
       const summary = job.summary;
       const result = el('td', summary ? HCR.t("保留 ") + summary.selected + HCR.t(" / 候选 ") + summary.candidates : '—', 'num');
