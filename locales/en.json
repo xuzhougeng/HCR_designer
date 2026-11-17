@@ -594,9 +594,7 @@
   "共享参考可在": "Upload and configure shared references in the ",
   "页面上传和配置。": " page.",
   "上传参考序列": "Upload reference sequences",
-  "支持 FASTA 或 gzip 压缩文件；只需上传一次": "FASTA or gzip files supported; upload only once",
   "按亚基因组上传（可多选）": "Upload by subgenome (multiple files)",
-  "每个文件视为一个亚基因组，名称取自文件名；至少两个文件，编号不得在文件之间重复": "Each file represents one subgenome named after its filename. At least two files are required; IDs must not overlap between files",
   "是否考虑多套染色体": "Use multiple chromosome sets",
   "勾选后使用参考库中已保存的亚基因组归属信息；本次无需再次上传。": "Use subgenome assignments saved in the reference library; no new upload is needed.",
   "参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。": "The reference is searched for paired-arm matches on target and non-target transcripts. Bo/Bju cDNA is a transcript reference.",
@@ -937,5 +935,13 @@
   "结果 ZIP（在页面中同步计算并下载，不进入任务记录）": "Result ZIP (computed and downloaded in the page; not in Job history)",
   "已选组合之间的最小距离；三探针目前固定为 15 nt，页面上的设置暂不生效": "Minimum distance between selected sets; triplet selection is currently fixed at 15 nt and the page setting has no effect",
   "关闭页面后设计还会继续吗？": "Does a design keep running after I close the page?",
-  "双探针设计会：提交后在后台排队计算，可以关闭页面，进度和结果在“任务记录”中保留 3 个月。三探针设计不会：它在页面中同步计算，关闭或刷新页面会丢失结果，也不会出现在任务记录中；批量 CSV 的全部行在一次请求里逐行计算，等待时间随行数增加。完成后请及时保存下载的 ZIP。": "Split-probe design does: jobs queue in the background, you can close the page, and progress and results stay in Job history for 3 months. Triplet design does not: it runs in the page, closing or reloading the page loses the result, and it does not appear in Job history. A batch CSV is computed in one request, row after row, so the wait grows with the number of rows. Save the downloaded ZIP when it finishes."
+  "双探针设计会：提交后在后台排队计算，可以关闭页面，进度和结果在“任务记录”中保留 3 个月。三探针设计不会：它在页面中同步计算，关闭或刷新页面会丢失结果，也不会出现在任务记录中；批量 CSV 的全部行在一次请求里逐行计算，等待时间随行数增加。完成后请及时保存下载的 ZIP。": "Split-probe design does: jobs queue in the background, you can close the page, and progress and results stay in Job history for 3 months. Triplet design does not: it runs in the page, closing or reloading the page loses the result, and it does not appear in Job history. A batch CSV is computed in one request, row after row, so the wait grows with the number of rows. Save the downloaded ZIP when it finishes.",
+  "⚠ 已过期，下次清理时删除": "⚠ expired; deleted at the next cleanup",
+  "⚠ 1 天内过期": "⚠ expires within a day",
+  "{days} 天后过期": "expires in {days} days",
+  "在设计中选用参考会重新开始 {days} 天计时；{days} 天未用的参考会被自动删除。": "Selecting a reference for a design restarts its {days}-day clock; references unused for {days} days are deleted automatically.",
+  "最近使用：": "Last used: ",
+  "尚无记录": "not recorded yet",
+  "过期时间：": "Expires: ",
+  "使用记录不可读，暂不显示过期时间": "Usage record unreadable; expiry not shown"
 }

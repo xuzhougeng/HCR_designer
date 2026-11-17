@@ -18,12 +18,16 @@ def register_reference_routes(app):
     if storage is not None:
         # Usage records let the retention job expire references nobody has used recently.
         storage.reference_library = library
+        # Pages show expiry with the very period the cleanup job applies.
+        library.retention = storage.reference_retention
     auth = app.extensions['admin_auth']
 
     def can_edit():
         return bool(app.config['REFERENCE_PUBLIC_EDIT'] or auth['authenticated']())
 
     app.jinja_env.globals['reference_can_edit'] = can_edit
+    app.jinja_env.globals['reference_retention_period_days'] = (
+        lambda: app.extensions['reference_library'].retention_period().days)
     app.extensions['reference_can_edit'] = can_edit
 
     def writable(function):
