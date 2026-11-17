@@ -2,6 +2,7 @@
 from collections import Counter
 from datetime import datetime, timezone
 import csv
+import errno
 import gzip
 import hashlib
 import io
@@ -18,6 +19,9 @@ from scripts.create_split_probe import main as design_split
 from scripts.utils import save_sequence
 from src.common.paired_specificity import load_reference, infer_species, MAX_SUBSTITUTIONS
 from src.common.homolog_alignment import AlignmentUnavailable, find_homolog
+from src.common.job_errors import (ReferenceChangedError, ReferenceFastaError, ReferenceMissingError,
+                                   ToolFailedError, ToolUnavailableError)
+from src.common.paired_scan import ScanError, ScannerUnavailable, ScanTimeout
 from src.common.reference_annotation import (MAX_LABEL_LENGTH, format_subgenome_map,
                                              load_subgenome_map, parse_subgenome_map)
 
@@ -47,6 +51,105 @@ BATCH_HEADER = ['task_name', 'bp_id', 'gene_id', 'max_selected', 'allowed_ids']
 STAGES = {'queued': '排队等待', 'reference': '准备参考库索引', 'candidates': '生成候选',
           'specificity': '双臂配对扫描与单臂比对', 'selection': '排序与筛选',
           'packaging': '整理结果文件', 'completed': '已完成'}
+
+
+FASTA_REASONS = {
+    'invalid_characters': '参考 FASTA 未通过检查：序列 {v0} 含有非核酸字符 {v1}（只接受 A/C/G/T/U 及 IUPAC 简并碱基）。请修正参考文件后重新上传并重新运行。',
+    'empty_sequence': '参考 FASTA 未通过检查：序列 {v0} 没有碱基。请删除该条目或补全序列后重新上传并重新运行。',
+    'duplicate_id': '参考 FASTA 未通过检查：序列编号 {v0} 重复出现。请确保每条序列编号唯一后重新上传并重新运行。',
+    'no_sequences': '参考 FASTA 未通过检查：文件中没有任何序列。请确认上传的是 FASTA 文件后重新运行。',
+    'sequence_before_header': '参考 FASTA 未通过检查：第一条标题行之前出现了序列。请修正参考文件后重新上传并重新运行。',
+    'missing_id': '参考 FASTA 未通过检查：存在没有编号的标题行（“>”后为空）。请修正参考文件后重新上传并重新运行。'}
+FAILURES = {
+    'reference_missing': '参考库文件已被删除或清理，无法继续计算。请返回第一步重新选择或上传参考库后再运行。',
+    'reference_changed': '参考库文件在计算过程中被替换或修改。请返回第一步重新检查输入后再运行。',
+    'blast_unavailable': '服务器上找不到 BLAST+ 程序 {v0}，无法建立参考索引或进行单臂比对。请联系管理员安装 NCBI BLAST+ 或设置 HCR_BLAST_BIN 后重新运行。',
+    'blast_failed': 'BLAST+ 程序 {v0} 运行失败，参考索引或单臂比对未完成。可直接重新运行。如反复出现，请联系管理员检查参考文件与 BLAST+ 安装。',
+    'scanner_unavailable': '服务器上的双臂配对扫描程序不可用（缺少 C++ 编译器或预编译程序）。请联系管理员安装 g++/clang++ 或设置 HCR_SCAN_BIN 后重新运行。',
+    'scan_timeout': '双臂配对扫描超过时间限制仍未完成。请缩小参考库或减少候选数量后重新运行。',
+    'scan_failed': '双臂配对扫描未正常完成，为避免给出不可靠的特异性结论已停止计算。可直接重新运行。如反复出现，请联系管理员查看服务器日志。',
+    'out_of_memory': '服务器内存不足，计算被中止。请缩小参考库、减少批量任务或候选数量后重新运行，或稍后再试。',
+    'disk_full': '服务器磁盘空间不足，无法写入参考索引或结果文件。请联系管理员清理空间后重新运行。',
+    'permission': '服务器没有写入参考索引或结果文件所需的权限。请联系管理员检查上传目录权限后重新运行。',
+    'unexpected': '计算未完成（{error}）。请检查参考文件与比对环境后重新运行。'}
+MAX_ID_IN_MESSAGE = 60
+
+
+def _visible(value, limit=MAX_ID_IN_MESSAGE):
+    """Sequence IDs or characters from user files, made safe for a one-line message."""
+    text = ' '.join(str(value or '').replace('；', ';').split()) or '?'
+    return text if len(text) <= limit else text[:limit - 1] + '…'
+
+
+def _chain(error):
+    seen = []
+    while error is not None and error not in seen:
+        seen.append(error)
+        error = error.__cause__ or error.__context__
+    return seen
+
+
+def _reference_state(manifest):
+    """'reference_missing' / 'reference_changed' when the job's reference moved under it."""
+    path = manifest.get('reference_path')
+    if not path:
+        return None
+    try:
+        stat = Path(path).stat()
+    except FileNotFoundError:
+        return 'reference_missing'
+    except OSError:
+        return None
+    recorded = (manifest.get('reference') or {}).get('fingerprint')
+    if recorded and {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size} != recorded:
+        return 'reference_changed'
+    return None
+
+
+def describe_failure(error, manifest=None):
+    """Map an exception from a job run to ``(error_code, message)`` for the page.
+
+    The message names what the user (or the administrator) can do and never includes
+    exception text, paths or stack traces; the full exception goes to the server log.
+    """
+    if isinstance(error, InputError):
+        return 'input', str(error)
+    state = _reference_state(manifest or {})
+    if state:  # whatever broke afterwards, the vanished or edited reference is the cause
+        return state, FAILURES[state]
+    for item in _chain(error):
+        if isinstance(item, ReferenceFastaError):
+            template = FASTA_REASONS.get(item.reason, FASTA_REASONS['no_sequences'])
+            return 'reference_fasta', template.format(v0=_visible(item.sequence_id), v1=_visible(item.detail, 20))
+        if isinstance(item, ReferenceMissingError):
+            return 'reference_missing', FAILURES['reference_missing']
+        if isinstance(item, ReferenceChangedError):
+            return 'reference_changed', FAILURES['reference_changed']
+        if isinstance(item, MemoryError):
+            return 'out_of_memory', FAILURES['out_of_memory']
+        if isinstance(item, ScannerUnavailable):
+            return 'scanner_unavailable', FAILURES['scanner_unavailable']
+        if isinstance(item, ScanTimeout):
+            return 'scan_timeout', FAILURES['scan_timeout']
+        if isinstance(item, ScanError):
+            # SIGKILL (the kernel OOM killer) or a failed allocation inside the scanner.
+            if item.returncode in (-9, 137) or 'bad_alloc' in (item.stderr or ''):
+                return 'out_of_memory', FAILURES['out_of_memory']
+            if 'No space left' in (item.stderr or ''):
+                return 'disk_full', FAILURES['disk_full']
+            return 'scan_failed', FAILURES['scan_failed']
+        if isinstance(item, ToolUnavailableError):
+            return 'blast_unavailable', FAILURES['blast_unavailable'].format(v0=item.tool)
+        if isinstance(item, ToolFailedError):
+            stderr = item.stderr if isinstance(item.stderr, str) else ''
+            if 'No space left' in stderr or 'Disk quota' in stderr:
+                return 'disk_full', FAILURES['disk_full']
+            return 'blast_failed', FAILURES['blast_failed'].format(v0=item.tool)
+        if isinstance(item, OSError) and item.errno in (errno.ENOSPC, getattr(errno, 'EDQUOT', errno.ENOSPC)):
+            return 'disk_full', FAILURES['disk_full']
+        if isinstance(item, PermissionError) or (isinstance(item, OSError) and item.errno == errno.EROFS):
+            return 'permission', FAILURES['permission']
+    return 'unexpected', FAILURES['unexpected'].format(error=type(error).__name__)
 
 
 class InputError(ValueError):
@@ -504,7 +607,7 @@ class SplitWorkflow:
                 raise InputError('这些任务的目标转录本在归属文件中没有亚基因组，无法确定允许集合：'
                                  + '、'.join(missing), 'target_mode')
         manifest.update(status='queued', parameters=parameters, queued_at=self._now(),
-                        started_at=None, error=None)
+                        started_at=None, error=None, error_code=None, failed_task=None, failed_stage=None)
         write_json(directory / 'request.json', manifest)
         self._progress(directory, 'queued', 0, len(manifest['tasks']))
         return True
@@ -521,6 +624,7 @@ class SplitWorkflow:
         manifest = self._manifest(directory)
         parameters = manifest['parameters']
         total = len(manifest['tasks'])
+        current = dict(stage=None, task=None)  # where a failure happened
         try:
             manifest.update(status='running', started_at=self._now())
             write_json(directory / 'request.json', manifest)
@@ -531,6 +635,7 @@ class SplitWorkflow:
             results = []
             for index, task in enumerate(manifest['tasks'], 1):
                 def report(stage, index=index, name=task['name']):
+                    current.update(stage=stage, task=name)
                     self._progress(directory, stage, index, total, name)
                 report('candidates')
                 task_dir = output / task['name']
@@ -571,6 +676,7 @@ class SplitWorkflow:
                                     search={k: v for k, v in search.items() if k not in ('reference', 'executable')},
                                     probe_sets=compact))
                 write_json(task_dir / 'task_result.json', results[-1])
+            current.update(stage='packaging', task=None)
             self._progress(directory, 'packaging', total, total)
             exhaustive = bool(manifest['reference_path']) and all(
                 t['search'].get('status') == 'completed' and t['unassessed'] == 0 for t in results)
@@ -598,9 +704,9 @@ class SplitWorkflow:
             return result
         except Exception as error:
             if manifest['status'] != 'completed':
-                manifest.update(status='failed', failed_at=self._now(),
-                                error=str(error) if isinstance(error, InputError)
-                                else '计算未完成（%s）。请检查参考文件与比对环境后重新运行。' % type(error).__name__)
+                code, message = describe_failure(error, manifest)
+                manifest.update(status='failed', failed_at=self._now(), error=message, error_code=code,
+                                failed_task=current['task'], failed_stage=current['stage'])
                 write_json(directory / 'request.json', manifest)
             raise
         finally:
@@ -618,8 +724,9 @@ class SplitWorkflow:
         progress_path = directory / 'progress.json'
         progress = json.loads(progress_path.read_text()) if progress_path.is_file() else None
         keys = ('id', 'status', 'mode', 'process_multiple_sets', 'created_at', 'queued_at', 'started_at', 'completed_at',
-                'failed_at', 'error', 'summary', 'parameters')
+                'failed_at', 'error', 'error_code', 'failed_task', 'failed_stage', 'summary', 'parameters')
         return dict({k: manifest.get(k) for k in keys}, progress=progress,
+                    failed_stage_label=STAGES.get(manifest.get('failed_stage')),
                     reference=(manifest.get('reference') or {}).get('name'),
                     tasks=[{'name': t['name'], 'gene_id': t['gene_id'], 'bridge_id': t['bridge_id'],
                             'sequence_length': t['sequence_length']} for t in manifest['tasks']])
@@ -657,7 +764,8 @@ class SplitWorkflow:
             except (OSError, ValueError):
                 continue
             if manifest.get('status') in ('queued', 'running'):
-                manifest.update(status='interrupted', error='服务重启时该任务尚未完成，可重新运行。')
+                manifest.update(status='interrupted', error='服务重启时该任务尚未完成，可重新运行。',
+                                error_code='interrupted')
                 write_json(path, manifest)
                 (path.parent / 'running.lock').unlink(missing_ok=True)
                 recovered.append(manifest['id'])

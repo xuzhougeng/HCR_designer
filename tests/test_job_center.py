@@ -121,6 +121,50 @@ class JobCenterTests(unittest.TestCase):
         self.assertEqual(rerun.status_code, 202)
         self.assertEqual(self.wait(rerun.json['status_url'])['status'], 'completed')
 
+    def test_failures_saved_before_error_codes_still_display(self):
+        prepared = self.prepare('legacy')
+        with patch('scripts.split_workflow.design_split', side_effect=RuntimeError('boom')):
+            with self.assertLogs(self.app.logger, level='ERROR'):
+                self.wait(self.client.post(prepared['run_url'], json=DEFAULTS).json['status_url'])
+        path = self.root / 'split_results' / prepared['id'] / 'request.json'
+        manifest = json.loads(path.read_text())
+        self.assertEqual(manifest['error_code'], 'unexpected')
+        for key in ('error_code', 'failed_task', 'failed_stage'):  # what older versions wrote
+            manifest.pop(key)
+        legacy = '计算未完成（ScanError）。请检查参考文件与比对环境后重新运行。'
+        manifest['error'] = legacy
+        path.write_text(json.dumps(manifest))
+        saved = path.read_bytes()
+        status = self.client.get('/split/jobs/%s/status' % prepared['id']).json
+        self.assertEqual((status['status'], status['error']), ('failed', legacy))
+        self.assertIsNone(status['error_code'])
+        self.assertIsNone(status['failed_task'])
+        self.assertIsNone(status['failed_stage_label'])
+        listing = self.client.get('/jobs', headers={'Accept': 'application/json'}).json['jobs']
+        self.assertEqual(listing[0]['error'], legacy)
+        english = self.client.get('/jobs?lang=en', headers={'Accept': 'application/json'}).json['jobs']
+        self.assertEqual(english[0]['error'], 'Computation incomplete (ScanError). Check reference files and the '
+                                              'alignment environment before rerunning.')
+        self.assertIn('ScanError', self.client.get('/jobs').text)
+        self.assertEqual(self.client.get('/split/results/' + prepared['id']).status_code, 200)
+        self.assertEqual(path.read_bytes(), saved)  # viewing never rewrites old manifests
+
+    def test_new_failures_record_task_and_stage(self):
+        def fail_in_selection(**kwargs):
+            kwargs['progress']('candidates')
+            kwargs['progress']('selection')
+            raise PermissionError(13, 'Permission denied', str(self.root / 'split_results'))
+        prepared = self.prepare('perm')
+        with patch('scripts.split_workflow.design_split', side_effect=fail_in_selection):
+            with self.assertLogs(self.app.logger, level='ERROR'):
+                status = self.wait(self.client.post(prepared['run_url'], json=DEFAULTS).json['status_url'])
+        self.assertEqual((status['error_code'], status['failed_task'], status['failed_stage'], status['failed_stage_label']),
+                         ('permission', 'perm', 'selection', '排序与筛选'))
+        self.assertNotIn(str(self.root), json.dumps(status, ensure_ascii=False))
+        page = self.client.get('/jobs?lang=en').text
+        self.assertIn('Failed at: task', page)  # catalog shipped for the browser
+        self.assertNotIn(str(self.root), page)
+
     @patch('scripts.split_workflow.design_split', side_effect=fake_design)
     def test_results_saved_before_this_version_gain_sequences_and_synthesis(self, design):
         prepared = self.prepare()

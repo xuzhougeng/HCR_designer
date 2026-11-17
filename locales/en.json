@@ -356,6 +356,8 @@
   "分析结果保留 3 个月，到期后定期清理。请及时下载需要长期保存的 ZIP 文件。": "Analysis results are kept for 3 months and cleaned up periodically. Download ZIP files you need to keep.",
   "排队中": "Queued",
   "计算中": "Running",
+  "失败位置：任务 {v0} · {v1}": "Failed at: task {v0} · {v1}",
+  "失败位置：{v0}": "Failed at: {v0}",
   "失败": "Failed",
   "已中断": "Interrupted",
   " 分 ": " min ",

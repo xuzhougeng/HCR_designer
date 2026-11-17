@@ -1,6 +1,10 @@
+import errno
 import gzip
 import io
 import json
+import os
+import re
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,7 +13,13 @@ from zipfile import ZipFile
 
 from flask import Flask
 from scripts.split_web import register_split_routes
-from scripts.split_workflow import InputError, parse_parameters, DEFAULTS
+from scripts.i18n import register_i18n, message
+from scripts.split_workflow import InputError, parse_parameters, DEFAULTS, describe_failure, FAILURES
+from scripts.utils import create_blast_db
+from src.common import paired_scan
+from src.common.job_errors import ToolFailedError
+from src.common.paired_scan import ScanError, ScanTimeout, scan_pairs
+from src.common.paired_specificity import analyze_probe_sequences, load_reference
 from scripts.reference_library import ReferenceLibrary
 from werkzeug.datastructures import FileStorage
 
@@ -380,6 +390,183 @@ class GuidedWorkflowTests(unittest.TestCase):
             response, result = self.run_job(prepared, {})
         self.assertEqual(response.status_code, 202)
         self.assertEqual(result['status'], 'completed')
+
+    def failing_design(self, failing_task, error, stage='specificity'):
+        def design(**kwargs):
+            for name in ('reference', 'candidates', 'specificity', 'selection'):
+                kwargs['progress'](name)
+                if kwargs['name'] == failing_task and name == stage:
+                    raise error() if callable(error) else error
+            fake_design(**kwargs)
+        return design
+
+    def test_failed_batch_task_names_task_stage_and_cause_without_paths(self):
+        data = 'task_name,BP_ID,gene_id\none,BP_0079,BjuTarget\ntwo,BP_0079,BoOther\n'
+        prepared = self.prepare(input_mode='batch', batch_text=data)
+        secret = str(self.root)
+        error = ScanError(f'paired_scan failed (exit 1): cannot read {secret}/bol_bju_cdna.fasta', 1,
+                          f'open {secret}/x failed')
+        with patch('scripts.split_workflow.design_split', side_effect=self.failing_design('two', error)):
+            with self.assertLogs(self.app.logger, level='ERROR') as logs:
+                response = self.client.post(prepared['run_url'], json={})
+        self.assertIn(secret, '\n'.join(logs.output))  # the full exception still reaches the log
+        status = self.client.get(response.json['status_url'])
+        self.assertEqual(status.json['status'], 'failed')
+        self.assertEqual((status.json['error_code'], status.json['failed_task'], status.json['failed_stage']),
+                         ('scan_failed', 'two', 'specificity'))
+        self.assertEqual(status.json['failed_stage_label'], '双臂配对扫描与单臂比对')
+        self.assertEqual(status.json['error'], FAILURES['scan_failed'])
+        self.assertNotIn(secret, status.text)
+        self.assertNotIn('Traceback', status.text)
+        manifest = json.loads((self.root / 'split_results' / prepared['id'] / 'request.json').read_text())
+        self.assertEqual(manifest['error_code'], 'scan_failed')
+        english = self.client.get(response.json['status_url'] + '?lang=en').json
+        self.assertTrue(english['error'].startswith('The paired-arm scan did not finish normally'))
+        listing = self.client.get('/jobs', headers={'Accept': 'application/json'}).json['jobs']
+        self.assertEqual(listing[0]['failed_task'], 'two')
+        self.assertNotIn(secret, self.client.get('/jobs').text)
+        self.assertNotIn(secret, self.client.get('/split/results/' + prepared['id']).text)
+        # Rerunning clears the recorded failure.
+        with patch('scripts.split_workflow.design_split', side_effect=fake_design):
+            response, result = self.run_job(prepared, {})
+        status = self.client.get(response.json['status_url']).json
+        self.assertEqual((status['status'], status['error_code'], status['failed_task']), ('completed', None, None))
+
+    def test_reference_removed_during_run_is_reported_as_missing(self):
+        prepared = self.prepare()
+        def vanish():
+            self.reference.unlink()
+            return FileNotFoundError(errno.ENOENT, 'No such file', str(self.reference))
+        with patch('scripts.split_workflow.design_split', side_effect=self.failing_design('ABCG13', vanish, 'reference')):
+            with self.assertLogs(self.app.logger, level='ERROR'):
+                response = self.client.post(prepared['run_url'], json={})
+        status = self.client.get(response.json['status_url']).json
+        self.assertEqual((status['error_code'], status['failed_task'], status['failed_stage']),
+                         ('reference_missing', 'ABCG13', 'reference'))
+        self.assertEqual(status['failed_stage_label'], '准备参考库索引')
+
+
+HAN = re.compile(r'[\u3400-\u9fff]')
+
+
+class FailureReasonTests(unittest.TestCase):
+    """Each failure class gets an actionable message without server paths or exception text."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.secret = os.path.join(self.tmp.name, 'private-server-folder')
+        os.makedirs(self.secret)
+        self.fasta = os.path.join(self.secret, 'ref.fasta')
+        with open(self.fasta, 'w') as handle:
+            handle.write('>BjuTarget\n' + SEQ + '\n')
+        self.app = Flask(__name__)
+        register_i18n(self.app)
+
+    def raised(self, function, *args, **kwargs):
+        try:
+            function(*args, **kwargs)
+        except Exception as error:  # noqa: BLE001 - the point is what the engine raises
+            return error
+        self.fail('%s did not raise' % function.__name__)
+
+    def check(self, error, code, *expected, manifest=None):
+        actual, text = describe_failure(error, manifest)
+        self.assertEqual(actual, code, text)
+        for part in expected:
+            self.assertIn(part, text)
+        for leak in (self.tmp.name, 'private-server-folder', 'Traceback', '/bin/', 'exit '):
+            self.assertNotIn(leak, text)
+        with self.app.test_request_context('/?lang=en'):
+            english = message(text)
+        self.assertIsNone(HAN.search(english), english)
+        return text
+
+    def write(self, body):
+        with open(self.fasta, 'w') as handle:
+            handle.write(body)
+
+    def test_rejected_reference_fasta_names_sequence_and_reason(self):
+        self.write('>prot_1 description\nMEEPQSDLACGT\n')
+        text = self.check(self.raised(create_blast_db, self.fasta), 'reference_fasta', 'prot_1', '非核酸字符 ELPQ')
+        self.assertTrue(text.startswith('参考 FASTA 未通过检查：序列 prot_1 含有非核酸字符'))
+        self.write('>empty\n>next\nACGT\n')
+        self.check(self.raised(create_blast_db, self.fasta), 'reference_fasta', '序列 empty 没有碱基')
+        self.write('')
+        self.check(self.raised(create_blast_db, self.fasta), 'reference_fasta', '没有任何序列')
+        self.write('>dup\nACGT\n>dup\nACGT\n')
+        self.check(self.raised(load_reference, self.fasta), 'reference_fasta', '序列编号 dup 重复')
+        self.write('ACGT\n>late\nACGT\n')
+        self.check(self.raised(load_reference, self.fasta), 'reference_fasta', '标题行之前')
+        self.write('>a\nACGT\n> \nACGT\n')
+        self.check(self.raised(load_reference, self.fasta), 'reference_fasta', '没有编号的标题行')
+        self.write('>' + 'x' * 300 + '\nACGTJ\n')
+        text = self.check(self.raised(create_blast_db, self.fasta), 'reference_fasta')
+        self.assertLess(len(text), 200)  # long IDs are shortened
+
+    def test_missing_or_changed_reference(self):
+        missing = os.path.join(self.secret, 'gone.fasta')
+        self.check(self.raised(create_blast_db, missing), 'reference_missing', '已被删除或清理')
+        self.check(self.raised(load_reference, missing), 'reference_missing')
+        self.check(self.raised(scan_pairs, [('ACGT' * 4, 'ACGT' * 4, 0)], missing), 'reference_missing')
+        # Whatever broke afterwards, a vanished or edited reference is reported as the cause.
+        manifest = {'reference_path': missing, 'reference': {'fingerprint': {'mtime_ns': 1, 'size': 1}}}
+        self.check(KeyError('x'), 'reference_missing', manifest=manifest)
+        manifest = dict(manifest, reference_path=self.fasta)
+        self.check(ScanError('boom'), 'reference_changed', '被替换或修改', manifest=manifest)
+        stat = os.stat(self.fasta)
+        manifest['reference']['fingerprint'] = {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size}
+        self.check(ScanError('boom'), 'scan_failed', manifest=manifest)
+
+    def test_blast_missing_or_failing(self):
+        with patch.dict(os.environ, {'HCR_BLAST_BIN': os.path.join(self.secret, 'nothing')}):
+            self.check(self.raised(analyze_probe_sequences, ['ACGTACGTAC'], self.fasta),
+                       'blast_unavailable', 'blastn', 'HCR_BLAST_BIN')
+            self.write('>BjuTarget\nACGTACGT\n')
+            self.check(self.raised(create_blast_db, self.fasta), 'blast_unavailable', 'makeblastdb')
+        failure = subprocess.CalledProcessError(2, ['blastn'], stderr='BLAST Database error: ' + self.secret)
+        with patch('src.common.paired_specificity.blast_executable', return_value='blastn'), \
+                patch('src.common.paired_specificity.subprocess.run', side_effect=failure):
+            error = self.raised(analyze_probe_sequences, ['ACGTACGTAC'], self.fasta)
+        self.assertIsInstance(error, subprocess.CalledProcessError)  # existing handlers still match
+        self.check(error, 'blast_failed', 'blastn')
+        def makeblastdb(**kwargs):
+            def run():
+                raise subprocess.CalledProcessError(1, ['makeblastdb'], stderr='Error: ' + self.secret)
+            return run
+        with patch('scripts.utils.NcbimakeblastdbCommandline', side_effect=makeblastdb), \
+                patch('scripts.utils.blast_executable', return_value='makeblastdb'):
+            self.check(self.raised(create_blast_db, self.fasta), 'blast_failed', 'makeblastdb')
+        self.check(ToolFailedError('makeblastdb', 1, stderr='No space left on device'), 'disk_full')
+
+    def test_pair_scanner_unavailable_failed_or_timed_out(self):
+        pair = ('ACGTACGTACGTACGT', 'ACGTACGTACGTACGT', 0)
+        with patch.dict(os.environ, {'HCR_SCAN_BIN': os.path.join(self.secret, 'absent')}):
+            error = self.raised(scan_pairs, [pair], self.fasta)
+        self.assertIsInstance(error, FileNotFoundError)
+        self.check(error, 'scanner_unavailable', 'HCR_SCAN_BIN')
+        environment = {k: v for k, v in os.environ.items() if k not in ('HCR_SCAN_BIN', 'CXX')}
+        with patch.dict(os.environ, environment, clear=True), \
+                patch.object(paired_scan, 'PROJECT_ROOT', Path(self.secret)), \
+                patch('src.common.paired_scan.shutil.which', return_value=None):
+            self.check(self.raised(scan_pairs, [pair], self.fasta), 'scanner_unavailable', 'C++')
+        with patch.object(paired_scan, 'scanner_executable', return_value='/bin/sh'):
+            self.check(self.raised(scan_pairs, [pair], self.fasta), 'scan_failed', '可直接重新运行')
+        self.check(ScanTimeout('paired_scan exceeded 5 s on ref.fasta'), 'scan_timeout', '时间限制')
+        self.check(ScanError('paired_scan failed (exit -9): ', -9, ''), 'out_of_memory', '内存不足')
+        self.check(ScanError('failed', 1, "terminate called after throwing 'std::bad_alloc'"), 'out_of_memory')
+
+    def test_disk_permission_unexpected_and_input_errors(self):
+        self.check(OSError(errno.ENOSPC, 'No space left on device', self.secret), 'disk_full', '磁盘空间不足')
+        wrapped = RuntimeError('write failed')
+        wrapped.__cause__ = OSError(errno.EDQUOT, 'Disc quota exceeded', self.secret)
+        self.check(wrapped, 'disk_full')
+        self.check(PermissionError(errno.EACCES, 'Permission denied', self.secret), 'permission', '权限')
+        self.check(OSError(errno.EROFS, 'Read-only file system', self.secret), 'permission')
+        self.check(MemoryError(), 'out_of_memory')
+        text = self.check(KeyError(self.secret), 'unexpected', 'KeyError')
+        self.assertEqual(text, '计算未完成（KeyError）。请检查参考文件与比对环境后重新运行。')
+        self.assertEqual(describe_failure(InputError('请选择参考库。')), ('input', '请选择参考库。'))
 
 
 if __name__ == '__main__':
