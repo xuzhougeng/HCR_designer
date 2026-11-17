@@ -232,6 +232,7 @@ def triplet_reference():
         if not existing:
             return None
         path = library.path(existing)
+        library.touch(path.name)
     return create_blast_db(str(path))
 
 def target_fasta_name(gene_id):

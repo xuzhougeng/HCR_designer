@@ -14,6 +14,10 @@ def register_reference_routes(app):
     app.config.setdefault('REFERENCE_PUBLIC_EDIT', True)
     library = ReferenceLibrary(app.config['UPLOAD_FOLDER'], app.config['REFERENCE_CATALOG_FILE'])
     app.extensions['reference_library'] = library
+    storage = app.extensions.get('storage_maintenance')
+    if storage is not None:
+        # Usage records let the retention job expire references nobody has used recently.
+        storage.reference_library = library
     auth = app.extensions['admin_auth']
 
     def can_edit():
@@ -39,8 +43,9 @@ def register_reference_routes(app):
         listing = library.list()
         if request.accept_mimetypes.best == 'application/json':
             return jsonify(references=listing, can_edit=can_edit())
+        retention_days = storage.reference_retention.days if storage is not None else None
         return render_template('references.html', references=listing, can_edit=can_edit(),
-                               can_delete=bool(auth['authenticated']()))
+                               can_delete=bool(auth['authenticated']()), reference_retention_days=retention_days)
 
     @app.post('/references/upload')
     @writable

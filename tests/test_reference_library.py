@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import gzip
 import hashlib
 import io
@@ -15,6 +16,7 @@ from scripts.admin_web import register_admin
 from scripts.reference_library import ReferenceLibrary
 from scripts.reference_web import register_reference_routes
 from scripts.split_workflow import SplitWorkflow
+from scripts.storage_maintenance import REFERENCE_RETENTION_DAYS, StorageMaintenance
 
 
 FASTA = b'>BjuVA01G1 description\nACGTACGTACGTACGTACGTACGTACGTACGTACGT\n'
@@ -217,6 +219,33 @@ class ReferenceHttpTests(unittest.TestCase):
         self.assertEqual(self.app.extensions['reference_library'].list(), [])
         self.assertFalse((self.root / 'uploads' / (filename + '.subgenomes.tsv')).exists())
 
+    def test_cli_dry_run_and_admin_inventory_show_unused_references(self):
+        uploads = self.root / 'uploads'
+        uploads.mkdir()
+        library = self.app.extensions['reference_library']
+        self.assertIs(self.app.extensions['storage_maintenance'].reference_library, library)
+        now = datetime.now(timezone.utc)
+        with patch('scripts.reference_library.utcnow', return_value=now - timedelta(days=8)):
+            stale = library.upload(uploaded(), 'Stale', None)['reference']['filename']
+        fresh = library.upload(uploaded('fresh.fa', FASTA.replace(b'G1', b'G2')), 'Fresh', None)['reference']['filename']
+        runner = self.app.test_cli_runner()
+        preview = runner.invoke(args=['cleanup-results', '--dry-run'])
+        self.assertEqual(preview.exit_code, 0, preview.output)
+        self.assertEqual(json.loads(preview.output)['deleted'], [stale])
+        self.assertTrue((uploads / stale).exists())
+        self.login()
+        inventory = self.client.get('/admin', headers={'Accept': 'application/json'}).json
+        self.assertEqual(inventory['reference_retention_days'], 7)
+        entries = {e['key']: e for e in inventory['entries']}
+        self.assertTrue(entries[stale]['expired'])
+        self.assertFalse(entries[fresh]['expired'])
+        expires = datetime.fromisoformat(entries[fresh]['expires_at'])
+        self.assertLess(abs(expires - (now + timedelta(days=7))), timedelta(minutes=1))
+        actual = runner.invoke(args=['cleanup-results'])
+        self.assertEqual(actual.exit_code, 0, actual.output)
+        self.assertEqual([e['filename'] for e in library.list()], [fresh])
+        self.assertNotIn(stale, json.loads(Path(self.app.config['REFERENCE_CATALOG_FILE']).read_text()))
+
     def test_optional_admin_only_configuration(self):
         self.app.config['REFERENCE_PUBLIC_EDIT'] = False
         for route in ('/references/upload', '/references/configure', '/references/hash'):
@@ -225,3 +254,129 @@ class ReferenceHttpTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+T0 = datetime(2026, 11, 1, 12, tzinfo=timezone.utc)
+
+
+class ReferenceRetentionTests(unittest.TestCase):
+    """Shared references unused for REFERENCE_RETENTION_DAYS are removed by the retention job."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name).resolve()
+        self.uploads = self.root / 'uploads'
+        self.uploads.mkdir()
+        self.library = ReferenceLibrary(self.uploads, self.root / 'instance' / 'references.json')
+        self.storage = StorageMaintenance(self.uploads, reference_library=self.library)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def upload(self, when=T0, **kwargs):
+        with patch('scripts.reference_library.utcnow', return_value=when):
+            return self.library.upload(uploaded(**kwargs), 'Bju', True)['reference']['filename']
+
+    def entry(self, key, now):
+        return next(e for e in self.storage.inventory(now) if e['key'] == key)
+
+    def test_period_is_seven_days_unless_overridden_by_environment(self):
+        self.assertEqual(REFERENCE_RETENTION_DAYS, 7)
+        self.assertEqual(self.storage.reference_retention, timedelta(days=7))
+        for value, days in (('3', 3), ('0', 7), ('-2', 7), ('soon', 7)):
+            with patch.dict(os.environ, {'HCR_REFERENCE_RETENTION_DAYS': value}):
+                self.assertEqual(StorageMaintenance(self.uploads).reference_retention, timedelta(days=days))
+
+    def test_fresh_upload_is_kept_and_shows_its_expiry(self):
+        filename = self.upload()
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=1))['deleted'], [])
+        self.assertTrue((self.uploads / filename).exists())
+        entry = self.entry(filename, T0 + timedelta(days=1))
+        self.assertEqual(entry['modified_at'], T0.isoformat())
+        self.assertEqual(entry['expires_at'], (T0 + timedelta(days=7)).isoformat())
+        self.assertFalse(entry['expired'])
+
+    def test_seven_day_boundary_and_dry_run(self):
+        filename = self.upload()
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=7, seconds=-1))['deleted'], [])
+        preview = self.storage.cleanup(dry_run=True, now=T0 + timedelta(days=7))
+        self.assertEqual(preview['deleted'], [filename])
+        self.assertTrue((self.uploads / filename).exists())
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=7))['deleted'], [filename])
+        self.assertFalse((self.uploads / filename).exists())
+
+    def test_uses_reset_the_clock(self):
+        filename = self.upload()
+        service = SplitWorkflow(self.uploads, {'BP_1': 'A' * 19}, {}, {}, {}, reference_library=self.library)
+        with patch('scripts.reference_library.utcnow', return_value=T0 + timedelta(days=5)):
+            prepared = service.prepare(dict(input_mode='single', name='test', geneID='BjuVA01G1', bp_id='BP_1',
+                                            sequenceType='reference', reference_mode='existing',
+                                            existing_ref_genome=filename), {})
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=10))['deleted'], [])
+        with patch('scripts.reference_library.utcnow', return_value=T0 + timedelta(days=9)):
+            self.assertTrue(service.queue(prepared['id'], {}))
+        manifest_path = self.uploads / 'split_results' / prepared['id'] / 'request.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['status'] = 'completed'
+        manifest_path.write_text(json.dumps(manifest))
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=15, seconds=-1))['deleted'], [])
+        # A re-upload of the same content (also the legacy triplet path) and an explicit touch count as uses.
+        self.upload(when=T0 + timedelta(days=14), name='again.fa')
+        self.assertTrue(self.library.touch(filename, now=T0 + timedelta(days=20)))
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=27, seconds=-1))['deleted'], [])
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=27))['deleted'], [filename])
+
+    def test_references_in_use_symlinks_and_damaged_manifests_are_protected(self):
+        filename = self.upload()
+        later = T0 + timedelta(days=30)
+        job = self.uploads / 'split_results' / ('a' * 32)
+        job.mkdir(parents=True)
+        manifest = dict(id='a' * 32, status='queued', created_at=later.isoformat(),
+                        reference_path=str(self.uploads / filename))
+        (job / 'request.json').write_text(json.dumps(manifest))
+        report = self.storage.cleanup(now=later)
+        self.assertIn(filename, report['skipped'])
+        self.assertTrue((self.uploads / filename).exists())
+        (job / 'request.json').write_text('broken')
+        self.assertIn(filename, self.storage.cleanup(now=later)['skipped'])
+        (job / 'request.json').write_text(json.dumps(dict(manifest, status='completed')))
+        self.storage.legacy_active = 1  # a triplet request is in flight
+        self.assertIn(filename, self.storage.cleanup(now=later)['skipped'])
+        self.storage.legacy_active = 0
+        outside = self.root / 'outside.fa'
+        outside.write_bytes(FASTA)
+        (self.uploads / 'linked.fa').symlink_to(outside)
+        report = self.storage.cleanup(now=later)
+        self.assertEqual(report['deleted'], [filename])
+        self.assertTrue(outside.exists() and (self.uploads / 'linked.fa').is_symlink())
+
+    def test_legacy_reference_without_record_gets_a_grace_period(self):
+        legacy = self.uploads / 'legacy.fasta'
+        legacy.write_bytes(FASTA)
+        os.utime(legacy, (0, 0))  # file times never decide expiry
+        self.assertEqual(self.storage.cleanup(now=T0)['deleted'], [])
+        self.assertEqual(self.library._read()['legacy.fasta']['last_used_at'], T0.isoformat())
+        self.assertEqual(self.storage.cleanup(dry_run=True, now=T0 + timedelta(days=6))['deleted'], [])
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=7))['deleted'], ['legacy.fasta'])
+
+    def test_damaged_catalog_stops_automatic_expiry(self):
+        filename = self.upload()
+        self.library.catalog_path.write_text('[broken')
+        self.assertFalse(self.library.touch(filename))
+        self.assertEqual(self.storage.cleanup(now=T0 + timedelta(days=30))['deleted'], [])
+        self.assertTrue((self.uploads / filename).exists())
+
+    def test_expiry_removes_companion_files_and_catalog_entry(self):
+        with patch('scripts.reference_library.utcnow', return_value=T0):
+            filename = self.library.upload(uploaded(), 'Bju', True, uploaded('groups.csv', b'BjuVA01G1,A\n'))['reference']['filename']
+        companions = [filename + '.gz', filename + '.nhr', filename + '.00.nsq', filename + '.subgenomes.tsv']
+        for name in companions[:-1]:
+            (self.uploads / name).write_text('index')
+        kept = self.upload(when=T0 + timedelta(days=6), name='other.fa', data=FASTA.replace(b'G1', b'G2'))
+        self.assertEqual(self.entry(filename, T0)['file_count'], 5)
+        report = self.storage.cleanup(now=T0 + timedelta(days=7))
+        self.assertEqual(report['deleted'], [filename])
+        self.assertFalse(any((self.uploads / name).exists() for name in [filename] + companions))
+        self.assertNotIn(filename, self.library._read())
+        self.assertIn(kept, self.library._read())
+        self.assertEqual([e['filename'] for e in self.library.list()], [kept])
