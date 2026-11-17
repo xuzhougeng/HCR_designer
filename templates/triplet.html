@@ -4,6 +4,16 @@
 {% block eyebrow %}{{ _("设计") }}{% endblock %}
 {% block heading %}{{ _("三探针设计") }}{% endblock %}
 {% block lede %}{{ _("L/M/R 三段组合靶向同一转录本。单条按基因编号或序列设计，批量按 CSV 逐行设计，完成后下载结果 ZIP。") }}{% endblock %}
+{% block extra_css %}
+<style>
+.triplet-notice { white-space: normal; display: grid; gap: 8px; }
+.triplet-notice strong { font-size: 14px; }
+.triplet-notice ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.triplet-notice p { margin: 0; }
+.triplet-notice a { color: inherit; text-decoration: underline; }
+#triplet-result.is-done { border-color: var(--ok); }
+</style>
+{% endblock %}
 {% block head_actions %}
 <nav class="seg" aria-label="{{ _("输入数量") }}">
   <a href="{{ url_for('triplet') }}"{% if not batch %} aria-current="page"{% endif %}>{{ _("单条") }}</a>
@@ -12,7 +22,16 @@
 {% endblock %}
 
 {% block content %}
-<div class="alert notice">{{ _("三探针仍使用单臂 BLAST 的旧判定，尚未迁移到双探针的双臂配对扫描。结果请按候选看待。") }}</div>
+<section class="alert notice triplet-notice" id="triplet-notice" aria-labelledby="triplet-notice-title">
+  <strong id="triplet-notice-title">{{ _("三探针设计在本页同步运行，不是后台任务") }}</strong>
+  <ul>
+    <li>{{ _("计算期间请保持本页打开；关闭或刷新页面会丢失结果，需要重新提交。") }}</li>
+    <li>{{ _("结果不会出现在“任务记录”中。完成后浏览器会下载结果 ZIP，请及时保存。") }}</li>
+    {% if batch %}<li>{{ _("CSV 中的全部行在一次请求里逐行依次计算，总等待时间大致为单条用时乘以行数。") }}</li>{% endif %}
+    <li>{{ _("特异性仍使用单臂 BLAST 的旧判定，尚未迁移到双探针的双臂配对扫描。结果请按候选看待。") }}</li>
+  </ul>
+  <p>{{ _("需要关闭页面后继续计算、并在任务记录中保留 3 个月的设计，请使用") }} <a href="{{ url_for('split_batch' if batch else 'split') }}">{{ _("双探针设计") }}</a>{{ _("（后台任务）。") }}</p>
+</section>
 
 <form id="triplet-form" class="stack" action="{{ url_for('triplet_batch' if batch else 'triplet') }}" method="post" enctype="multipart/form-data" novalidate>
   {% if batch %}
@@ -73,7 +92,7 @@ task2,BP_1102,WUS,8</pre>
     <div class="panel-head"><div><h2 id="parameter-title"><span class="step-no">3</span>{{ _("参数") }}</h2><p>{{ _("默认值适用于大多数转录本。") }}</p></div></div>
     <div class="grid-3">
       <label class="field">{{ _("最多保留组合数") }}<input type="number" name="max_selected" value="5" min="1" max="10" step="1"><small>{% if batch %}{{ _("CSV 第 4 列优先") }}{% else %}1–10{% endif %}</small></label>
-      <label class="field">{{ _("相邻组合最小间距（nt）") }}<input type="number" name="min_gap" value="{{ 2 if batch else 15 }}" min="0" step="1"></label>
+      <label class="field">{{ _("相邻组合最小间距（nt）") }}<input type="number" name="min_gap" value="15" min="0" step="1" readonly aria-describedby="min-gap-hint"><small id="min-gap-hint">{{ _("三探针目前固定按 15 nt 选择组合，此项暂不可修改") }}</small></label>
       <label class="field">{{ _("最小互补长度（nt）") }}<input type="number" name="min_complementary_length" value="5" min="4" max="8" step="1"><small>4–8</small></label>
     </div>
     <details class="disclosure">
@@ -91,7 +110,7 @@ task2,BP_1102,WUS,8</pre>
       </div>
     </details>
     <div class="actions">
-      <span>{{ _("计算在服务器上同步完成，期间请保持本页打开") }}</span>
+      <span>{% if batch %}{{ _("同步计算：全部行逐行完成后才下载 ZIP，期间请保持本页打开") }}{% else %}{{ _("同步计算：请保持本页打开，直到 ZIP 下载完成") }}{% endif %}</span>
       <div><button type="submit" class="btn primary" id="submit-button"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("开始设计并下载 ZIP") }}</button></div>
     </div>
   </section>
@@ -100,8 +119,11 @@ task2,BP_1102,WUS,8</pre>
 <div id="triplet-status" class="alert" role="status" aria-live="polite" hidden></div>
 
 <section class="panel" id="triplet-result" hidden aria-labelledby="result-title">
-  <div class="panel-head"><div><h2 id="result-title">{{ _("设计完成") }}</h2><p id="result-detail"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("再次下载") }}</button></div>
+  <div class="panel-head"><div><h2 id="result-title">{{ _("设计完成，ZIP 已交给浏览器下载") }}</h2><p id="result-detail"></p></div><button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("再次下载") }}</button></div>
   <ul class="note-list">
+    <li>{{ _("ZIP 已保存到浏览器的默认下载位置；没有看到时请查看浏览器的下载列表。") }}</li>
+    <li>{{ _("“再次下载”只在本页打开期间有效。关闭或刷新本页后结果无法找回，需要重新提交计算。") }}</li>
+    <li>{{ _("该结果不会出现在“任务记录”中。") }}</li>
     <li>{{ _("ZIP 内每个任务包含探针序列 CSV、BED 坐标与详细报告。") }}</li>
     <li>{{ _("修改参数后可直接再次提交，不需要刷新页面。") }}</li>
   </ul>
@@ -120,6 +142,11 @@ task2,BP_1102,WUS,8</pre>
   const existing = document.getElementById('existing-reference');
   const upload = document.getElementById('reference-file');
   let source = 'gene', lastFile = null;
+  const warnBeforeLeaving = event => {
+    event.preventDefault();
+    event.returnValue = '';
+    return '';
+  };
 
   function syncReference() {
     existing.disabled = upload.files.length > 0;
@@ -178,8 +205,13 @@ task2,BP_1102,WUS,8</pre>
     const started = Date.now();
     submit.disabled = true;
     document.getElementById('triplet-result').hidden = true;
-    HCR.setAlert(status, HCR.t("正在生成候选并检查背景序列……"), 'busy');
-    const timer = setInterval(() => HCR.setAlert(status, HCR.t("正在生成候选并检查背景序列……已用时 ") + Math.round((Date.now() - started) / 1000) + ' s', 'busy'), 1000);
+    lastFile = null;
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    const running = batch ? HCR.t("正在逐行计算 CSV 中的全部任务……") : HCR.t("正在生成候选并检查背景序列……");
+    const keepOpen = HCR.t("请勿关闭或刷新本页，否则结果会丢失。");
+    const showProgress = () => HCR.setAlert(status, running + ' ' + HCR.t("已用时 {seconds} s", {seconds: Math.round((Date.now() - started) / 1000)}) + '\n' + keepOpen, 'busy');
+    showProgress();
+    const timer = setInterval(showProgress, 1000);
     try {
       const result = await HCR.postForFile(form.action, data, batch ? 'triplet_batch_results.zip' : 'triplet_results.zip');
       lastFile = result;
@@ -191,11 +223,13 @@ task2,BP_1102,WUS,8</pre>
       if (done !== null) detail += HCR.t(" · 完成 ") + done + HCR.t(" 个任务") + (Number(skipped) ? HCR.t("，跳过 ") + skipped + HCR.t(" 个（见 skipped_tasks.tsv）") : '');
       document.getElementById('result-detail').textContent = detail;
       document.getElementById('triplet-result').hidden = false;
-      HCR.setAlert(status, '');
+      document.getElementById('triplet-result').classList.add('is-done');
+      HCR.setAlert(status, HCR.t("已完成：{name} 已交给浏览器下载。关闭本页前请确认文件已保存。", {name: result.filename}), 'success');
     } catch (error) {
       HCR.setAlert(status, error.message, 'error');
     } finally {
       clearInterval(timer);
+      window.removeEventListener('beforeunload', warnBeforeLeaving);
       submit.disabled = false;
     }
   });

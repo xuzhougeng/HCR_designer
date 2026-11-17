@@ -42,6 +42,13 @@
   };
 
   /* ---------------- progress ---------------- */
+  // Which task and stage a failed job stopped at; jobs saved before this was recorded have neither.
+  function failurePlace(job) {
+    const stage = job.failed_stage_label ? HCR.t(job.failed_stage_label) : '';
+    if (job.failed_task) return HCR.t("失败位置：任务 {v0} · {v1}", {v0: job.failed_task, v1: stage || HCR.t("计算中")});
+    return stage ? HCR.t("失败位置：{v0}", {v0: stage}) : '';
+  }
+
   function followProgress() {
     let current = status, timer = null;
     const started = () => Date.parse(current.started_at || current.queued_at || current.created_at);
@@ -65,7 +72,7 @@
       let detail;
       if (state === 'queued') detail = current.queue_position ? HCR.t("前面还有 ") + current.queue_position + HCR.t(" 个任务") : HCR.t("等待后台开始");
       else if (state === 'running') detail = (progress.task_name ? progress.task_name + ' · ' : '') + (HCR.t(progress.label) || HCR.t("计算中"));
-      else if (state === 'failed') detail = HCR.t("任务失败");
+      else if (state === 'failed') detail = failurePlace(current) || HCR.t("任务失败");
       else if (state === 'interrupted') detail = HCR.t("任务被中断");
       else detail = HCR.t("已完成，正在打开结果……");
       byId('progress-detail').textContent = detail;
@@ -378,7 +385,7 @@
     }
 
     function strip(probe) {
-      const cell = el('td');
+      const cell = el('td', undefined, 'c-near');
       if (!assessed(probe)) { cell.append(el('span', HCR.t("未评估"), 'hint')); return cell; }
       const near = closest(probe);
       if (!near) { cell.append(el('span', HCR.t("当前检索未检出"), 'hint')); return cell; }
@@ -391,7 +398,12 @@
       paint(probe.left_probe.sequence.length, near.left_mismatch_positions_probe_5to3 || [], 'l');
       bar.append(el('span', undefined, 'gap'));
       paint(probe.right_probe.sequence.length, near.right_mismatch_positions_probe_5to3 || [], 'r');
-      cell.append(bar, el('span', near.subject_id + ' · ' + (RELATIONS[near.relation] || near.relation) + ' · L ' + near.left_mismatches + ' / R ' + near.right_mismatches, 'strip-label'));
+      /* subject may truncate (full ID in the tooltip); relation may wrap; L/R counts always stay whole */
+      const label = el('span', undefined, 'strip-label'), subject = el('span', near.subject_id, 'strip-subject');
+      subject.title = near.subject_id;
+      label.append(subject, el('span', ' · ' + (RELATIONS[near.relation] || near.relation)),
+        el('span', ' · L ' + near.left_mismatches + ' / R ' + near.right_mismatches, 'strip-counts'));
+      cell.append(bar, label);
       return cell;
     }
 
@@ -434,20 +446,24 @@
       const empty = byId('empty-results');
       empty.hidden = rows.length > 0;
       empty.textContent = task.probe_sets.length ? HCR.t("这个范围内没有候选。可切换显示范围或清除位置筛选。") : HCR.t("当前参数未生成候选。可调整臂长、Tm 或 GC 范围后重新设计。");
+      /* column names double as inline labels when the table collapses into stacked rows (results.css) */
+      const headers = [...document.querySelectorAll('.candidate-table thead th')].map(th => th.textContent.trim());
       displayed.forEach(q => {
-        const row = el('tr'); if (selected === q) row.className = 'is-selected';
-        const id = el('td'); id.append(el('code', task.name + '-' + q.id));
+        const row = el('tr'); row.setAttribute('role', 'row'); if (selected === q) row.className = 'is-selected';
+        const name = task.name + '-' + q.id, code = el('code', name); code.title = name;
+        const id = el('td', undefined, 'c-id'); id.append(code);
         const [state, label] = stateOf(q);
-        const st = el('td'); st.append(el('span', label, 'status-pill ' + (state === 'keep' ? '' : state)));
+        const st = el('td', undefined, 'c-status'); st.append(el('span', label, 'status-pill ' + (state === 'keep' ? '' : state)));
         const [a, b] = span(q);
-        const actions = el('td'); const box = el('div', undefined, 'row-actions');
+        const actions = el('td', undefined, 'c-actions'); const box = el('div', undefined, 'row-actions');
         const view = el('button', HCR.t("证据"), 'btn small'); view.type = 'button';
         view.addEventListener('click', () => select(q));
         const inOrder = HCR.orders.has(orderKey(q));
         const add = el('button', inOrder ? HCR.t("已加入") : HCR.t("加入清单"), 'btn small' + (inOrder ? ' in-order' : '')); add.type = 'button';
         add.addEventListener('click', () => HCR.orders.toggle(orderItem(q)));
         box.append(view, add); actions.append(box);
-        row.append(id, el('td', a + '–' + b, 'num'), st, strip(q), el('td', REASONS[q.reason_code] || q.reason || '—'), actions);
+        row.append(id, el('td', a + '–' + b, 'num c-pos'), st, strip(q), el('td', REASONS[q.reason_code] || q.reason || '—', 'c-reason'), actions);
+        [...row.cells].forEach((cell, i) => { cell.setAttribute('role', 'cell'); if (headers[i]) cell.dataset.label = headers[i]; });
         body.append(row);
       });
       updateEvidenceNavigation(rows);
@@ -502,11 +518,14 @@
       renderSequence(probe, matches);
 
       const body = byId('evidence-matches'); body.replaceChildren();
+      const headers = [...document.querySelectorAll('.hits-table thead th')].map(th => th.textContent.trim());
       matches.forEach(hit => {
-        const row = el('tr');
+        const row = el('tr'); row.setAttribute('role', 'row');
         [hit.subject_id, (RELATIONS[hit.relation] || hit.relation) + (hit.subject_subgenome ? ' · ' + hit.subject_subgenome : ''),
          hit.left_start + '–' + hit.left_end + ' / ' + hit.left_mismatches, hit.right_start + '–' + hit.right_end + ' / ' + hit.right_mismatches,
-         hit.strand + ' / ' + hit.gap + ' nt'].forEach(v => row.append(el('td', v)));
+         hit.strand + ' / ' + hit.gap + ' nt'].forEach((v, i) => {
+          const cell = el('td', v); cell.setAttribute('role', 'cell'); cell.dataset.label = headers[i]; row.append(cell);
+        });
         body.append(row);
       });
       panel.hidden = false;

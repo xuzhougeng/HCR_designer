@@ -14,6 +14,8 @@ import subprocess
 import tempfile
 import time
 
+from .job_errors import ReferenceMissingError
+
 SOURCE = Path(__file__).resolve().with_name('paired_scan.cpp')
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 METHOD = 'exhaustive ungapped substitution scan (pigeonhole seeds on the longer arm, full verification of both arms)'
@@ -22,7 +24,22 @@ COLUMNS = ['key', 'subject', 'l_start', 'l_end', 'r_start', 'r_end', 'mm_l', 'mm
 
 
 class ScanError(RuntimeError):
-    """The scan did not complete; callers must not treat this as a clean result."""
+    """The scan did not complete; callers must not treat this as a clean result.
+
+    ``returncode`` and ``stderr`` are set when the scanner process itself failed.
+    """
+
+    def __init__(self, message, returncode=None, stderr=None):
+        super().__init__(message)
+        self.returncode, self.stderr = returncode, stderr
+
+
+class ScanTimeout(ScanError):
+    """The scan ran longer than the allowed time."""
+
+
+class ScannerUnavailable(ScanError, FileNotFoundError):
+    """No usable scanner binary: HCR_SCAN_BIN is wrong, no C++ compiler, or the build failed."""
 
 
 def scanner_executable():
@@ -31,18 +48,22 @@ def scanner_executable():
         candidate = Path(configured)
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
-        raise FileNotFoundError(f'HCR_SCAN_BIN={configured} is not an executable file')
+        raise ScannerUnavailable(f'HCR_SCAN_BIN={configured} is not an executable file')
     digest = hashlib.sha256(SOURCE.read_bytes()).hexdigest()[:16]
     binary = PROJECT_ROOT / '.tools' / 'paired_scan' / digest / 'paired_scan'
     if binary.is_file() and os.access(binary, os.X_OK):
         return str(binary)
     compiler = next((c for c in (os.environ.get('CXX'), 'c++', 'g++', 'clang++') if c and shutil.which(c)), None)
     if not compiler:
-        raise FileNotFoundError('No C++ compiler found to build paired_scan; set HCR_SCAN_BIN to a prebuilt binary')
+        raise ScannerUnavailable('No C++ compiler found to build paired_scan; set HCR_SCAN_BIN to a prebuilt binary')
     binary.parent.mkdir(parents=True, exist_ok=True)
     temporary = binary.with_name('paired_scan.partial')
-    subprocess.run([compiler, '-std=c++17', '-O2', '-o', str(temporary), str(SOURCE)],
-                   check=True, capture_output=True, text=True)
+    try:
+        subprocess.run([compiler, '-std=c++17', '-O2', '-o', str(temporary), str(SOURCE)],
+                       check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ScannerUnavailable(f'Building paired_scan with {compiler} failed: '
+                                 f'{(getattr(error, "stderr", None) or error)}') from error
     temporary.replace(binary)
     return str(binary)
 
@@ -62,7 +83,7 @@ def scan_pairs(pairs, reference_path, max_substitutions=3, timeout=None):
     """
     reference_path = Path(reference_path).resolve()
     if not reference_path.is_file():
-        raise FileNotFoundError(f'Reference FASTA not found: {reference_path}')
+        raise ReferenceMissingError(f'Reference FASTA not found: {reference_path}')
     distinct = list(dict.fromkeys((str(l), str(r), int(g)) for l, r, g in pairs))
     for left, right, gap in distinct:
         if gap < 0 or set(left + right) - set('ACGT') or min(len(left), len(right)) < max_substitutions + 1:
@@ -92,9 +113,10 @@ def scan_pairs(pairs, reference_path, max_substitutions=3, timeout=None):
                 completed = subprocess.run([binary, str(queries), str(reference_path), str(output), str(max_substitutions)],
                                            capture_output=True, text=True, timeout=timeout)
             except subprocess.TimeoutExpired as error:
-                raise ScanError(f'paired_scan exceeded {timeout} s on {reference_path.name}') from error
+                raise ScanTimeout(f'paired_scan exceeded {timeout} s on {reference_path.name}') from error
             if completed.returncode != 0:
-                raise ScanError(f'paired_scan failed (exit {completed.returncode}): {completed.stderr.strip()}')
+                raise ScanError(f'paired_scan failed (exit {completed.returncode}): {completed.stderr.strip()}',
+                                completed.returncode, completed.stderr)
             lines = output.read_text().splitlines()
             if len(lines) < 2 or lines[0] != '\t'.join(COLUMNS) or not lines[-1].startswith('#DONE'):
                 raise ScanError('paired_scan output is incomplete; the scan did not finish')

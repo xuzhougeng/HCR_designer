@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 
 from .blast_runtime import blast_executable
+from .job_errors import ReferenceFastaError, ReferenceMissingError, ToolFailedError, ToolUnavailableError
 from .paired_scan import scan_pairs, METHOD as SCAN_METHOD
 from .reference_annotation import load_subgenome_map
 
@@ -144,26 +145,32 @@ def _reference_sequences(path, mtime_ns, size):
     def retain():
         if name is not None:
             if name in sequences:
-                raise ValueError(f'Duplicate reference ID: {name}')
+                raise ReferenceFastaError(f'Duplicate reference ID: {name}', 'duplicate_id', name)
             sequences[name] = ''.join(parts).upper()
     with open(path) as handle:
         for line in handle:
             if line.startswith('>'):
                 retain()
-                name, parts = line[1:].split()[0], []
+                fields = line[1:].split()
+                if not fields:
+                    raise ReferenceFastaError('FASTA header without an ID', 'missing_id')
+                name, parts = fields[0], []
             elif line.strip():
                 if name is None:
-                    raise ValueError('FASTA sequence precedes its header')
+                    raise ReferenceFastaError('FASTA sequence precedes its header', 'sequence_before_header')
                 parts.append(line.strip())
         retain()
     if not sequences:
-        raise ValueError('Reference FASTA is empty')
+        raise ReferenceFastaError('Reference FASTA is empty', 'no_sequences')
     return sequences
 
 
 def load_reference(path):
     path = Path(path).resolve()
-    stat = path.stat()
+    try:
+        stat = path.stat()
+    except FileNotFoundError as error:
+        raise ReferenceMissingError(f'Reference FASTA not found: {path}') from error
     return _reference_sequences(str(path), stat.st_mtime_ns, stat.st_size)
 
 
@@ -249,13 +256,21 @@ def _analyze_probe_sequences_serial(probe_sequences, reference_path, num_threads
     with tempfile.TemporaryDirectory(prefix='hcr-paired-') as directory:
         fasta = Path(directory) / 'queries.fasta'
         fasta.write_text(''.join(f'>{key}\n{sequence}\n' for key, sequence in queries.items()))
-        command = [blast_executable('blastn'), '-query', str(fasta), '-db', str(reference_path),
+        try:
+            blastn = blast_executable('blastn')
+        except FileNotFoundError as error:
+            raise ToolUnavailableError('blastn', str(error)) from error
+        command = [blastn, '-query', str(fasta), '-db', str(reference_path),
                    '-task', 'blastn-short', '-word_size', '7', '-dust', 'no',
                    '-soft_masking', 'false', '-strand', 'plus', '-ungapped',
                    '-evalue', '1000', '-max_target_seqs', str(max(1, len(reference))),
                    '-num_threads', str(max(1, min(num_threads, os.cpu_count() or 1))),
                    '-outfmt', '6 qseqid sseqid qlen qstart qend sstart send length nident mismatch gaps gapopen qseq sseq']
-        result = subprocess.run(command, text=True, capture_output=True, check=True)
+        try:
+            result = subprocess.run(command, text=True, capture_output=True, check=True)
+        except subprocess.CalledProcessError as error:
+            raise ToolFailedError('blastn', error.returncode, error.cmd, error.output, error.stderr,
+                                  f'blastn failed (exit {error.returncode}): {(error.stderr or "").strip()}') from error
         hits = parse_seed_hits(result.stdout, queries, reference)
     return {sequence: {
         'status': 'completed', 'method': ARM_METHOD,
