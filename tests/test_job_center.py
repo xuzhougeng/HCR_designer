@@ -43,7 +43,7 @@ class JobCenterTests(unittest.TestCase):
         self.app = Flask(__name__, template_folder=str(REPO / 'templates'), static_folder=str(REPO / 'static'))
         self.app.config.update(TESTING=True, UPLOAD_FOLDER=str(self.root))
         for endpoint in ['index', 'triplet', 'triplet_batch', 'bridge', 'bridge_list', 'bridge_query', 'bridge_sequence',
-                         'bridge_analyze', 'bridge_validate', 'formatting', 'subgenomes', 'references', 'probe_recommend', 'filter', 'help', 'orders']:
+                         'bridge_analyze', 'bridge_validate', 'formatting', 'subgenomes', 'references', 'probe_recommend', 'probe_selector', 'filter', 'help', 'orders']:
             self.app.add_url_rule('/' + endpoint, endpoint, lambda: 'placeholder')
         self.service_args = ({'BP_0079': 'A' * 19}, {'BjuTarget': SEQ}, {}, {})
         register_split_routes(self.app, *self.service_args, lambda: [])

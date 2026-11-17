@@ -15,8 +15,9 @@
     <table class="table">
       <thead><tr><th>{{ _("分组") }}</th><th>{{ _("工具") }}</th><th>{{ _("用途") }}</th><th>{{ _("输出") }}</th></tr></thead>
       <tbody>
-        <tr><td rowspan="2">{{ _("设计") }}</td><td><a href="{{ url_for('split') }}">{{ _("双探针设计") }}</a></td><td>{{ _("L/R 两臂相邻结合目标转录本；在参考库中做双臂配对扫描，按目标策略筛选") }}</td><td>{{ _("页面内逐对证据 + 结果 ZIP") }}</td></tr>
+        <tr><td rowspan="3">{{ _("设计") }}</td><td><a href="{{ url_for('split') }}">{{ _("双探针设计") }}</a></td><td>{{ _("L/R 两臂相邻结合目标转录本；在参考库中做双臂配对扫描，按目标策略筛选") }}</td><td>{{ _("页面内逐对证据 + 结果 ZIP") }}</td></tr>
         <tr><td><a href="{{ url_for('triplet') }}">{{ _("三探针设计") }}</a></td><td>{{ _("L/M/R 三段组合；特异性按单臂 BLAST 判定") }}</td><td>{{ _("结果 ZIP（在页面中同步计算并下载，不进入任务记录）") }}</td></tr>
+        <tr><td><a href="{{ url_for('probe_selector') }}">{{ _("按 TPM 挑选") }}</a></td><td>{{ _("按 TPM 决定每个基因的探针对数，从已完成任务或结果 ZIP 的全部候选中挑选，修正 L 探针 5′ 端碱基") }}</td><td>{{ _("Excel（selected_probes_v3.xlsx）") }}</td></tr>
         <tr><td rowspan="4">{{ _("桥接探针库") }}</td><td><a href="{{ url_for('bridge_list') }}">{{ _("浏览探针库") }}</a></td><td>{{ _("查看、搜索和导出全部桥接探针") }}</td><td>CSV</td></tr>
         <tr><td><a href="{{ url_for('bridge_query') }}">{{ _("冲突检查") }}</a></td><td>{{ _("按 BP_ID、按新序列或多条互查共享 k-mer（含反向互补）") }}</td><td>{{ _("页面表格 + TSV") }}</td></tr>
         <tr><td><a href="{{ url_for('bridge') }}">{{ _("推荐新探针") }}</a></td><td>{{ _("挑选与在用探针及彼此之间都无冲突的新探针") }}</td><td>{{ _("页面表格 + TSV") }}</td></tr>

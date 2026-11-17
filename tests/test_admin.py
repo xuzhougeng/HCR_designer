@@ -196,7 +196,7 @@ class AdminTests(unittest.TestCase):
                                ADMIN_CREDENTIALS_FILE=str(self.root / 'instance' / 'admin.json'))
         (self.root / 'uploads').mkdir()
         for name in ('index', 'split', 'split_batch', 'triplet', 'triplet_batch', 'jobs', 'orders', 'bridge_list',
-                     'bridge_query', 'bridge', 'bridge_validate', 'formatting', 'subgenomes', 'references', 'probe_recommend', 'filter', 'help'):
+                     'bridge_query', 'bridge', 'bridge_validate', 'formatting', 'subgenomes', 'references', 'probe_recommend', 'probe_selector', 'filter', 'help'):
             self.app.add_url_rule('/' + name, name, lambda: 'placeholder')
         register_admin(self.app)
         self.client = self.app.test_client()
