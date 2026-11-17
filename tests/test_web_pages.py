@@ -50,6 +50,31 @@ class WorkbenchShellTests(unittest.TestCase):
                 # The intranet server may have no internet access: no third-party assets.
                 self.assertNotRegex(page, r'<(link|script)[^>]+(href|src)="https?://')
 
+    def test_triplet_pages_explain_they_are_not_background_jobs(self):
+        expected = {
+            'zh': ('三探针设计在本页同步运行，不是后台任务', '关闭或刷新页面会丢失结果', '任务记录',
+                   '下载结果 ZIP', '单臂 BLAST', '逐行依次计算'),
+            'en': ('Triplet design runs in this page, not as a background job', 'Closing or reloading the page loses the result',
+                   'Job history', 'downloads the result ZIP', 'single-arm BLAST', 'one row after another'),
+        }
+        for language, texts in expected.items():
+            for path, dual in (('/triplet', '/split"'), ('/triplet/batch', '/split/batch"')):
+                with self.subTest(language=language, path=path):
+                    page = self.client.get(path + '?lang=' + language).get_data(as_text=True)
+                    notice = re.search(r'<section class="alert notice triplet-notice".*?</section>', page, re.S)
+                    self.assertIsNotNone(notice)
+                    notice = notice.group(0)
+                    for text in texts[:-1]:
+                        self.assertIn(text, notice)
+                    self.assertEqual(texts[-1] in notice, path.endswith('batch'))
+                    self.assertIn('href="' + dual, notice)
+                    # One merged notice: the old standalone BLAST banner is gone.
+                    self.assertEqual(page.count('class="alert notice'), 1)
+                    # The page warns before leaving only while a request runs.
+                    self.assertIn("addEventListener('beforeunload'", page)
+                    self.assertIn("removeEventListener('beforeunload'", page)
+                    self.assertRegex(page, r'name="min_gap" value="15"[^>]*readonly')
+
     def test_home_reports_library_size(self):
         page = self.client.get('/').get_data(as_text=True)
         self.assertIn('{:,} 条'.format(len(web.bridge_seq_dict)), page)

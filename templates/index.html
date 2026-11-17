@@ -79,7 +79,7 @@
     <div class="tool-group">
       <h3>{{ _("设计") }}</h3>
       <a class="tool" href="{{ url_for('split') }}"><svg aria-hidden="true"><use href="#i-split"/></svg><strong>{{ _("双探针设计") }}</strong><span>{{ _("L/R 两臂配对，单条与批量共用一个向导，逐对给出配对证据和筛选原因。") }}</span></a>
-      <a class="tool" href="{{ url_for('triplet') }}"><svg aria-hidden="true"><use href="#i-triplet"/></svg><strong>{{ _("三探针设计") }} <span class="chip warn">{{ _("旧规则") }}</span></strong><span>{{ _("L/M/R 三段组合，单条或 CSV 批量；特异性仍按单臂 BLAST 判定。") }}</span></a>
+      <a class="tool" href="{{ url_for('triplet') }}"><svg aria-hidden="true"><use href="#i-triplet"/></svg><strong>{{ _("三探针设计") }} <span class="chip warn">{{ _("旧规则") }}</span></strong><span>{{ _("L/M/R 三段组合，单条或 CSV 批量；在页面中同步计算，不进入任务记录；特异性仍按单臂 BLAST 判定。") }}</span></a>
     </div>
     <div class="tool-group">
       <h3>{{ _("桥接探针库") }}</h3>
