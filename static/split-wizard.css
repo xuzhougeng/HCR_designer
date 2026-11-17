@@ -6,12 +6,15 @@
 .split-workspace code { font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
 
 .wizard-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
-.wizard-steps button { display: flex; align-items: center; gap: 12px; padding: 10px 4px 15px; border: 0; border-bottom: 2px solid var(--line); background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
-.wizard-steps button > span { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line-strong); border-radius: 50%; flex-shrink: 0; font: 500 12px var(--mono); }
-.wizard-steps button small { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+.wizard-steps button, .wizard-step-auto { display: flex; align-items: center; gap: 12px; padding: 10px 4px 15px; border: 0; border-bottom: 2px solid var(--line); background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
+.wizard-steps button > span, .wizard-step-auto > span { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line-strong); border-radius: 50%; flex-shrink: 0; font: 500 12px var(--mono); }
+.wizard-steps button small, .wizard-step-auto small { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; font-weight: 400; }
 .wizard-steps button[aria-current] { border-color: var(--accent); color: var(--ink); font-weight: 600; }
 .wizard-steps button[aria-current] > span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .wizard-steps button:disabled { cursor: default; opacity: .6; }
+/* Step 3 is not navigable: the result page opens on its own after submission. */
+.wizard-step-auto { cursor: default; border-bottom-style: dashed; }
+.wizard-step-auto > span { border-style: dashed; }
 
 .wizard-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px 20px; flex-wrap: wrap; margin-bottom: 22px; }
@@ -33,8 +36,13 @@
 .bridge-preview code { letter-spacing: .04em; }
 .reference-note, .scope-note { font-size: 12.5px; color: var(--muted); line-height: 1.65; }
 .reference-note { padding: 12px 14px; background: var(--sunk); border-radius: var(--radius-sm); margin-bottom: 18px; white-space: pre-line; }
-.scope-note { border-top: 1px solid var(--line); padding-top: 16px; }
-.scope-note p { margin: 0 0 8px; }
+.scope-note { border-top: 1px solid var(--line); padding-top: 14px; }
+.scope-note p { margin: 8px 0 0; }
+.field-details { font-size: 12.5px; color: var(--muted); line-height: 1.65; margin: -6px 0 16px; }
+.field-details summary { color: var(--ink); }
+.field-details ul { margin: 8px 0 0; padding-left: 18px; }
+.wizard-caveats { margin-top: 22px; padding: 12px 16px; border-radius: 6px; color: var(--warn); background: var(--warn-soft); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+.wizard-caveats ul { margin: 0; padding-left: 18px; display: flex; flex-wrap: wrap; gap: 2px 26px; }
 .text-link { display: inline-block; margin-bottom: 14px; font-size: 12.5px; }
 
 .wizard-button { display: inline-flex; gap: 10px; justify-content: center; align-items: center; padding: 9px 16px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; text-decoration: none; cursor: pointer; }
@@ -102,9 +110,9 @@
 @media (max-width: 600px) {
   .wizard-panel { padding: 18px 16px; }
   .wizard-steps { gap: 6px; margin-bottom: 16px; }
-  .wizard-steps button { gap: 7px; font-size: 12px; }
-  .wizard-steps button small { display: none; }
-  .wizard-steps button > span { width: 24px; height: 24px; }
+  .wizard-steps button, .wizard-step-auto { gap: 7px; font-size: 12px; }
+  .wizard-steps button small, .wizard-step-auto small { display: none; }
+  .wizard-steps button > span, .wizard-step-auto > span { width: 24px; height: 24px; }
   .field-grid, .advanced-parameters > .field-grid { grid-template-columns: 1fr; }
   .wizard-actions > button { flex-grow: 1; }
   .result-actions { width: 100%; }

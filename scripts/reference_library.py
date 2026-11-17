@@ -1,5 +1,6 @@
 """Shared FASTA catalog, ploidy configuration and content-based upload deduplication."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import math
 import gzip
 import hashlib
 import json
@@ -10,14 +11,43 @@ import tempfile
 
 from werkzeug.utils import secure_filename
 
-from scripts.storage_maintenance import STORAGE_LOCK, utcnow
+from scripts.storage_maintenance import STORAGE_LOCK, reference_retention_days, utcnow
 from src.common.reference_annotation import SubgenomeAnnotation, format_subgenome_map, parse_subgenome_map
 
 
 class ReferenceLibrary:
-    def __init__(self, upload_root, catalog_path):
+    def __init__(self, upload_root, catalog_path, retention=None):
         self.root = Path(upload_root).resolve()
         self.catalog_path = Path(catalog_path)
+        # The retention job's period (a timedelta); None reads the same setting the job uses.
+        self.retention = retention
+
+    def retention_period(self):
+        return self.retention or timedelta(days=reference_retention_days())
+
+    def _expiry(self, metadata, now, retention):
+        """Read-only view of when the retention job may delete a reference.
+
+        No usage record yet means the job starts the clock on its next run, so the full period remains.
+        A damaged record shows no expiry rather than a guess.
+        """
+        if metadata is None:
+            return dict(last_used_at=None, expires_at=None, days_left=None, expiring_soon=False)
+        stamp = metadata.get('last_used_at')
+        if stamp is None:
+            used, last_used_at = now, None
+        else:
+            try:
+                used = datetime.fromisoformat(stamp)
+            except (TypeError, ValueError):
+                return dict(last_used_at=None, expires_at=None, days_left=None, expiring_soon=False)
+            if used.tzinfo is None:
+                used = used.replace(tzinfo=timezone.utc)
+            last_used_at = used.isoformat()
+        expires = used + retention
+        remaining = (expires - now).total_seconds()
+        return dict(last_used_at=last_used_at, expires_at=expires.isoformat(),
+                    days_left=max(0, math.ceil(remaining / 86400)), expiring_soon=remaining <= 86400)
 
     def _read(self):
         if not self.catalog_path.exists():
@@ -96,15 +126,27 @@ class ReferenceLibrary:
         stat = path.stat()
         return dict(size=stat.st_size, mtime_ns=stat.st_mtime_ns, ctime_ns=stat.st_ctime_ns, inode=stat.st_ino)
 
-    def list(self):
+    def list(self, now=None):
+        """Catalog view for pages; never writes, and a damaged catalog only hides what it cannot vouch for."""
+        now = now or utcnow()
+        retention = self.retention_period()
         with STORAGE_LOCK:
-            records = self._read()
+            try:
+                records, damaged = self._read(), False
+            except ValueError:
+                records, damaged = {}, True
             listing = []
             for path in self._files():
                 metadata = records.get(path.name, {})
+                if damaged or not isinstance(metadata, dict):
+                    expiry, metadata = self._expiry(None, now, retention), {}
+                else:
+                    expiry = self._expiry(metadata, now, retention)
+                annotation = metadata.get('subgenome')
+                if not isinstance(annotation, dict):
+                    annotation = None
                 current = self._fingerprint(path)
                 verified = metadata.get('fingerprint') == current
-                annotation = metadata.get('subgenome')
                 annotation_path = self.root / (path.name + '.subgenomes.tsv')
                 annotation_ready = bool(annotation and annotation.get('reference_fingerprint') == current
                                         and annotation_path.is_file() and not annotation_path.is_symlink())
@@ -113,7 +155,7 @@ class ReferenceLibrary:
                                     sequence_count=metadata.get('sequence_count') if verified else None,
                                     size=current['size'], uploaded_at=metadata.get('uploaded_at'),
                                     subgenome={k: v for k, v in annotation.items() if k != 'reference_fingerprint'} if annotation else None,
-                                    subgenome_ready=annotation_ready))
+                                    subgenome_ready=annotation_ready, **expiry))
             return listing
 
     def path(self, filename):

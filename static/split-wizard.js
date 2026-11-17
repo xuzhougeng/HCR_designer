@@ -24,7 +24,7 @@
     root.querySelectorAll('[data-step]').forEach(button => {
       const n = Number(button.dataset.step);
       if (n === step) button.setAttribute('aria-current', 'step'); else button.removeAttribute('aria-current');
-      button.disabled = busy || (n === 2 && !prepared) || n === 3;
+      button.disabled = busy || (n === 2 && !prepared);
     });
   }
   function syncInput() {
