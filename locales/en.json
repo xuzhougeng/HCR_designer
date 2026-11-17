@@ -153,6 +153,7 @@
   "只看不合格": "Failed only",
   "编号": "ID",
   "原因": "Reason",
+  "操作": "Actions",
   "合格": "Passed",
   "不合格": "Failed",
   "AI 筛选 · Probe Designer": "AI filtering · Probe Designer",

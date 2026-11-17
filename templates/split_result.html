@@ -81,11 +81,11 @@
     </select></label>
     <label class="field">{{ _("排序") }}<select id="result-sort"><option value="position">{{ _("按位置") }}</option><option value="risk">{{ _("最接近的非目标配对优先") }}</option><option value="rank">{{ _("按评分") }}</option></select></label>
     <span class="count" id="visible-count"></span>
-    <button type="button" class="btn small" id="candidate-back">{{ _("上一页") }}</button><button type="button" class="btn small" id="candidate-next">{{ _("下一页") }}</button>
+    <span class="pager"><button type="button" class="btn small" id="candidate-back">{{ _("上一页") }}</button><button type="button" class="btn small" id="candidate-next">{{ _("下一页") }}</button></span>
   </div>
-  <div class="table-wrap tall"><table class="table candidate-table">
-    <thead><tr><th>{{ _("探针对") }}</th><th>{{ _("位置") }}</th><th>{{ _("状态") }}</th><th>{{ _("最近非目标配对") }}</th><th>{{ _("原因") }}</th><th></th></tr></thead>
-    <tbody id="candidate-rows"></tbody>
+  <div class="table-wrap tall candidate-wrap"><table class="table candidate-table" role="table">
+    <thead role="rowgroup"><tr role="row"><th role="columnheader">{{ _("探针对") }}</th><th role="columnheader">{{ _("位置") }}</th><th role="columnheader">{{ _("状态") }}</th><th role="columnheader">{{ _("最近非目标配对") }}</th><th role="columnheader">{{ _("原因") }}</th><th role="columnheader"><span class="sr-only">{{ _("操作") }}</span></th></tr></thead>
+    <tbody id="candidate-rows" role="rowgroup"></tbody>
   </table></div>
   <p class="empty" id="empty-results" hidden></p>
 </section>
@@ -103,7 +103,7 @@
   <h3 class="sub">{{ _("序列视图") }} <span class="hint">{{ _("目标正义链 5′ → 3′，两侧各显示 12 nt；下方为非目标转录本同位置的序列") }}</span></h3>
   <div class="seqview" id="seqview"></div>
   <h3 class="sub">{{ _("全部配对位点") }}</h3>
-  <div class="table-wrap"><table class="table"><thead><tr><th>{{ _("参考转录本") }}</th><th>{{ _("关系") }}</th><th>{{ _("L 坐标 / 错配") }}</th><th>{{ _("R 坐标 / 错配") }}</th><th>{{ _("方向 / 间隔") }}</th></tr></thead><tbody id="evidence-matches"></tbody></table></div>
+  <div class="table-wrap hits-wrap"><table class="table hits-table" role="table"><thead role="rowgroup"><tr role="row"><th role="columnheader">{{ _("参考转录本") }}</th><th role="columnheader">{{ _("关系") }}</th><th role="columnheader">{{ _("L 坐标 / 错配") }}</th><th role="columnheader">{{ _("R 坐标 / 错配") }}</th><th role="columnheader">{{ _("方向 / 间隔") }}</th></tr></thead><tbody id="evidence-matches" role="rowgroup"></tbody></table></div>
 </section>
 {% endif %}
 

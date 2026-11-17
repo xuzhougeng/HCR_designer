@@ -38,9 +38,23 @@
 .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .sw.keep { background: var(--ok); } .sw.excluded { background: var(--bad); } .sw.other { background: var(--line-strong); } .sw.unknown { background: var(--muted); opacity: .45; }
 
-.candidate-table { min-width: 860px; }
+/* Candidate table. Layout follows the width of its own box (container query), not the viewport,
+   because the sidebar takes 236px on desktop and none below 820px.
+   >= 860px: plain table, no horizontal scroll.
+   520-859px: each row is a two-line grid with aligned columns: ID · position · status · actions,
+              then the mismatch strip under ID+position and the reason under status+actions.
+   < 520px: stacked card per row. */
+.candidate-wrap { container: candidates / inline-size; }
+.pager { display: inline-flex; gap: 6px; padding-bottom: 2px; }
 .candidate-table tr.is-selected { background: var(--accent-soft); }
+.candidate-table th, .candidate-table td { padding: 9px 10px; }
 .candidate-table td { vertical-align: middle; }
+.candidate-table .c-id { white-space: nowrap; }
+.candidate-table .c-id code { display: block; max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
+.candidate-table .c-status .status-pill { white-space: normal; max-width: 7.5rem; }
+.candidate-table .c-near { min-width: calc(197px + 20px); }
+.candidate-table .c-reason { min-width: 9em; }
+.candidate-table .c-actions { width: 1%; }
 .range-chip { display: inline-flex; align-items: center; gap: 6px; }
 .range-chip button { border: 0; background: none; color: inherit; cursor: pointer; font: inherit; padding: 0 2px; }
 .strip { display: inline-flex; align-items: center; gap: 1px; vertical-align: middle; }
@@ -48,7 +62,38 @@
 .strip i.l, .strip i.r { background: var(--line-strong); }
 .strip i.x { background: #e08a00; }
 .strip .gap { width: 5px; }
-.strip-label { display: block; font-size: 11.5px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+/* width 0 + min-width 100%: the label never widens its column; the strip bar sets the width */
+.strip-label { display: flex; flex-wrap: wrap; width: 0; min-width: 100%; font-size: 11.5px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+.strip-label > span { white-space: pre; }
+.strip-label .strip-subject { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.strip-label .strip-counts { color: var(--ink); }
+
+@container candidates (max-width: 859px) {
+  .candidate-table, .candidate-table tbody { display: block; }
+  .candidate-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .candidate-table tr { display: grid; grid-template-columns: 10rem 6.5rem minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .candidate-table tr:last-child { border-bottom: 0; }
+  .candidate-table td.c-id code { max-width: none; }
+  .candidate-table td, .candidate-table td.c-id, .candidate-table td.c-near, .candidate-table td.c-reason, .candidate-table td.c-actions { display: block; padding: 0; border: 0; min-width: 0; max-width: none; width: auto; }
+  .candidate-table .c-id { grid-area: 1 / 1; }
+  .candidate-table .c-pos { grid-area: 1 / 2; }
+  .candidate-table .c-status { grid-area: 1 / 3; }
+  .candidate-table .c-actions { grid-area: 1 / 4; }
+  .candidate-table .c-near { grid-area: 2 / 1 / 3 / 3; }
+  .candidate-table .c-reason { grid-area: 2 / 3 / 3 / 5; align-self: start; font-size: 12.5px; }
+  .candidate-table .c-near::before, .candidate-table .c-reason::before, .candidate-table .c-pos::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .candidate-table .c-pos::before { display: inline; margin: 0 6px 0 0; }
+  .candidate-table .c-status .status-pill { white-space: nowrap; max-width: none; }
+}
+@container candidates (max-width: 519px) {
+  .candidate-table tr { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .candidate-table .c-id { grid-area: 1 / 1; }
+  .candidate-table .c-actions { grid-area: 1 / 2; }
+  .candidate-table .c-pos { grid-area: 2 / 1; }
+  .candidate-table .c-status { grid-area: 2 / 2; justify-self: end; }
+  .candidate-table .c-near { grid-area: 3 / 1 / 4 / 3; }
+  .candidate-table .c-reason { grid-area: 4 / 1 / 5 / 3; }
+}
 .status-pill { display: inline-block; border-radius: 4px; padding: 1px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--ok-soft); color: var(--ok); }
 .status-pill.excluded { background: var(--bad-soft); color: var(--bad); }
 .status-pill.other, .status-pill.unknown { background: var(--sunk); color: var(--muted); }
@@ -99,7 +144,31 @@ h3.sub .hint { font-weight: 400; margin-left: 8px; }
 .seq-row .x { background: #e08a00; color: #1b1203; font-weight: 700; border-radius: 2px; }
 .seq-row.ruler span { color: var(--muted); }
 
+/* Evidence panel on narrow screens: paired-site rows become cards; sequence names sit above
+   their sequence (all rows still start at the same column, so bases stay aligned) */
+.hits-wrap { container: hits / inline-size; }
+.hits-table th { white-space: normal; }
+@container hits (max-width: 559px) {
+  .hits-table, .hits-table tbody { display: block; }
+  .hits-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hits-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .hits-table tr:last-child { border-bottom: 0; }
+  .hits-table td { display: block; padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  .hits-table td:first-child { grid-column: 1 / -1; font-family: var(--mono); font-weight: 500; }
+  .hits-table td:nth-child(2) { grid-column: 1 / -1; color: var(--muted); }
+  .hits-table td:nth-child(n+3)::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); }
+}
+.seqview { container: seqview / inline-size; }
+@container seqview (max-width: 879px) {
+  .seq-grid { grid-template-columns: max-content; row-gap: 0; }
+  .seq-grid .name { justify-self: start; position: sticky; left: 0; padding-top: 6px; background: var(--surface); }
+}
+
 @media (max-width: 820px) {
   .stage-track { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; }
   .arm-cards { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  /* on phones the stacked cards scroll with the page instead of inside a nested 640px box */
+  .candidate-wrap.tall { max-height: none; }
 }
