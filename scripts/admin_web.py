@@ -147,6 +147,8 @@ def register_admin(app):
         data = dict(entries=entries, total_bytes=sum(e['size'] for e in entries),
                     expired_bytes=sum(e['size'] for e in entries if e['expired'] and not e['blocked']),
                     cutoff=three_months_ago(utcnow()).isoformat(), last_cleanup=storage.last_cleanup,
+                    reference_retention_days=storage.reference_retention.days,
+                    reference_cleanup=storage.reference_library is not None,
                     automatic_cleanup='storage_cleanup_scheduler' in app.extensions)
         if request.accept_mimetypes.best == 'application/json':
             return jsonify(data)
@@ -201,9 +203,9 @@ def register_admin(app):
         click.echo('管理员账号已保存，密码仅保存哈希。请重启 Web 服务后访问 /admin。')
 
     @app.cli.command('cleanup-results')
-    @click.option('--dry-run', is_flag=True, help='只预览超过三个月的结果，不删除文件。')
+    @click.option('--dry-run', is_flag=True, help='只预览超过三个月的结果和长期未使用的共享参考，不删除文件。')
     def cleanup_results(dry_run):
-        """Remove expired analysis results; shared references are retained."""
+        """Remove expired analysis results and shared references unused for the reference retention period."""
         report = storage.cleanup(dry_run=dry_run)
         click.echo(json.dumps(report, ensure_ascii=False, indent=2))
         if report['errors']:

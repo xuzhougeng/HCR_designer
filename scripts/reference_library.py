@@ -10,7 +10,7 @@ import tempfile
 
 from werkzeug.utils import secure_filename
 
-from scripts.storage_maintenance import STORAGE_LOCK
+from scripts.storage_maintenance import STORAGE_LOCK, utcnow
 from src.common.reference_annotation import SubgenomeAnnotation, format_subgenome_map, parse_subgenome_map
 
 
@@ -36,6 +36,56 @@ class ReferenceLibrary:
             os.replace(temporary, self.catalog_path)
         finally:
             Path(temporary).unlink(missing_ok=True)
+
+    def touch(self, filename, now=None):
+        """Record a use of a shared reference; the retention job removes references left unused.
+
+        Best effort: a damaged catalog must not stop an analysis, and it also stops automatic expiry.
+        """
+        with STORAGE_LOCK:
+            try:
+                records = self._read()
+                records.setdefault(filename, {})['last_used_at'] = (now or utcnow()).isoformat()
+                self._save(records)
+                return True
+            except (OSError, ValueError, AttributeError):
+                return False
+
+    def usage(self, filenames, now):
+        """Last recorded use per FASTA name.
+
+        A reference without a record (on disk before usage was tracked) starts its grace period now.
+        Raises ValueError when the catalog is damaged, so that nothing expires on a guess.
+        """
+        with STORAGE_LOCK:
+            records = self._read()
+            usage, changed = {}, False
+            for filename in filenames:
+                metadata = records.setdefault(filename, {})
+                if not isinstance(metadata, dict):
+                    raise ValueError('参考库配置文件损坏，请联系管理员检查。')
+                try:
+                    used = datetime.fromisoformat(metadata['last_used_at'])
+                    if used.tzinfo is None:
+                        used = used.replace(tzinfo=timezone.utc)
+                except (KeyError, TypeError, ValueError):
+                    used = now
+                    metadata['last_used_at'] = now.isoformat()
+                    changed = True
+                usage[filename] = used
+            if changed:
+                self._save(records)
+            return usage
+
+    def forget(self, filename):
+        """Drop the catalog entry of a deleted reference; a damaged catalog is left for an administrator."""
+        with STORAGE_LOCK:
+            try:
+                records = self._read()
+                if records.pop(filename, None) is not None:
+                    self._save(records)
+            except (OSError, ValueError):
+                pass
 
     def _files(self):
         return sorted(path for path in self.root.iterdir() if not path.is_symlink() and path.is_file()
@@ -235,6 +285,7 @@ class ReferenceLibrary:
                     metadata = self._index(path, records)
                     if metadata['sha256'] == sha256:
                         metadata['sequence_count'] = count
+                        metadata['last_used_at'] = utcnow().isoformat()
                         self._save(records)
                         entry = next(record for record in self.list() if record['filename'] == path.name)
                         return dict(reference=entry, duplicate=True)
@@ -245,9 +296,10 @@ class ReferenceLibrary:
                 if path.exists():
                     raise ValueError('参考文件名冲突，请修改上传文件名后重试。')
                 staged.replace(path)
+                uploaded_at = utcnow().isoformat()
                 records[path.name] = dict(settings, sha256=sha256, sequence_count=count,
                                           fingerprint=self._fingerprint(path),
-                                          uploaded_at=datetime.now(timezone.utc).isoformat())
+                                          uploaded_at=uploaded_at, last_used_at=uploaded_at)
                 try:
                     self._save_with_annotation(records, path, annotation)
                 except Exception:

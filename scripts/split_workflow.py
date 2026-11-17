@@ -285,6 +285,7 @@ class SplitWorkflow:
                 'species_counts': dict(Counter(infer_species(key) or '其他/未知' for key in references)),
                 'sha256': digest.hexdigest()}
         if mode == 'existing' and self.reference_library:
+            self.reference_library.touch(path.name)
             metadata = next((entry for entry in self.reference_library.list() if entry['filename'] == path.name), None)
             if metadata:
                 info['display_name'] = metadata['display_name']
@@ -491,6 +492,9 @@ class SplitWorkflow:
                 raise InputError('参考库已被清理，请返回第一步重新选择参考库。')
             if {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size} != manifest['reference']['fingerprint']:
                 raise InputError('参考库在输入检查后发生变化，请返回第一步重新检查。')
+            shared = Path(manifest['reference_path'])
+            if self.reference_library and shared.parent == self.upload_root:
+                self.reference_library.touch(shared.name)
         if parameters['target_mode'] == 'subgenome':
             if not manifest.get('subgenome_map'):
                 raise InputError('亚基因组模式需要归属信息：请在第一步勾选使用多倍体参考库中已配置的归属，'
