@@ -4,7 +4,6 @@ from pathlib import Path
 
 import csv
 import logging
-from Bio.SeqUtils import MeltingTemp as mt
 from ..common.blast_utils import analyze_blast_results
 import json
 from ..common.probeset_select import select_probe_sets

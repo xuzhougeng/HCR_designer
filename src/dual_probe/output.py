@@ -555,6 +555,7 @@ class ProbeOutputHandler:
                     f.write("-" * 40 + "\n")
         
         # 保存筛选后的BED格式
+        # JSON positions are 1-based inclusive; BED is 0-based half-open, as in _save_bed_format.
         bed_file = self.output_dir / f"{output_prefix}.bed"
         task_name = output_prefix.split('_filtered')[0]  # 获取原始task_name
         with open(bed_file, 'w') as f:
@@ -562,11 +563,11 @@ class ProbeOutputHandler:
                 if probe_set.get('keep', False):
                     set_id = probe_set['id']
                     # 写入左探针
-                    f.write(f"{task_name}\t{probe_set['left_probe']['position']['start']}\t"
+                    f.write(f"{task_name}\t{probe_set['left_probe']['position']['start'] - 1}\t"
                            f"{probe_set['left_probe']['position']['end']}\tL-{set_id}\t0\t+\n")
                     
                     # 写入右探针
-                    f.write(f"{task_name}\t{probe_set['right_probe']['position']['start']}\t"
+                    f.write(f"{task_name}\t{probe_set['right_probe']['position']['start'] - 1}\t"
                            f"{probe_set['right_probe']['position']['end']}\tR-{set_id}\t0\t+\n")
         
         # 保存筛选后的CSV格式

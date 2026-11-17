@@ -1,8 +1,11 @@
 import io
 import json
+from pathlib import Path
 import re
+import tempfile
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 import app as web
 
@@ -119,6 +122,110 @@ class LegacyToolTests(unittest.TestCase):
                                       'deduplicated_count', 'detected_type'})
         self.assertEqual(stats['original_count'], 3)
         self.assertIn('ACGTACGTACGT', response.get_data(as_text=True))
+
+    def test_formatting_keeps_the_record_after_a_removed_one(self):
+        text, stats = web.format_fasta_sequences('>bad\nACGTACGTAC!\n>kept1\nACGTACGT\n>kept2\nTTTTACGT\n',
+                                                 deduplicate=False)
+        self.assertEqual(text, '>kept1\nACGTACGT\n>kept2\nTTTTACGT')
+        self.assertEqual((stats['original_count'], stats['removed_count'], stats['formatted_count']), (3, 1, 2))
+        self.assertEqual(stats['removed_sequences'][0][0], 'bad')
+
+    def test_recommendation_reports_unusable_input_instead_of_an_empty_table(self):
+        def post(cds, counts):
+            return self.client.post('/probe_recommend', content_type='multipart/form-data', data={
+                'cds_file': (io.BytesIO(cds), 'cds.fa'), 'counts_file': (io.BytesIO(counts), 'counts.txt')})
+        with tempfile.TemporaryDirectory() as directory, patch.dict(web.app.config, UPLOAD_FOLDER=directory):
+            good = post(b'>g1\nATGCATGCAT\n>g2\nATGC\n', b'g1\t10\ng2\t3\n')
+            self.assertEqual(good.status_code, 200)
+            self.assertEqual(good.get_data(as_text=True).splitlines()[0], 'gene_id,tpm,probe_number')
+            self.assertEqual(len(good.get_data(as_text=True).splitlines()), 3)
+            good.close()
+            for cds, counts in [(b'>g1\nATGC\n', b'other\t10\n'), (b'>g1\nATGC\n', b'g1\t0\n'),
+                                (b'\x1f\x8b\xff\xfe', b'g1\t10\n')]:
+                response = post(cds, counts)
+                self.assertEqual(response.status_code, 400)
+                self.assertTrue(response.get_json()['error'])
+            self.assertEqual(len(list(Path(directory).iterdir())), 1)  # only the successful table was written
+
+
+class TripletStorageTests(unittest.TestCase):
+    """Legacy triplet requests keep one ZIP and never write outside their own results folder."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.uploads = Path(self.tmp.name) / 'site' / 'uploads'
+        self.uploads.mkdir(parents=True)
+        self.config = patch.dict(web.app.config, UPLOAD_FOLDER=str(self.uploads))
+        self.config.start()
+        self.client = web.app.test_client()
+        self.sequence = web.cdna_dict['AT1G01010']
+
+    def tearDown(self):
+        self.config.stop()
+        self.tmp.cleanup()
+
+    def files(self):
+        return sorted(str(path.relative_to(self.tmp.name)) for path in Path(self.tmp.name).rglob('*') if path.is_file())
+
+    def test_single_rejects_path_like_names_and_leaves_no_working_directory(self):
+        form = {'bp_id': 'BP_1101', 'geneID': '', 'seq': self.sequence, 'sequenceType': 'cdna'}
+        for name in ['../../../escaped', 'a/b', '..', '']:
+            with self.subTest(name=name):
+                response = self.client.post('/triplet', data=dict(form, name=name))
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('任务名称', response.get_json()['error'])
+        self.assertEqual(self.files(), [])
+        self.assertEqual(self.client.post('/triplet', data=dict(form, name='t', bp_id='BP_9999')).status_code, 400)
+        self.assertEqual(list(self.uploads.iterdir()), [])
+
+        response = self.client.post('/triplet', data=dict(form, name='pasted'))
+        self.assertEqual(response.status_code, 200)
+        with ZipFile(io.BytesIO(response.get_data())) as archive:
+            names = archive.namelist()
+        response.close()
+        self.assertIn('target.fasta', names)  # a pasted sequence has no gene ID to name the file
+        self.assertIn('pasted_filtered.json', names)
+        results = sorted(path.name for path in (self.uploads / 'triplet_results').iterdir())
+        self.assertEqual(len(results), 1)
+        self.assertRegex(results[0], r'^triplet_results_[a-f0-9]{32}\.zip$')
+        self.assertEqual(len(self.files()), 1)
+
+    def test_targets_with_ambiguous_bases_are_refused_not_crashed(self):
+        gene = next(k for k, v in web.cdna_dict.items() if set(v) - set('ACGT'))
+        single = self.client.post('/triplet', data={'name': 't', 'bp_id': 'BP_1101', 'geneID': gene, 'seq': '', 'sequenceType': 'cdna'})
+        self.assertEqual(single.status_code, 400)
+        self.assertIn('A/T/C/G', single.get_json()['error'])
+        batch = self.client.post('/triplet/batch', content_type='multipart/form-data', data={
+            'batch_file': (io.BytesIO(f't,BP_1101,{gene}\n'.encode()), 'tasks.csv')})
+        self.assertEqual(batch.status_code, 400)
+        self.assertEqual(self.files(), [])
+
+    def test_batch_skips_path_like_names_and_cleans_up_after_failures(self):
+        def post(text):
+            return self.client.post('/triplet/batch', content_type='multipart/form-data', data={
+                'batch_file': (io.BytesIO(text.encode()), 'tasks.csv')})
+        rejected = post('../../../escaped,BP_1101,AT1G01010\n')
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn('任务名称', rejected.get_json()['error'])
+        self.assertEqual(self.files(), [])
+        self.assertEqual(list((self.uploads / 'triplet_results').iterdir()), [])
+
+        with patch.object(web, 'create_triplet_probe', side_effect=RuntimeError('engine failed')), \
+             self.assertLogs(web.app.logger, 'ERROR'):
+            self.assertEqual(post('ok,BP_1101,AT1G01010\n').status_code, 500)
+        self.assertEqual(list((self.uploads / 'triplet_results').iterdir()), [])
+
+        mixed = post('ok,BP_1101,AT1G01010\n../bad,BP_1101,AT1G01010\n')
+        self.assertEqual(mixed.status_code, 200)
+        self.assertEqual((mixed.headers['X-Tasks-Completed'], mixed.headers['X-Tasks-Skipped']), ('1', '1'))
+        with ZipFile(io.BytesIO(mixed.get_data())) as archive:
+            names = archive.namelist()
+            self.assertIn('ok/AT1G01010.fasta', names)
+            self.assertIn('skipped_tasks.tsv', names)
+            self.assertIn('任务名称', archive.read('skipped_tasks.tsv').decode())
+        mixed.close()
+        self.assertTrue(all(name.startswith('ok/') or name == 'skipped_tasks.tsv' for name in names))
+        self.assertEqual(len(self.files()), 1)
 
 
 if __name__ == '__main__':

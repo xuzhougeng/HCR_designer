@@ -1,9 +1,13 @@
 import unittest
-from scripts.tcr import is_valid_primer, check_complementarity
+# scripts/tcr.py no longer exists; its primer check lives on as is_valid_probe.
+from src.common.sequence_utils import is_valid_probe as is_valid_primer
 from Bio.SeqUtils import MeltingTemp as mt
-from Bio.SeqUtils import GC
-from Bio.Seq import Seq
+from Bio.SeqUtils import gc_fraction
 import random
+
+
+def GC(sequence):
+    return gc_fraction(sequence) * 100
 
 class TestIsValidPrimer(unittest.TestCase):
     def check_primer_properties(self, seq):
@@ -123,98 +127,6 @@ class TestIsValidPrimer(unittest.TestCase):
             tm_min=45.0,    # 更低的最小熔点
             tm_max=65.0     # 更高的最大熔点
         ))
-
-    def test_check_complementarity(self):
-        """测试引物互补性检查函数"""
-        # 测试完全无互补的序列
-        primer1 = "ATGCATGCATGC"
-        primer2 = "CCCCCCCCCCC"
-        result = check_complementarity(primer1, primer2)
-        print(f"\nTest 1 - No complementarity:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result: {result}")
-        self.assertFalse(result['has_complementarity'])
-        self.assertEqual(result['max_complementary_length'], 0)
-        self.assertEqual(len(result['complementary_regions']), 0)
-        self.assertFalse(result['three_prime_complementarity'])
-
-        # 测试有部分互补的序列
-        primer1 = "ATGCATGCATGC"  # 包含 ATGC
-        primer2 = "GCATGCAT"      # 反向互补后为 ATGCATGC，与primer1的一部分互补
-        result = check_complementarity(primer1, primer2)
-        print(f"\nTest 2 - Partial complementarity:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result: {result}")
-        self.assertTrue(result['has_complementarity'])
-        self.assertGreaterEqual(result['max_complementary_length'], 4)
-        self.assertGreater(len(result['complementary_regions']), 0)
-
-        # 测试3'端互补的序列
-        primer1 = "ATGCATGCATGC"  # 3'端为 ATGC
-        primer2 = "ATGC"          # 反向互补后为 GCAT
-        result = check_complementarity(primer1, primer2)
-        print(f"\nTest 3 - 3' complementarity:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result: {result}")
-        self.assertTrue(result['has_complementarity'])
-        self.assertTrue(result['three_prime_complementarity'])
-
-        # 测试不同的最小互补长度
-        primer1 = "ATGCATGC"
-        primer2 = "GCATGCAT"  # 反向互补后完全互补
-        # 使用更长的最小互补长度
-        result = check_complementarity(primer1, primer2, min_complementary_length=5)
-        print(f"\nTest 4 - Different min complementary length:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result (min_length=5): {result}")
-        self.assertTrue(result['has_complementarity'])
-        # 使用更短的最小互补长度
-        result = check_complementarity(primer1, primer2, min_complementary_length=3)
-        print(f"Result (min_length=3): {result}")
-        self.assertTrue(result['has_complementarity'])
-
-        # 测试边界情况
-        # 测试短序列
-        primer1 = "AT"
-        primer2 = "AT"
-        result = check_complementarity(primer1, primer2)
-        print(f"\nTest 5 - Short sequences:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result: {result}")
-        self.assertFalse(result['has_complementarity'])  # 因为长度小于min_complementary_length
-
-        # 测试完全互补的序列
-        primer1 = "ATGCATGC"
-        primer2 = "GCATGCAT"  # primer1的反向互补
-        result = check_complementarity(primer1, primer2)
-        print(f"\nTest 6 - Full complementarity:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result: {result}")
-        self.assertTrue(result['has_complementarity'])
-        self.assertEqual(result['max_complementary_length'], len(primer1))
-
-        # 测试序列长度不等的情况
-        primer1 = "ATGCATGC"
-        primer2 = "ATGC"  # 反向互补后与primer1的一部分互补
-        result = check_complementarity(primer1, primer2)
-        print(f"\nTest 7 - Different lengths:")
-        print(f"Primer1: {primer1}")
-        print(f"Primer2: {primer2}")
-        print(f"Primer2 RC: {str(Seq(primer2).reverse_complement())}")
-        print(f"Result: {result}")
-        self.assertTrue(result['has_complementarity'])
 
 if __name__ == '__main__':
     unittest.main()

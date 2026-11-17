@@ -1,7 +1,7 @@
 import os
 import shutil
 import gzip
-from datetime import datetime
+from io import BytesIO, StringIO
 from pathlib import Path
 from zipfile import ZipFile
 import csv
@@ -9,6 +9,7 @@ import re
 import json
 
 from flask import Flask, request, render_template, send_file, jsonify
+from werkzeug.utils import secure_filename
 
 from scripts.utils import load_alias, load_fasta, generate_unique_id, save_sequence, create_blast_db
 from scripts.create_triplet_probe import main as create_triplet_probe
@@ -16,7 +17,7 @@ from scripts.bp_suggestion import design_multiple_probes
 from scripts.bp_suggestion import query_conflicting_probes
 from scripts.bp_suggestion import BridgeProbeSystem
 from scripts.bp_suggestion import analyze_input_conflicts
-from src.common.sequence_utils import calculate_tm, calculate_gc_content, is_valid_probe, check_poly_n
+from src.common.sequence_utils import calculate_tm, calculate_gc_content, check_poly_n
 
 
 
@@ -197,6 +198,7 @@ def help():
     return render_template('help.html')
 
 from scripts.split_web import register_split_routes
+from scripts.split_workflow import InputError, task_name as valid_task_name
 
 register_split_routes(app, bridge_seq_dict, cdna_dict, cds_dict, gene_alias, get_available_genomes)
 
@@ -232,14 +234,13 @@ def triplet_reference():
         path = library.path(existing)
     return create_blast_db(str(path))
 
+def target_fasta_name(gene_id):
+    """File name for the saved target; identifiers never choose the directory."""
+    return (secure_filename(gene_id) or 'target') + '.fasta'
+
 @app.route('/triplet', methods=['GET', 'POST'])
 def triplet():
     if request.method == 'POST':
-        # 生成随机的文件夹名
-        unique_id = generate_unique_id()
-        output_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', unique_id)
-        os.makedirs(output_dir, exist_ok=True)
-
         # 处理参考基因组/BLAST数据库
         try:
             blast_db = triplet_reference()
@@ -263,7 +264,11 @@ def triplet():
         # 原有的单个处理逻辑保持不变
         seq = request.form['seq']
         gene_id = request.form['geneID'].upper()
-        task_name = request.form['name']
+        # The task name becomes part of output file names, so it must not carry path parts.
+        try:
+            task_name = valid_task_name(request.form['name'])
+        except InputError as e:
+            return jsonify({'error': str(e)}), 400
         BP_ID = request.form['bp_id']
         
         # 获取probe sequence
@@ -282,52 +287,49 @@ def triplet():
                     return jsonify({'error': f'内置 TAIR cDNA 中没有 {gene_id}'}), 400
                 seq = cdna_dict[gene_id]
 
+        seq = ''.join(seq.split()).upper()
         if len(seq) == 0:
             return jsonify({'error': '请填写基因编号或粘贴目标序列'}), 400
-        
-        create_triplet_probe(
-            name=task_name,
-            sequence=seq,
-            gene_id=gene_id,
-            min_length=min_length,
-            max_length=max_length,
-            gc_min=min_gc,
-            gc_max=max_gc,
-            tm_min=min_tm,
-            tm_max=max_tm,
-            min_gap=min_gap,
-            min_complementary_length=min_complementary_length,
-            poly_n=poly_n,
-            kmer_size=kmer_size,
-            min_kmer_count=min_kmer_count,
-            ref_genome=blast_db,
-            bridge_probe_id=BP_ID,
-            bridge_probe=probe_seq,
-            output_dir=output_dir,
-            max_selected=max_selected
-        )
-        
+        if re.search('[^ACGT]', seq):
+            return jsonify({'error': '目标序列只能包含 A/T/C/G，含模糊碱基的序列无法设计三探针。'}), 400
 
-        zip_filename = f"triplet_results_{unique_id}.zip"
-        zip_path = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', zip_filename)
-        
-        # get files in output_dir
-        files = os.listdir(output_dir)
-        fasta_name = f"{gene_id}.fasta"
-        fasta_file = os.path.join(output_dir, fasta_name)
-        save_sequence(gene_id, seq, fasta_file)
-        files.append(fasta_name)
-        # 创建 ZIP 文件
-        with ZipFile(zip_path, 'w') as zipf:
-            for file in files:
-                if os.path.isfile(os.path.join(output_dir, file)):
-                    zipf.write(os.path.join(output_dir, file), os.path.basename(file))
-        
-        # 清理临时文件
-        for file in files:
-            if os.path.exists(os.path.join(output_dir, file)):
-                os.remove(os.path.join(output_dir, file))
-        
+        # Create the working directory only once the request is valid, and always
+        # remove it afterwards: the ZIP next to it is the only result that is kept.
+        unique_id = generate_unique_id()
+        results_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results')
+        output_dir = os.path.join(results_dir, unique_id)
+        zip_path = os.path.join(results_dir, f"triplet_results_{unique_id}.zip")
+        os.makedirs(output_dir, exist_ok=True)
+        try:
+            create_triplet_probe(
+                name=task_name,
+                sequence=seq,
+                gene_id=gene_id,
+                min_length=min_length,
+                max_length=max_length,
+                gc_min=min_gc,
+                gc_max=max_gc,
+                tm_min=min_tm,
+                tm_max=max_tm,
+                min_gap=min_gap,
+                min_complementary_length=min_complementary_length,
+                poly_n=poly_n,
+                kmer_size=kmer_size,
+                min_kmer_count=min_kmer_count,
+                ref_genome=blast_db,
+                bridge_probe_id=BP_ID,
+                bridge_probe=probe_seq,
+                output_dir=output_dir,
+                max_selected=max_selected
+            )
+            save_sequence(gene_id, seq, os.path.join(output_dir, target_fasta_name(gene_id)))
+            with ZipFile(zip_path, 'w') as zipf:
+                for file in sorted(os.listdir(output_dir)):
+                    if os.path.isfile(os.path.join(output_dir, file)):
+                        zipf.write(os.path.join(output_dir, file), file)
+        finally:
+            shutil.rmtree(output_dir, ignore_errors=True)
+
         # 返回 ZIP 文件
         return send_file(zip_path, as_attachment=True)
     
@@ -337,11 +339,6 @@ def triplet():
 @app.route('/triplet/batch', methods=['GET', 'POST'])
 def triplet_batch():
     if request.method == 'POST':
-        # 生成随机的文件夹名
-        unique_id = generate_unique_id()
-        output_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', unique_id)
-        os.makedirs(output_dir, exist_ok=True)
-
         # 处理参考基因组/BLAST数据库
         try:
             blast_db = triplet_reference()
@@ -363,142 +360,150 @@ def triplet_batch():
         min_complementary_length = int(request.form.get('min_complementary_length', 5))
         default_max_selected = int(request.form.get('max_selected', 5))  # 获取默认的max_selected值
 
-        # 批量处理
-        if 'batch_file' in request.files:
-            batch_file = request.files['batch_file']
-            if batch_file:
-                # 创建一个子目录存放所有批量结果
-                batch_dir = os.path.join(output_dir, 'batch_results')
-                os.makedirs(batch_dir, exist_ok=True)
-                
-                # 读取CSV文件
-                import csv
-                from io import StringIO
-                csv_content = batch_file.read().decode('utf-8')
-                csv_reader = csv.reader(StringIO(csv_content))
-                
-                # 如果有参考基因组，先从中提取所有序列
-                ref_sequences = {}
-                if ref_genome_path:
-                    print(ref_genome_path)
-                    ref_sequences = load_fasta(ref_genome_path)
-                    # upper all keys
-                    ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
-                
-                completed, skipped = 0, []
-                for line_number, row in enumerate(csv_reader, start=1):
-                    if not any(cell.strip() for cell in row):
-                        continue
-                    if len(row) < 3:
-                        skipped.append((line_number, ','.join(row), '少于 3 列'))
-                    else:  # 至少需要3列
-                        task_name, bp_id, gene_id = [cell.strip() for cell in row[:3]]
-                        gene_id = gene_id.upper()
-                        
-                        # 获取max_selected值,如果有第4列就使用第4列的值,否则使用默认值
+        batch_file = request.files.get('batch_file')
+        if not batch_file:
+            return jsonify({'error': '请上传批量任务 CSV 文件'}), 400
+
+        # The working directory exists only while this request runs; the ZIP next
+        # to it is the only result that is kept.
+        unique_id = generate_unique_id()
+        results_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results')
+        output_dir = os.path.join(results_dir, unique_id)
+        batch_dir = os.path.join(output_dir, 'batch_results')
+        zip_path = os.path.join(results_dir, f"triplet_batch_results_{unique_id}.zip")
+        os.makedirs(batch_dir, exist_ok=True)
+        try:
+            # 读取CSV文件
+            csv_content = batch_file.read().decode('utf-8')
+            csv_reader = csv.reader(StringIO(csv_content))
+
+            # 如果有参考基因组，先从中提取所有序列
+            ref_sequences = {}
+            if ref_genome_path:
+                ref_sequences = load_fasta(ref_genome_path)
+                # upper all keys
+                ref_sequences = {k.upper(): v for k, v in ref_sequences.items()}
+
+            completed, skipped = 0, []
+            for line_number, row in enumerate(csv_reader, start=1):
+                if not any(cell.strip() for cell in row):
+                    continue
+                if len(row) < 3:
+                    skipped.append((line_number, ','.join(row), '少于 3 列'))
+                    continue
+                # 至少需要3列
+                task_name, bp_id, gene_id = [cell.strip() for cell in row[:3]]
+                gene_id = gene_id.upper()
+                # The task name becomes a directory and file prefix inside the ZIP.
+                try:
+                    task_name = valid_task_name(task_name)
+                except InputError as e:
+                    skipped.append((line_number, ' '.join(task_name.split()), str(e)))
+                    continue
+
+                # 获取max_selected值,如果有第4列就使用第4列的值,否则使用默认值
+                max_selected = default_max_selected
+                if len(row) >= 4:
+                    try:
+                        max_selected = int(row[3])
+                    except (ValueError, TypeError):
                         max_selected = default_max_selected
-                        if len(row) >= 4:
-                            try:
-                                max_selected = int(row[3])
-                            except (ValueError, TypeError):
-                                max_selected = default_max_selected
-                        
-                        # 获取probe sequence
-                        probe_seq = bridge_seq_dict.get(bp_id, None)
-                        if probe_seq is None:
-                            skipped.append((line_number, task_name, f'桥接探针编号 {bp_id} 不在探针库中'))
-                            continue
-                            
-                        # 获取序列，按优先级尝试不同来源
-                        sequence = None
-                        
-                        # 1. 首先检查基因别名
-                        if gene_id in gene_alias:
-                            gene_id = gene_alias[gene_id]
-                        
-                        # 2. 从CDS字典获取
-                        if gene_id in cds_dict:
-                            sequence = cds_dict[gene_id]
-                        # 3. 从cDNA字典获取
-                        elif gene_id in cdna_dict:
-                            sequence = cdna_dict[gene_id]
-                        # 4. 从参考基因组获取
-                        elif gene_id in ref_sequences:
-                            sequence = ref_sequences[gene_id]
-                        # 5. 尝试从参考基因组中模糊匹配
-                        elif ref_sequences:
-                            # 尝试查找包含gene_id的序列ID
-                            for ref_id, ref_seq in ref_sequences.items():
-                                if gene_id in ref_id:
-                                    sequence = ref_seq
-                                    gene_id = ref_id  # 更新为完整的ID
-                                    break
-                            
-                        if sequence:
-                            # 为每个任务创建单独的输出目录
-                            task_dir = os.path.join(batch_dir, task_name)
-                            os.makedirs(task_dir, exist_ok=True)
-                            
-                            # 保存序列到FASTA文件
-                            fasta_file = os.path.join(task_dir, f"{gene_id}.fasta")
-                            save_sequence(gene_id, sequence, fasta_file)
-                            
-                            # 运行triplet probe设计
-                            create_triplet_probe(
-                                name=task_name,
-                                sequence=sequence,
-                                gene_id=gene_id,
-                                min_length=min_length,
-                                max_length=max_length,
-                                gc_min=min_gc,
-                                gc_max=max_gc,
-                                tm_min=min_tm,
-                                tm_max=max_tm,
-                                min_gap=min_gap,
-                                min_complementary_length=min_complementary_length,
-                                poly_n=poly_n,
-                                kmer_size=kmer_size,
-                                min_kmer_count=min_kmer_count,
-                                ref_genome=blast_db,
-                                bridge_probe_id=bp_id,
-                                bridge_probe=probe_seq,
-                                output_dir=task_dir,
-                                max_selected=max_selected  # 使用每行指定的max_selected值
-                            )
-                            completed += 1
-                        else:
-                            skipped.append((line_number, task_name, f'找不到 {gene_id} 的序列（别名、CDS、cDNA、参考库均未命中）'))
 
-                if completed == 0:
-                    shutil.rmtree(output_dir)
-                    reasons = '；'.join(f'第 {n} 行 {name}：{reason}' for n, name, reason in skipped[:10])
-                    return jsonify({'error': '没有可设计的任务。' + reasons}), 400
-                if skipped:
-                    with open(os.path.join(batch_dir, 'skipped_tasks.tsv'), 'w', encoding='utf-8') as handle:
-                        handle.write('line\ttask\treason\n')
-                        handle.writelines(f'{n}\t{name}\t{reason}\n' for n, name, reason in skipped)
-                
-                # 创建ZIP文件
-                zip_filename = f"triplet_batch_results_{unique_id}.zip"
-                zip_path = os.path.join(app.config['UPLOAD_FOLDER'], 'triplet_results', zip_filename)
-                
-                with ZipFile(zip_path, 'w') as zipf:
-                    for root, dirs, files in os.walk(batch_dir):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            arcname = os.path.relpath(file_path, batch_dir)
-                            zipf.write(file_path, arcname)
-                
-                # 清理临时文件
-                shutil.rmtree(output_dir)
-                
-                # 返回ZIP文件
-                response = send_file(zip_path, as_attachment=True)
-                response.headers['X-Tasks-Completed'] = str(completed)
-                response.headers['X-Tasks-Skipped'] = str(len(skipped))
-                return response
+                # 获取probe sequence
+                probe_seq = bridge_seq_dict.get(bp_id, None)
+                if probe_seq is None:
+                    skipped.append((line_number, task_name, f'桥接探针编号 {bp_id} 不在探针库中'))
+                    continue
 
-        return jsonify({'error': '请上传批量任务 CSV 文件'}), 400
+                # 获取序列，按优先级尝试不同来源
+                sequence = None
+
+                # 1. 首先检查基因别名
+                if gene_id in gene_alias:
+                    gene_id = gene_alias[gene_id]
+
+                # 2. 从CDS字典获取
+                if gene_id in cds_dict:
+                    sequence = cds_dict[gene_id]
+                # 3. 从cDNA字典获取
+                elif gene_id in cdna_dict:
+                    sequence = cdna_dict[gene_id]
+                # 4. 从参考基因组获取
+                elif gene_id in ref_sequences:
+                    sequence = ref_sequences[gene_id]
+                # 5. 尝试从参考基因组中模糊匹配
+                elif ref_sequences:
+                    # 尝试查找包含gene_id的序列ID
+                    for ref_id, ref_seq in ref_sequences.items():
+                        if gene_id in ref_id:
+                            sequence = ref_seq
+                            gene_id = ref_id  # 更新为完整的ID
+                            break
+
+                if not sequence:
+                    skipped.append((line_number, task_name, f'找不到 {gene_id} 的序列（别名、CDS、cDNA、参考库均未命中）'))
+                    continue
+                # References may be lower case or carry ambiguity codes; the designer cannot use those.
+                sequence = sequence.upper()
+                if re.search('[^ACGT]', sequence):
+                    skipped.append((line_number, task_name, f'{gene_id} 的序列含 A/T/C/G 以外的碱基，无法设计三探针'))
+                    continue
+
+                # 为每个任务创建单独的输出目录
+                task_dir = os.path.join(batch_dir, task_name)
+                os.makedirs(task_dir, exist_ok=True)
+
+                # 保存序列到FASTA文件
+                save_sequence(gene_id, sequence, os.path.join(task_dir, target_fasta_name(gene_id)))
+
+                # 运行triplet probe设计
+                create_triplet_probe(
+                    name=task_name,
+                    sequence=sequence,
+                    gene_id=gene_id,
+                    min_length=min_length,
+                    max_length=max_length,
+                    gc_min=min_gc,
+                    gc_max=max_gc,
+                    tm_min=min_tm,
+                    tm_max=max_tm,
+                    min_gap=min_gap,
+                    min_complementary_length=min_complementary_length,
+                    poly_n=poly_n,
+                    kmer_size=kmer_size,
+                    min_kmer_count=min_kmer_count,
+                    ref_genome=blast_db,
+                    bridge_probe_id=bp_id,
+                    bridge_probe=probe_seq,
+                    output_dir=task_dir,
+                    max_selected=max_selected  # 使用每行指定的max_selected值
+                )
+                completed += 1
+
+            if completed == 0:
+                reasons = '；'.join(f'第 {n} 行 {name}：{reason}' for n, name, reason in skipped[:10])
+                return jsonify({'error': '没有可设计的任务。' + reasons}), 400
+            if skipped:
+                with open(os.path.join(batch_dir, 'skipped_tasks.tsv'), 'w', encoding='utf-8') as handle:
+                    handle.write('line\ttask\treason\n')
+                    handle.writelines(f'{n}\t{name}\t{reason}\n' for n, name, reason in skipped)
+
+            # 创建ZIP文件
+            with ZipFile(zip_path, 'w') as zipf:
+                for root, dirs, files in os.walk(batch_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, batch_dir)
+                        zipf.write(file_path, arcname)
+        finally:
+            # 清理临时文件
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+        # 返回ZIP文件
+        response = send_file(zip_path, as_attachment=True)
+        response.headers['X-Tasks-Completed'] = str(completed)
+        response.headers['X-Tasks-Skipped'] = str(len(skipped))
+        return response
 
     return render_template('triplet.html', mode='batch', bridges=bridge_seq_dict,
                            available_genomes=get_available_genomes())
@@ -877,65 +882,60 @@ def calculate_tpm(cds_file, counts_file):
     Returns:
         dict: 基因ID到TPM值的映射字典
     """
-    try:
-        # 1. 读取CDS序列，获取每个基因的长度
-        cds_content = cds_file.read().decode('utf-8')
-        cds_dict = {}
-        current_id = None
-        current_seq = []
+    # 1. 读取CDS序列，获取每个基因的长度
+    cds_content = cds_file.read().decode('utf-8')
+    cds_dict = {}
+    current_id = None
+    current_seq = []
+    
+    for line in cds_content.splitlines():
+        if line.startswith('>'):
+            if current_id and current_seq:
+                cds_dict[current_id] = ''.join(current_seq)
+            current_id = line[1:].split()[0]
+            current_seq = []
+        elif line.strip():
+            current_seq.append(line.strip())
+    
+    if current_id and current_seq:
+        cds_dict[current_id] = ''.join(current_seq)
         
-        for line in cds_content.splitlines():
-            if line.startswith('>'):
-                if current_id and current_seq:
-                    cds_dict[current_id] = ''.join(current_seq)
-                current_id = line[1:].split()[0]
-                current_seq = []
-            elif line.strip():
-                current_seq.append(line.strip())
-        
-        if current_id and current_seq:
-            cds_dict[current_id] = ''.join(current_seq)
-            
-        gene_lengths = {gene_id: len(sequence) for gene_id, sequence in cds_dict.items()}
-        
-        # 2. 读取counts文件
-        counts_dict = {}
-        counts_content = counts_file.read().decode('utf-8')
-        for line in counts_content.splitlines():
-            if line.strip():  # 跳过空行
-                parts = line.strip().split()
-                if len(parts) >= 2:
-                    gene_id = parts[0]
-                    try:
-                        count = float(parts[1])
-                        counts_dict[gene_id] = count
-                    except ValueError:
-                        continue  # 跳过无法转换为数字的行
-        
-        # 3. 计算每个基因的RPK (Reads Per Kilobase)
-        rpk_dict = {}
-        for gene_id, count in counts_dict.items():
-            if gene_id in gene_lengths:
-                # RPK = reads / (length_kb)
-                rpk = count / (gene_lengths[gene_id] / 1000.0)
-                rpk_dict[gene_id] = rpk
-        
-        # 4. 计算RPK总和
-        sum_rpk = sum(rpk_dict.values())
-        
-        # 5. 计算每个基因的TPM
-        tpm_dict = {}
-        if sum_rpk > 0:  # 避免除以0
-            scaling_factor = 1_000_000.0 / sum_rpk
-            for gene_id, rpk in rpk_dict.items():
-                tpm = rpk * scaling_factor
-                tpm_dict[gene_id] = tpm
-        
-        return tpm_dict
-        
-    except Exception as e:
-        print(f"TPM计算错误: {str(e)}")
-        return {}
+    gene_lengths = {gene_id: len(sequence) for gene_id, sequence in cds_dict.items()}
+    
+    # 2. 读取counts文件
+    counts_dict = {}
+    counts_content = counts_file.read().decode('utf-8')
+    for line in counts_content.splitlines():
+        if line.strip():  # 跳过空行
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                gene_id = parts[0]
+                try:
+                    count = float(parts[1])
+                    counts_dict[gene_id] = count
+                except ValueError:
+                    continue  # 跳过无法转换为数字的行
+    
+    # 3. 计算每个基因的RPK (Reads Per Kilobase)
+    rpk_dict = {}
+    for gene_id, count in counts_dict.items():
+        if gene_id in gene_lengths:
+            # RPK = reads / (length_kb)
+            rpk = count / (gene_lengths[gene_id] / 1000.0)
+            rpk_dict[gene_id] = rpk
+    
+    # 4. 计算RPK总和
+    sum_rpk = sum(rpk_dict.values())
+    
+    # 5. 计算每个基因的TPM
+    tpm_dict = {}
+    if sum_rpk > 0:  # 避免除以0
+        scaling_factor = 1_000_000.0 / sum_rpk
+        for gene_id, rpk in rpk_dict.items():
+            tpm = rpk * scaling_factor
+            tpm_dict[gene_id] = tpm
+    
+    return tpm_dict
 
 def get_recommended_probe_number(tpm):
     """根据TPM值推荐探针数量
@@ -973,8 +973,6 @@ def deduplicate_gene_variants(sequences_dict, stats):
     Returns:
         Dictionary with deduplicated sequences
     """
-    import re
-
     # Group sequences by base gene ID
     gene_groups = {}
 
@@ -1088,8 +1086,6 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
     Returns:
         tuple: (formatted_text, stats_dict)
     """
-    import re
-
     lines = input_text.strip().split('\n')
     formatted_lines = []
     stats = {
@@ -1108,6 +1104,28 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
     current_sequence = []
     sequences_dict = {}  # For storing sequences before deduplication
 
+    def finish_record(header, parts):
+        """Apply the formatting options to one complete record and keep it if valid."""
+        stats['original_count'] += 1
+        sequence = ''.join(parts)
+        if uppercase:
+            sequence = sequence.upper()
+
+        # Detect sequence type and validate if filtering is enabled
+        sequence_type = detect_sequence_type(sequence)
+        stats['sequence_types'][sequence_type] += 1
+        if filter_invalid:
+            is_valid, invalid_chars = validate_sequence(sequence, sequence_type)
+            if not is_valid:
+                stats['removed_count'] += 1
+                char_type = "amino acids" if sequence_type == 'AA' else "nucleotides"
+                stats['removed_sequences'].append((header.strip('>'), f"Contains invalid {char_type}: {', '.join(sorted(invalid_chars))} (detected as {sequence_type})"))
+                return
+
+        # Store sequence for potential deduplication
+        sequences_dict[header.strip('>')] = sequence
+        stats['formatted_count'] += 1
+
     for line in lines:
         line = line.strip()
         if not line:
@@ -1116,31 +1134,7 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
         if line.startswith('>'):
             # Process previous sequence if exists
             if current_header is not None:
-                stats['original_count'] += 1
-                sequence = ''.join(current_sequence)
-
-                # Apply formatting options
-                if uppercase:
-                    sequence = sequence.upper()
-
-                # Detect sequence type and validate if filtering is enabled
-                sequence_type = detect_sequence_type(sequence)
-                stats['sequence_types'][sequence_type] += 1
-
-                if filter_invalid:
-                    is_valid, invalid_chars = validate_sequence(sequence, sequence_type)
-                    if not is_valid:
-                        stats['removed_count'] += 1
-                        char_type = "amino acids" if sequence_type == 'AA' else "nucleotides"
-                        stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid {char_type}: {', '.join(invalid_chars)} (detected as {sequence_type})"))
-                        current_header = None
-                        current_sequence = []
-                        continue
-
-                # Store sequence for potential deduplication
-                header_id = current_header.strip('>')
-                sequences_dict[header_id] = sequence
-                stats['formatted_count'] += 1
+                finish_record(current_header, current_sequence)
 
             # Process new header
             current_header = line
@@ -1155,30 +1149,7 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
 
     # Process the last sequence
     if current_header is not None:
-        stats['original_count'] += 1
-        sequence = ''.join(current_sequence)
-
-        if uppercase:
-            sequence = sequence.upper()
-
-        # Detect sequence type and validate
-        sequence_type = detect_sequence_type(sequence)
-        stats['sequence_types'][sequence_type] += 1
-
-        if filter_invalid:
-            is_valid, invalid_chars = validate_sequence(sequence, sequence_type)
-            if not is_valid:
-                stats['removed_count'] += 1
-                char_type = "amino acids" if sequence_type == 'AA' else "nucleotides"
-                stats['removed_sequences'].append((current_header.strip('>'), f"Contains invalid {char_type}: {', '.join(invalid_chars)} (detected as {sequence_type})"))
-            else:
-                header_id = current_header.strip('>')
-                sequences_dict[header_id] = sequence
-                stats['formatted_count'] += 1
-        else:
-            header_id = current_header.strip('>')
-            sequences_dict[header_id] = sequence
-            stats['formatted_count'] += 1
+        finish_record(current_header, current_sequence)
 
     # Apply deduplication if enabled
     if deduplicate:
@@ -1188,7 +1159,6 @@ def format_fasta_sequences(input_text, clean_headers=True, uppercase=True, filte
     for header_id, sequence in sequences_dict.items():
         # If deduplication was applied, use the base gene ID without variant suffix
         if deduplicate:
-            import re
             base_gene_match = re.match(r'^(.+?)[\.\-]\d+$', header_id)
             if base_gene_match:
                 output_header = base_gene_match.group(1)
@@ -1252,7 +1222,6 @@ def formatting():
             formatted_filename = f"{original_name}_formatted.fasta"
 
             # Return formatted file for download using send_file with BytesIO
-            from io import BytesIO
             output = BytesIO()
             output.write(formatted_sequences.encode('utf-8'))
             output.seek(0)
@@ -1288,17 +1257,15 @@ def probe_recommend():
             return jsonify({'error': '请选择所有必需的文件'}), 400
 
         try:
-            # 保存文件内容到临时变量
-            cds_content = cds_file.read()
-            counts_content = counts_file.read()
-            
-            # 重置文件指针
-            cds_file.seek(0)
-            counts_file.seek(0)
-            
             # 计算所有基因的TPM值
-            tpm_dict = calculate_tpm(cds_file, counts_file)
-            
+            try:
+                tpm_dict = calculate_tpm(cds_file, counts_file)
+            except UnicodeDecodeError:
+                return jsonify({'error': 'CDS 与 counts 文件需为未压缩的 UTF-8 文本。'}), 400
+            if not tpm_dict:
+                # An empty table would look like a successful run with nothing to recommend.
+                return jsonify({'error': '没有可计算 TPM 的基因：请确认两份文件的基因编号一致，且 counts 不全为 0。'}), 400
+
             # 从TPM字典中获取所有基因ID
             gene_list = list(tpm_dict.keys())
 

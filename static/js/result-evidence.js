@@ -42,7 +42,14 @@
     const index = rows.indexOf(selected);
     return index < 0 ? null : rows[index + direction] || null;
   }
-  const api = {compare, closest, targetMismatchPositions, alignmentColumns, neighbor};
+  function rankScore(probe, junctionPenalty = 0) {
+    // The selector's ranking score (lower is better): single-arm quality plus paired
+    // specificity, plus the soft penalty for an L arm that starts with G/C.
+    const evaluation = probe.evaluation || {};
+    return Number(evaluation.quality_score || 0) + Number(evaluation.specificity_score || 0)
+      + (/^[GC]/.test(probe.left_probe?.sequence || '') ? Number(junctionPenalty) || 0 : 0);
+  }
+  const api = {compare, closest, targetMismatchPositions, alignmentColumns, neighbor, rankScore};
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.HCRResults = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

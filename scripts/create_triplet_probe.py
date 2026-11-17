@@ -1,4 +1,4 @@
-from src.triple_probe import TripleProbeDesigner, ProbeSet, TripleProbeConfig,ProbeOutputHandler
+from src.triple_probe import TripleProbeDesigner, TripleProbeConfig, ProbeOutputHandler
 import os
 import random
 from datetime import datetime

@@ -1,6 +1,5 @@
 
 from Bio.Blast.Applications import NcbiblastnCommandline
-from Bio.Blast import NCBIXML
 import tempfile
 import os
 from .blast_runtime import blast_executable

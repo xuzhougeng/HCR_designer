@@ -400,12 +400,16 @@
       let rows = task.probe_sets.filter(q => filter === 'all' || (filter === 'keep' && q.keep) ||
         (filter === 'cross' && crossExact(q)) || (filter === 'excluded' && policyExcluded(q)) || (filter === 'unassessed' && !assessed(q)));
       if (range) rows = rows.filter(q => { const [a, b] = span(q); const mid = (a + b) / 2; return mid >= range[0] && mid <= range[1]; });
-      if (byId('result-sort').value === 'risk') {
+      const order = byId('result-sort').value;
+      if (order === 'risk') {
         rows = rows.slice().sort((a, b) => {
           const ca = closest(a), cb = closest(b);
           if (!ca || !cb) return (ca ? 0 : 1) - (cb ? 0 : 1);
           return byRisk(ca, cb);
         });
+      } else if (order === 'rank') {
+        const penalty = result.parameters.gc_junction_penalty;
+        rows = rows.slice().sort((a, b) => HCRResults.rankScore(a, penalty) - HCRResults.rankScore(b, penalty) || a.id - b.id);
       } else rows = rows.slice().sort((a, b) => span(a)[0] - span(b)[0]);
       return rows;
     }

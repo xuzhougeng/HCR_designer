@@ -49,8 +49,18 @@ def generate_unique_id():
     unique_id = uuid.uuid4().hex
     return unique_id
 
+# Reference FASTA alphabet: IUPAC nucleotide codes in either case, the same set the
+# reference library accepts on upload. Case never matters downstream (BLAST and the
+# pair scan both ignore it, and the file itself is left untouched so its recorded
+# SHA-256 stays valid); windows containing anything but A/C/G/T are skipped there.
+REFERENCE_ALPHABET = frozenset('ACGTURYSWKMBDHVN')
+
+
 def create_blast_db(fasta_path):
     """Create BLAST database if it doesn't exist
+
+    Sequences may be upper or lower case and may contain IUPAC ambiguity codes
+    such as N; anything else (for example protein letters) is rejected.
     
     Parameters:
     -----------
@@ -77,13 +87,13 @@ def create_blast_db(fasta_path):
             
         # Check sequence format
         for seq_id, seq in sequences.items():
-            # Check if sequence is uppercase
-            if not seq.isupper():
-                raise ValueError(f"Sequence {seq_id} contains lowercase characters")
-                
-            # Check if sequence contains only valid DNA characters
-            if not all(c in 'ATCG' for c in seq):
-                raise ValueError(f"Sequence {seq_id} contains invalid DNA characters")
+            if not seq:
+                raise ValueError(f"Sequence {seq_id} is empty")
+
+            # Check if sequence contains only nucleotide codes (either case)
+            invalid = set(seq.upper()) - REFERENCE_ALPHABET
+            if invalid:
+                raise ValueError(f"Sequence {seq_id} contains invalid DNA characters: {''.join(sorted(invalid))}")
         
         # Create BLAST database
         cline = NcbimakeblastdbCommandline(

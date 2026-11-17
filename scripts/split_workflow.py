@@ -309,13 +309,22 @@ class SplitWorkflow:
         return str(path), references, dict(info, fingerprint=fingerprint), annotation
 
     @staticmethod
-    def _lookup(identifier, sequences, aliases):
-        index = {}
-        for key in sequences:
-            folded = key.casefold()
-            if folded in index:
-                raise InputError('参考库含仅大小写不同的重复编号，请先消除歧义。')
-            index[folded] = key
+    def _lookup(identifier, sequences, aliases, indexes=None):
+        """Resolve an identifier case-insensitively.
+
+        ``indexes`` lets one prepare() call reuse the folded-ID index of each
+        sequence collection; a batch otherwise rebuilds it for every row.
+        """
+        index = None if indexes is None else indexes.get(id(sequences))
+        if index is None:
+            index = {}
+            for key in sequences:
+                folded = key.casefold()
+                if folded in index:
+                    raise InputError('参考库含仅大小写不同的重复编号，请先消除歧义。')
+                index[folded] = key
+            if indexes is not None:
+                indexes[id(sequences)] = index
         identifier = aliases.get(identifier.upper(), identifier)
         found = index.get(identifier.casefold())
         if not found:
@@ -369,6 +378,7 @@ class SplitWorkflow:
                     raise InputError('请上传或粘贴至少一行批量任务。', 'batch_file')
                 source = 'reference' if references else 'cdna'
             tasks, errors, names = [], [], set()
+            indexes = {}  # folded-ID index per sequence collection, shared by every row below
             for line, name, bridge, gene, count, allowed in rows:
                 try:
                     name = task_name(name)
@@ -386,15 +396,15 @@ class SplitWorkflow:
                     if source == 'reference':
                         if not references:
                             raise InputError('从参考库提取序列时必须选择参考库。', 'existing_ref_genome')
-                        gene, sequence = self._lookup(gene, references, self.aliases)
+                        gene, sequence = self._lookup(gene, references, self.aliases, indexes)
                     elif source == 'custom':
                         sequence = sequence_text(form.get('seq', ''))
                         if references:
-                            gene, _ = self._lookup(gene, references, self.aliases)
+                            gene, _ = self._lookup(gene, references, self.aliases, indexes)
                     else:
-                        gene, sequence = self._lookup(gene, self.cdna if source == 'cdna' else self.cds, self.aliases)
+                        gene, sequence = self._lookup(gene, self.cdna if source == 'cdna' else self.cds, self.aliases, indexes)
                         if references:
-                            gene, _ = self._lookup(gene, references, self.aliases)
+                            gene, _ = self._lookup(gene, references, self.aliases, indexes)
                     sequence = sequence_text(sequence)
                     if len(sequence) < 30:
                         raise InputError('目标序列至少需要 30 nt。', 'seq')
@@ -402,7 +412,7 @@ class SplitWorkflow:
                     allowed_ids = []
                     for transcript in split_ids(allowed):
                         if references:
-                            transcript, _ = self._lookup(transcript, references, self.aliases)
+                            transcript, _ = self._lookup(transcript, references, self.aliases, indexes)
                         if transcript.casefold() == gene.casefold():
                             raise InputError('允许共同检测的转录本不需要包含目标本身。', 'allowed_ids')
                         if transcript.casefold() not in {i.casefold() for i in allowed_ids}:

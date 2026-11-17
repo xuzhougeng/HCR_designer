@@ -1,7 +1,5 @@
 import json
-import copy
 import argparse
-from collections import defaultdict
 if __package__ in (None, ''):
     # Preserve the existing direct-script CLI as well as package imports.
     import sys
@@ -241,29 +239,6 @@ def select_probe_sets(data, max_selected=5, gc_junction_penalty=20.0, min_distan
             # 如果已经选择了足够数量的探针组，就停止
             if len(best_selection) >= max_selected:
                 break
-    
-    # 如果没有找到足够数量的探针组，就使用贪心算法找出最多的探针组
-    if not best_selection and max_selected:
-        # 按质量分数排序
-        sorted_probe_sets = sorted(probe_set_info, key=lambda x: x['combined_score'])
-        
-        # 初始化已选择的探针组和所有已选择的探针区间
-        selected_sets = []
-        selected_probe_intervals = []
-        
-        # 选择满足条件的探针组合
-        for probe_info in sorted_probe_sets:
-            current_intervals = probe_intervals_dict[probe_info['id']]
-            # 检查新探针组合是否与已选择的探针组合距离太近
-            if not is_set_too_close(current_intervals, selected_probe_intervals, min_distance):
-                selected_sets.append(probe_info)
-                selected_probe_intervals.extend(current_intervals)
-                
-                # 如果已经选择了足够数量的探针组，就停止
-                if len(selected_sets) >= max_selected:
-                    break
-        
-        best_selection = selected_sets
     
     # 确保选择了尽可能多的探针组
     if len(best_selection) < max_selected:

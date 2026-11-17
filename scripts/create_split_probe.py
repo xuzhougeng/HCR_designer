@@ -1,11 +1,10 @@
-from src.dual_probe import DualProbeDesigner, ProbeSet, DualProbeConfig,ProbeOutputHandler
+from src.dual_probe import DualProbeDesigner, DualProbeConfig, ProbeOutputHandler
 import os
 import random
 from datetime import datetime
 import logging
 import argparse
 import json
-import copy
 from scripts.utils import create_blast_db
 # set logging level info
 logging.basicConfig(level=logging.INFO)
@@ -160,7 +159,9 @@ def generate_dual_probe(sequence: str,
     # 将探针组合转换为JSON格式用于筛选
     # Preserve the exact serialized evidence, scores and 1-based coordinates.
     # Rebuilding this dictionary previously discarded BLAST and used rank as score.
-    probe_sets_json = copy.deepcopy(output_handler.probe_data)
+    # The detailed JSON is already on disk and the handler is local, so selection can
+    # annotate this structure in place instead of copying every arm's evidence.
+    probe_sets_json = output_handler.probe_data
     probe_sets_json['candidate_generation'] = {
         'mode': config.candidate_mode, 'min_length': config.min_length,
         'max_length': config.max_length, 'inner_gap': config.inner_gap,
@@ -172,25 +173,10 @@ def generate_dual_probe(sequence: str,
         probe_sets_json, f"{task_name}_filtered", config.max_selected,
         config.gc_junction_penalty, min_distance=config.min_gap)
     
-    # 获取筛选后的探针组合
-    filtered_json_path = os.path.join(config.output_dir, f"{task_name}_filtered.json")
-    with open(filtered_json_path, 'r') as f:
-        filtered_data = json.load(f)
-    
-    # 收集被保留的探针组合及其原始ID
-    filtered_probe_sets = []
-    filtered_ids = []
-    for fs in filtered_data['probe_sets']:
-        if fs.get('keep', False):
-            # 在原始数据中找到对应的探针组合
-            original_id = fs['id']
-            filtered_ids.append(original_id)
-            
-            # 找到对应的原始probe_set
-            for ps in probe_sets_json["probe_sets"]:
-                if ps['id'] == original_id:
-                    filtered_probe_sets.append(ps)
-                    break
+    # 收集被保留的探针组合及其原始ID。筛选直接在 probe_sets_json 上标注 keep，
+    # 与刚写出的 *_filtered.json 内容一致，无需再读回文件。
+    filtered_probe_sets = [ps for ps in probe_sets_json["probe_sets"] if ps.get('keep', False)]
+    filtered_ids = [ps['id'] for ps in filtered_probe_sets]
 
     # 获取杂交探针(HCR probe)
     # 随机碱基选择

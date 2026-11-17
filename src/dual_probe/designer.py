@@ -1,15 +1,12 @@
 """双探针设计核心逻辑模块"""
 from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 import logging
 from Bio.Seq import Seq
-from Bio.SeqUtils import MeltingTemp as mt
-from collections import Counter
 
 from .config import DualProbeConfig
 from ..common.sequence_utils import (
     calculate_gc_content,
-    check_poly_n,
     has_dimer_issues,
     calculate_tm,
     is_valid_probe,
