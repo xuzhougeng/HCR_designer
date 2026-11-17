@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Probe Designer{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
@@ -14,6 +15,8 @@
     <symbol id="i-split" viewBox="0 0 24 24"><path d="M3 15h18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".55"/><path d="M4 11h7M13 11h7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M11.5 11V6.5M12.5 11V6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
     <symbol id="i-triplet" viewBox="0 0 24 24"><path d="M3 15h18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".55"/><path d="M3.5 11h4.5M9.8 11h4.4M16 11h4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M12 11V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
     <symbol id="i-library" viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18.5" cy="18" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="i-subgenome" viewBox="0 0 24 24"><path d="M7 4v5.5M7 12.5V20M12 4v3.5M12 10.5V20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M17 4v7.5M17 14.5V20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".45"/></symbol>
+    <symbol id="i-reference" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
     <symbol id="i-conflict" viewBox="0 0 24 24"><path d="M4 8h10M4 16h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10 8h10M10 16h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".45"/><path d="M12 5v14" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -36,6 +39,7 @@
     ('triplet', _("三探针设计"), 'i-triplet', ['triplet', 'triplet_batch'], ''),
     ('jobs', _("任务记录"), 'i-clock', ['jobs', 'split_result'], ''),
     ('orders', _("下单清单"), 'i-cart', ['orders'], '#count'),
+    ('references', _("参考库管理"), 'i-reference', ['references'], ''),
   ]),
   (_("桥接探针库"), [
     ('bridge_list', _("浏览探针库"), 'i-library', ['bridge_list'], ''),
@@ -45,8 +49,7 @@
   ]),
   (_("序列工具"), [
     ('formatting', _("FASTA 格式化"), 'i-format', ['formatting'], ''),
-    ('subgenomes', _("亚基因组编号"), 'i-library', ['subgenomes'], ''),
-    ('references', _("参考库管理"), 'i-library', ['references'], ''),
+    ('subgenomes', _("亚基因组编号"), 'i-subgenome', ['subgenomes'], ''),
     ('probe_recommend', _("探针数量推荐"), 'i-bars', ['probe_recommend'], ''),
     ('filter', _("AI 筛选"), 'i-chip', ['filter'], _("实验")),
   ]),

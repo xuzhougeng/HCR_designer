@@ -8,7 +8,7 @@ import csv
 import re
 import json
 
-from flask import Flask, request, render_template, send_file, jsonify
+from flask import Flask, request, render_template, send_file, jsonify, redirect, url_for
 from werkzeug.utils import secure_filename
 
 from scripts.utils import load_alias, load_fasta, generate_unique_id, save_sequence, create_blast_db
@@ -196,6 +196,11 @@ def index():
 @app.route("/help", methods=['GET'])
 def help():
     return render_template('help.html')
+
+@app.route('/favicon.ico', methods=['GET'])
+def favicon():
+    """Browsers request /favicon.ico regardless of the <link rel="icon"> tag."""
+    return redirect(url_for('static', filename='favicon.svg'), code=301)
 
 from scripts.split_web import register_split_routes
 from scripts.split_workflow import InputError, task_name as valid_task_name

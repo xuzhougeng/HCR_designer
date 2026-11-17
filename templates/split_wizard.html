@@ -10,7 +10,7 @@
   <nav class="wizard-steps" aria-label="{{ _("设计步骤") }}">
     <button type="button" data-step="1" aria-current="step"><span>1</span><div>{{ _("序列与参考") }}<small>{{ _("确认目标和比对范围") }}</small></div></button>
     <button type="button" data-step="2" disabled><span>2</span><div>{{ _("参数与检查") }}<small>{{ _("确认本次设计条件") }}</small></div></button>
-    <button type="button" data-step="3" disabled><span>3</span><div>{{ _("结果复核") }}<small>{{ _("后台计算，完成后逐对复核") }}</small></div></button>
+    <div class="wizard-step-auto"><span>3</span><div>{{ _("结果复核") }}<small>{{ _("提交后自动打开结果页") }}</small></div></div>
   </nav>
   <noscript><div class="wizard-alert error">{{ _("分步页面需要启用 JavaScript。") }}</div></noscript>
   <div id="workflow-message" class="wizard-alert" role="status" aria-live="polite" hidden></div>
@@ -22,36 +22,43 @@
         <section class="input-card">
           <div class="card-heading"><h3>{{ _("目标序列") }}</h3><button type="button" class="text-button" id="fill-example">{{ _("填入 Bo/Bju 示例") }}</button></div>
           <div id="single-fields">
-            <label class="field">{{ _("任务名称") }}<input name="name" id="task-name" maxlength="80" placeholder="{{ _("例如：ABCG13_demo") }}" autocomplete="off"><small>{{ _("用于本次结果文件和探针编号；编号不与历史设计对应") }}</small></label>
+            <label class="field">{{ _("任务名称") }}<input name="name" id="task-name" maxlength="80" placeholder="{{ _("例如：ABCG13_demo") }}" autocomplete="off"><small>{{ _("用于结果文件名和探针编号") }}</small></label>
             <div class="field-grid">
-              <label class="field">{{ _("目标转录本编号") }}<input name="geneID" id="gene-id" placeholder="{{ _("例如：BjuVA06G01970") }}" autocomplete="off"><small>{{ _("使用参考库时必填，粘贴序列时也需保留") }}</small></label>
+              <label class="field">{{ _("目标转录本编号") }}<input name="geneID" id="gene-id" placeholder="{{ _("例如：BjuVA06G01970") }}" autocomplete="off"><small>{{ _("必填，粘贴序列时也要填写") }}</small></label>
               <label class="field">{{ _("桥接探针编号") }}<input name="bp_id" id="bridge-id" value="BP_1101" autocomplete="off" spellcheck="false"><small>{{ _("BP_0001–1000 或 BP_1101–2578") }}</small></label>
             </div>
             <div class="bridge-preview"><span>{{ _("对应桥接序列 · 5′ → 3′") }}</span><code id="bridge-sequence"></code></div>
             <label class="field">{{ _("目标序列来源") }}<select name="sequenceType" id="sequence-source"><option value="reference">{{ _("从所选参考库提取") }}</option><option value="custom">{{ _("直接粘贴序列") }}</option><option value="cdna">{{ _("内置 TAIR cDNA") }}</option><option value="cds">{{ _("内置 TAIR CDS") }}</option></select></label>
-            <label class="field" id="paste-field" hidden>{{ _("目标序列") }}<textarea name="seq" id="sequence-text" rows="5" spellcheck="false" placeholder="{{ _("粘贴纯 A/T/C/G 序列或单条 FASTA") }}"></textarea><small>{{ _("更换输入方式不会隐藏目标编号或覆盖粘贴内容") }}</small></label>
-            <label class="field">{{ _("允许共同检测的转录本（可选）") }}<input name="allowed_ids" id="allowed-ids" placeholder="{{ _("例如：BjuVB08G01230; BoC03G012340") }}" autocomplete="off" spellcheck="false"><small>{{ _("填写后按严格允许集合判定：目标与这些转录本之外的完全配对一律排除。留空则按第二步的目标判定模式处理") }}</small></label>
+            <label class="field" id="paste-field" hidden>{{ _("目标序列") }}<textarea name="seq" id="sequence-text" rows="5" spellcheck="false" placeholder="{{ _("粘贴纯 A/T/C/G 序列或单条 FASTA") }}"></textarea></label>
+            <label class="field">{{ _("允许共同检测的转录本（可选）") }}<input name="allowed_ids" id="allowed-ids" placeholder="{{ _("例如：BjuVB08G01230; BoC03G012340") }}" autocomplete="off" spellcheck="false"><small>{{ _("分号分隔；填写后，目标与这些转录本之外的完全配对一律排除。留空则按第二步的判定模式") }}</small></label>
           </div>
           <div id="batch-fields" hidden>
-            <p class="field-hint">{{ _("每行一个任务，支持有表头或无表头的 UTF-8 CSV。第 4 列可覆盖默认保留数量，第 5 列可用分号列出允许共同检测的转录本。") }}</p>
-            <a class="text-link" href="{{ url_for('split_batch_template') }}">{{ _("下载 CSV 模板") }}</a>
+            <p class="field-hint">{{ _("UTF-8 CSV，每行一个任务，列顺序同模板。") }} <a href="{{ url_for('split_batch_template') }}">{{ _("下载 CSV 模板") }}</a></p>
             <label class="field">{{ _("上传 CSV") }}<input type="file" name="batch_file" id="batch-file" accept=".csv,text/csv"></label>
             <label class="field">{{ _("或粘贴表格内容") }}<textarea name="batch_text" id="batch-text" rows="6" spellcheck="false" placeholder="task_name,BP_ID,gene_id,max_selected,allowed_ids&#10;ABCG13,BP_0079,BjuVA06G01970,5,"></textarea></label>
-            <p class="field-hint">{{ _("目标优先从所选参考库提取；不指定参考库时使用内置 TAIR cDNA。每行错误会明确列出，不会跳过任务。") }}</p>
+            <details class="field-details"><summary>{{ _("CSV 列说明") }}</summary>
+              <ul>
+                <li>{{ _("第 1–3 列：任务名称、桥接探针编号、目标转录本编号；表头可有可无。") }}</li>
+                <li>{{ _("第 4 列（可选）：该任务最多保留的对数，覆盖第二步的默认值。") }}</li>
+                <li>{{ _("第 5 列（可选）：允许共同检测的转录本，用分号分隔。") }}</li>
+                <li>{{ _("目标优先从所选参考库提取；不指定参考库时使用内置 TAIR cDNA。每行错误会明确列出，不会跳过任务。") }}</li>
+              </ul>
+            </details>
           </div>
         </section>
         <section class="input-card reference-card">
           <h3>{{ _("参考与特异性检查") }}</h3>
           <label class="field">{{ _("参考库来源") }}<select name="reference_mode" id="reference-mode"><option value="existing">{{ _("已有参考库") }}</option><option value="upload">{{ _("上传参考 FASTA") }}</option><option value="subgenome_files">{{ _("按亚基因组分多个文件上传") }}</option><option value="none">{{ _("不做特异性检查") }}</option></select></label>
           <label class="field" id="existing-reference-field">{{ _("选择参考库") }}<select name="existing_ref_genome" id="existing-reference"><option value="">{{ _("请选择参考序列") }}</option>{% for genome in available_genomes %}<option value="{{ genome.filename }}" data-subgenome-ready="{{ 'true' if genome.subgenome_ready else 'false' }}" data-ploidy="{{ 'true' if genome.polyploid is sameas true else 'false' if genome.polyploid is sameas false else '' }}">{{ genome.display_name }}{{ _(" · 多倍体") if genome.polyploid is sameas true else '' }}</option>{% endfor %}</select><small>{{ _("共享参考可在") }}<a href="{{ url_for('references') }}" target="_blank" rel="noopener">{{ _("参考库管理") }}</a>{{ _("页面上传和配置。") }}</small></label>
-          <label class="field" id="upload-reference-field" hidden>{{ _("上传参考序列") }}<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"><small>{{ _("支持 FASTA 或 gzip 压缩文件；只需上传一次") }}</small></label>
-          <label class="field" id="subgenome-files-field" hidden>{{ _("按亚基因组上传（可多选）") }}<input type="file" name="subgenome_files" id="subgenome-files" accept=".fa,.fasta,.fna,.gz" multiple><small>{{ _("每个文件视为一个亚基因组，名称取自文件名；至少两个文件，编号不得在文件之间重复") }}</small></label>
+          <label class="field" id="upload-reference-field" hidden>{{ _("上传参考序列") }}<input type="file" name="ref_genome" id="reference-file" accept=".fa,.fasta,.fna,.gz"><small>{{ _("FASTA 或 gzip，只需上传一次") }}</small></label>
+          <label class="field" id="subgenome-files-field" hidden>{{ _("按亚基因组上传（可多选）") }}<input type="file" name="subgenome_files" id="subgenome-files" accept=".fa,.fasta,.fna,.gz" multiple><small>{{ _("每个文件一个亚基因组（以文件名命名），至少两个；编号不可跨文件重复") }}</small></label>
           <label class="check-card" id="multiple-sets-field" hidden><input type="checkbox" name="process_multiple_sets" id="process-multiple-sets">{{ _("启用多倍体模式（是否考虑多套染色体）") }}<small id="multiple-sets-hint">{{ _("使用参考库已保存的亚基因组归属；结果页提供跨组同源比对与跨物种优先的配对证据。") }}</small></label>
           <div class="reference-note" id="reference-note">{{ _("参考库用于查找目标及非目标转录本上的双臂配对。Bo/Bju cDNA 是转录本参考库。") }}</div>
           <div class="reference-note" id="subgenome-note">{{ _("参考库、倍性与亚基因组归属文件可在参考库管理页配置；编号归属 CSV 可由") }}<a href="{{ url_for('subgenomes') }}" target="_blank" rel="noopener">{{ _("亚基因组编号工具") }}</a>{{ _("单独生成。") }}</div>
-          <div class="scope-note"><h4>{{ _("结果如何理解") }}</h4><p>{{ _("双臂配对按完整无缺口扫描检出（每臂最多 3 个替换，正向转录本）；非允许转录本上的完全配对会被排除，近似配对保留证据供复核。") }}</p><p>{{ _("插入缺失未复核；候选保留不代表已经通过实验特异性验证。") }}</p></div>
+          <details class="scope-note"><summary>{{ _("扫描范围") }}</summary><p>{{ _("双臂配对按完整无缺口扫描检出（每臂最多 3 个替换，正向转录本）；非允许转录本上的完全配对会被排除，近似配对保留证据供复核。") }}</p></details>
         </section>
       </div>
+      <div class="wizard-caveats" role="note" aria-label="{{ _("使用前须知") }}"><strong>{{ _("使用前须知") }}</strong><ul><li>{{ _("结果是计算候选，不代表已通过实验特异性验证。") }}</li><li>{{ _("不检查插入/缺失：只按无缺口配对扫描。") }}</li></ul></div>
       <footer class="wizard-actions"><span>{{ _("先检查编号、桥接探针和参考序列") }}</span><button type="button" class="wizard-button primary" id="prepare-button">{{ _("检查输入并继续") }} <span aria-hidden="true">→</span></button></footer>
     </section>
     <section id="step-2" class="wizard-panel" aria-labelledby="parameter-heading" hidden>
