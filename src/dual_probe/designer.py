@@ -1,15 +1,12 @@
 """双探针设计核心逻辑模块"""
 from dataclasses import dataclass
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 import logging
 from Bio.Seq import Seq
-from Bio.SeqUtils import MeltingTemp as mt
-from collections import Counter
 
 from .config import DualProbeConfig
 from ..common.sequence_utils import (
     calculate_gc_content,
-    check_poly_n,
     has_dimer_issues,
     calculate_tm,
     is_valid_probe,
@@ -117,6 +114,9 @@ class DualProbeDesigner:
         repeat_kmers = calculate_kmer_count(sequence, self.config.kmer_size, self.config.min_kmer_count)
         self.kmer_list = list(repeat_kmers)
 
+        if self.config.candidate_mode == 'exhaustive':
+            return self._design_all_lengths(sequence, repeat_kmers)
+
         # Candidate generation enumerates every left start whose pair can still fit
         # (two arms plus the inner gap); spacing between selected pairs is decided
         # later by probeset_select, so candidates may overlap each other here.
@@ -145,6 +145,39 @@ class DualProbeDesigner:
             probe_sets.append(ProbeSet(left_result, right_result, has_gc_junction))
 
         return probe_sets
+
+    def _design_all_lengths(self, sequence, repeat_kmers):
+        """Enumerate every valid L/R length at every start, caching each arm once.
+
+        Arms use zero-based half-open target coordinates and antisense sequences,
+        as in the first-valid path. Candidate overlap is intentional; selection
+        and its inter-pair spacing happen after the paired specificity scan.
+        """
+        config = self.config
+        arms = {}
+        for start in range(len(sequence) - config.min_length + 1):
+            valid = []
+            for length in range(config.min_length, min(config.max_length, len(sequence)-start) + 1):
+                target = sequence[start:start+length]
+                # Same within-target repeat rule, using fixed-size set lookups.
+                if any(target[i:i+config.kmer_size] in repeat_kmers
+                       for i in range(len(target)-config.kmer_size+1)):
+                    continue
+                if not is_valid_probe(target, min_length=config.min_length, max_length=config.max_length,
+                                      gc_min=config.gc_min, gc_max=config.gc_max,
+                                      tm_min=config.tm_min, tm_max=config.tm_max, poly_n=config.poly_n):
+                    continue
+                antisense = str(Seq(target).reverse_complement())
+                valid.append((antisense, start, start+length,
+                              calculate_tm(antisense), calculate_gc_content(antisense)))
+            arms[start] = valid
+        pairs = []
+        for start, left_arms in arms.items():
+            for left in left_arms:
+                for right in arms.get(left[2] + config.inner_gap, ()):
+                    if self._check_probe_compatibility(left, right):
+                        pairs.append(ProbeSet(left, right, check_left_probe_gc_junction(left[0])))
+        return pairs
     
 
     

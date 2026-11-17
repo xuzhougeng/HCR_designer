@@ -215,5 +215,10 @@
   "归属文件中没有可用于比对的其他分组序列。": "No sequences from other annotated groups are available for alignment.",
   "同源序列比对超时，请稍后重试。": "Homolog alignment timed out. Please retry later.",
   "同源序列比对未完成，请检查 BLAST 环境后重试。": "Homolog alignment failed. Check the BLAST environment and retry.",
-  "在其他已标注分组中未检出显著相似的序列（E ≤ 1e-5）。": "No significantly similar sequences were detected in other annotated groups (E ≤ 1e-5)."
+  "在其他已标注分组中未检出显著相似的序列（E ≤ 1e-5）。": "No significantly similar sequences were detected in other annotated groups (E ≤ 1e-5).",
+  "请选择有效的候选生成方式。": "Please choose a valid candidate generation mode.",
+  "CDS 与 counts 文件需为未压缩的 UTF-8 文本。": "The CDS and counts files must be uncompressed UTF-8 text.",
+  "没有可计算 TPM 的基因：请确认两份文件的基因编号一致，且 counts 不全为 0。": "No gene has a computable TPM: check that both files use the same gene IDs and that the counts are not all zero.",
+  "目标序列只能包含 A/T/C/G，含模糊碱基的序列无法设计三探针。": "The target sequence may contain only A/T/C/G; a sequence with ambiguous bases cannot be used for triplet design.",
+  "{v0} 的序列含 A/T/C/G 以外的碱基，无法设计三探针": "The sequence of {v0} contains bases other than A/T/C/G and cannot be used for triplet design"
 }

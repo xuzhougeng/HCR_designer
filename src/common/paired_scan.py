@@ -5,6 +5,7 @@ on demand into ``.tools/paired_scan/<source hash>/``. A missing compiler,
 a failed run or a truncated output raise; they are never reported as "no hits".
 """
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import os
 from pathlib import Path
@@ -73,24 +74,49 @@ def scan_pairs(pairs, reference_path, max_substitutions=3, timeout=None):
     if not distinct:
         return {}, dict(run_info, status='completed', sequences=0, bases=0, paired_hits=0, seconds=0.0)
     binary = scanner_executable()
+    try:
+        workers = int(os.environ.get('HCR_SCAN_WORKERS', '1'))
+    except ValueError as error:
+        raise ValueError('HCR_SCAN_WORKERS must be an integer between 1 and 32') from error
+    if not 1 <= workers <= 32:
+        raise ValueError('HCR_SCAN_WORKERS must be an integer between 1 and 32')
+    workers = min(workers, len(distinct))
+    started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix='hcr-scan-') as directory:
-        queries = Path(directory) / 'queries.tsv'
-        output = Path(directory) / 'hits.tsv'
-        queries.write_text(''.join(f'p{i}\t{l}\t{r}\t{g}\n' for i, (l, r, g) in enumerate(distinct)))
-        started = time.perf_counter()
-        try:
-            completed = subprocess.run([binary, str(queries), str(reference_path), str(output), str(max_substitutions)],
-                                       capture_output=True, text=True, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            raise ScanError(f'paired_scan exceeded {timeout} s on {reference_path.name}') from error
-        if completed.returncode != 0:
-            raise ScanError(f'paired_scan failed (exit {completed.returncode}): {completed.stderr.strip()}')
-        lines = output.read_text().splitlines()
-    if len(lines) < 2 or lines[0] != '\t'.join(COLUMNS) or not lines[-1].startswith('#DONE'):
-        raise ScanError('paired_scan output is incomplete; the scan did not finish')
-    trailer = dict(item.split('=') for item in lines[-1].split('\t')[1:])
+        def scan_partition(part):
+            queries = Path(directory) / f'queries-{part}.tsv'
+            output = Path(directory) / f'hits-{part}.tsv'
+            indices = range(part, len(distinct), workers)
+            queries.write_text(''.join(f'p{i}\t{distinct[i][0]}\t{distinct[i][1]}\t{distinct[i][2]}\n' for i in indices))
+            try:
+                completed = subprocess.run([binary, str(queries), str(reference_path), str(output), str(max_substitutions)],
+                                           capture_output=True, text=True, timeout=timeout)
+            except subprocess.TimeoutExpired as error:
+                raise ScanError(f'paired_scan exceeded {timeout} s on {reference_path.name}') from error
+            if completed.returncode != 0:
+                raise ScanError(f'paired_scan failed (exit {completed.returncode}): {completed.stderr.strip()}')
+            lines = output.read_text().splitlines()
+            if len(lines) < 2 or lines[0] != '\t'.join(COLUMNS) or not lines[-1].startswith('#DONE'):
+                raise ScanError('paired_scan output is incomplete; the scan did not finish')
+            trailer = dict(item.split('=') for item in lines[-1].split('\t')[1:])
+            if int(trailer['queries']) != len(indices):
+                raise ScanError('paired_scan did not account for every query')
+            return lines[1:-1], trailer
+        if workers == 1:
+            partitions = [scan_partition(0)]
+        else:
+            # Partition queries, never the reference: every pair still searches
+            # every transcript. Results and failure handling match the serial run.
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                partitions = list(pool.map(scan_partition, range(workers)))
+    trailer = dict(partitions[0][1])
+    for field in ('sequences', 'bases', 'ambiguous_bases'):
+        if any(stats[field] != trailer[field] for _, stats in partitions):
+            raise ScanError('paired_scan partitions disagree about the reference')
+    for field in ('verified_candidates', 'paired_hits', 'peak_rss_kb'):
+        trailer[field] = sum(int(stats[field]) for _, stats in partitions)
     hits = defaultdict(list)
-    for line in lines[1:-1]:
+    for line in (line for records, _ in partitions for line in records):
         fields = line.split('\t')
         if len(fields) != len(COLUMNS):
             raise ScanError('paired_scan output has a malformed record')
@@ -108,5 +134,7 @@ def scan_pairs(pairs, reference_path, max_substitutions=3, timeout=None):
     run_info.update(status='completed', sequences=int(trailer['sequences']), bases=int(trailer['bases']),
                     ambiguous_bases=int(trailer['ambiguous_bases']), verified_candidates=int(trailer['verified_candidates']),
                     paired_hits=int(trailer['paired_hits']), seconds=round(time.perf_counter() - started, 3),
-                    peak_rss_mb=round(int(trailer['peak_rss_kb']) / 1024, 1), executable=binary)
+                    peak_rss_mb=round(int(trailer['peak_rss_kb']) / 1024, 1),
+                    peak_rss_aggregation='sum of worker peaks' if workers > 1 else 'single process peak',
+                    workers=workers, executable=binary)
     return {pair: hits.get(pair, []) for pair in distinct}, run_info

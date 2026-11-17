@@ -57,7 +57,8 @@
   <p class="empty" id="reference-no-results" hidden>{{ _("没有匹配的参考库，请尝试其他名称或文件名。") }}</p>
   {{ pagination(_("底部")) }}
 </section>
-<p class="hint">{{ _("选择多倍体参考时，分析页面会提示是否考虑多套染色体。勾选后使用本页保存的亚基因组归属，按目标所属亚基因组判定非目标配对；无需再次上传。共享参考及归属由管理员手动清理，不随分析结果的三个月保留期自动删除。") }}</p>
+<p class="hint">{{ _("选择多倍体参考时，分析页面会提示是否考虑多套染色体。勾选后使用本页保存的亚基因组归属，按目标所属亚基因组判定非目标配对；无需再次上传。") }}</p>
+{% if reference_retention_days %}<p class="hint">{{ _("共享参考连续 {days} 天未被上传或在设计中选用即过期，存储清理时会连同归属文件和 BLAST 索引一起删除；需要时可重新上传。", days=reference_retention_days) }}</p>{% endif %}
 <script type="application/json" id="reference-config">{{ {'csrf': admin_csrf_token(), 'upload_url': url_for('reference_upload'), 'configure_url': url_for('reference_configure'), 'hash_url': url_for('reference_hash'), 'delete_url': url_for('admin_delete'), 'login_url': url_for('admin_login', next='references')}|tojson }}</script>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/references.js') }}"></script>{% endblock %}

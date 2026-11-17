@@ -51,7 +51,13 @@ class ScannerTests(unittest.TestCase):
             reference = Path(directory) / 'reference.fa'
             reference.write_text(''.join(f'>{sid} description text\n{seq[:60].lower()}\n{seq[60:]}\n' for sid, seq in sequences.items()))
             for k in (0, 3):
-                hits, info = scan_pairs(pairs, reference, k)
+                with patch.dict(os.environ, {'HCR_SCAN_WORKERS': '1'}):
+                    hits, info = scan_pairs(pairs, reference, k)
+                with patch.dict(os.environ, {'HCR_SCAN_WORKERS': '4'}):
+                    parallel_hits, parallel_info = scan_pairs(pairs, reference, k)
+                self.assertEqual(parallel_hits, hits)
+                for field in ('pairs_scanned', 'sequences', 'bases', 'ambiguous_bases', 'paired_hits', 'verified_candidates'):
+                    self.assertEqual(parallel_info[field], info[field])
                 observed = {(pair, h['subject_id'], h['left_start'], h['left_end'], h['right_start'], h['right_end'],
                              h['left_mismatches'], h['right_mismatches']) for pair, records in hits.items() for h in records}
                 self.assertEqual(observed, brute_force(sequences, pairs, k))
@@ -92,6 +98,13 @@ class ScannerTests(unittest.TestCase):
             with patch.object(paired_scan, 'scanner_executable', return_value='/bin/sh'):
                 with self.assertRaises(ScanError):
                     scan_pairs([pair], reference, 3)
+            with patch.dict(os.environ, {'HCR_SCAN_WORKERS': '4'}):
+                with self.assertRaises(ScanError):
+                    scan_pairs([pair, ('T' * 16, 'G' * 16, 0)], Path(directory) / 'empty.fa', 3)
+            for workers in ('0', '33', 'invalid'):
+                with patch.dict(os.environ, {'HCR_SCAN_WORKERS': workers}):
+                    with self.assertRaises(ValueError):
+                        scan_pairs([pair], reference, 3)
 
 
 if __name__ == '__main__':

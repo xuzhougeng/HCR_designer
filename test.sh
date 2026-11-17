@@ -1,4 +1,6 @@
 #!/bin/bash
+# Run the whole unit-test suite from the project root.
+# Uses HCR_PYTHON when set, otherwise the project virtualenv, otherwise python3.
 
 # 设置颜色代码
 GREEN='\033[0;32m'
@@ -13,30 +15,27 @@ print_message() {
     echo -e "${color}${message}${NC}"
 }
 
+cd "$(dirname "$0")" || exit 1
+
+if [ -n "$HCR_PYTHON" ]; then
+    PYTHON="$HCR_PYTHON"
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
 # 检查Python是否安装
-if ! command -v python3 &> /dev/null; then
-    print_message "$RED" "错误: 未找到 Python3"
+if ! command -v "$PYTHON" &> /dev/null; then
+    print_message "$RED" "错误: 未找到 Python ($PYTHON)"
     exit 1
 fi
 
 # 检查必要的Python包是否安装
 print_message "$YELLOW" "检查依赖项..."
-python3 -c "import Bio" 2>/dev/null
-if [ $? -ne 0 ]; then
-    print_message "$RED" "错误: 未找到 Biopython 包"
-    print_message "$YELLOW" "请运行: pip install biopython"
-    exit 1
-fi
-
-# 检查测试文件是否存在
-if [ ! -f "tests/test_tcr2.py" ]; then
-    print_message "$RED" "错误: 未找到测试文件 tests/test_tcr2.py"
-    exit 1
-fi
-
-# 检查源代码文件是否存在
-if [ ! -f "scripts/tcr2.py" ]; then
-    print_message "$RED" "错误: 未找到源代码文件 scripts/tcr2.py"
+if ! "$PYTHON" -c "import Bio, flask" 2>/dev/null; then
+    print_message "$RED" "错误: 未找到 Biopython 或 Flask"
+    print_message "$YELLOW" "请运行: $PYTHON -m pip install -r requirements.txt"
     exit 1
 fi
 
@@ -44,11 +43,14 @@ fi
 print_message "$YELLOW" "开始运行测试..."
 echo "----------------------------------------"
 
-# 使用 -v 参数运行测试以获得详细输出
-python3 -m unittest tests/test_tcr2.py -v
-
-# 获取测试结果
+"$PYTHON" -m unittest discover -s tests "$@"
 test_result=$?
+
+if command -v node &> /dev/null; then
+    node --test tests/test_result_evidence.js || test_result=1
+else
+    print_message "$YELLOW" "未找到 node，跳过 tests/test_result_evidence.js"
+fi
 
 echo "----------------------------------------"
 

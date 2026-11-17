@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {closest, compare, targetMismatchPositions, alignmentColumns, neighbor} = require('../static/js/result-evidence.js');
+const {closest, compare, targetMismatchPositions, alignmentColumns, neighbor, rankScore} = require('../static/js/result-evidence.js');
 const same = {subject_id: 'BjuB', relation: 'same_species_other', subject_subgenome: 'B', left_mismatches: 0, right_mismatches: 0};
 const cross = {subject_id: 'BoC', relation: 'cross_species', subject_subgenome: 'C', left_mismatches: 1, right_mismatches: 2};
 
@@ -60,4 +60,17 @@ test('evidence navigation follows the filtered/sorted rows and stops at either e
   assert.equal(neighbor([a, c], b, 1), null);
   assert.equal(neighbor([a, c], a, -1), null);
   assert.equal(neighbor([a, c], c, 1), null);
+});
+
+test('score order follows the selector: quality plus specificity plus the G/C-start penalty', () => {
+  const probe = (id, first, quality, specificity) => ({id, left_probe: {sequence: first + 'ACGT'},
+    evaluation: {quality_score: quality, specificity_score: specificity}});
+  const clean = probe(1, 'A', 5, 0), penalised = probe(2, 'G', 5, 0), offTarget = probe(3, 'T', 0, 12), unassessed = probe(4, 'T', 7, null);
+  assert.equal(rankScore(clean, 20), 5);
+  assert.equal(rankScore(penalised, 20), 25);
+  assert.equal(rankScore(offTarget, 20), 12);
+  assert.equal(rankScore(unassessed, 20), 7);
+  assert.equal(rankScore(penalised), 5);
+  const ordered = [penalised, offTarget, unassessed, clean].sort((a, b) => rankScore(a, 20) - rankScore(b, 20) || a.id - b.id);
+  assert.deepEqual(ordered.map(item => item.id), [1, 4, 3, 2]);
 });

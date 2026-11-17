@@ -25,7 +25,8 @@ from src.common.reference_annotation import (MAX_LABEL_LENGTH, format_subgenome_
 DEFAULTS = dict(min_length=15, max_length=20, min_gc=40., max_gc=60.,
                 min_tm=47., max_tm=53., min_gap=2, max_selected=5, poly_n=4,
                 kmer_size=8, min_kmer_count=2, min_complementary_length=5,
-                gc_junction_penalty=20., exclusion_max_mismatches=0, target_mode='species')
+                gc_junction_penalty=20., exclusion_max_mismatches=0, target_mode='species',
+                candidate_mode='first_valid')
 LIMITS = dict(min_length=(15, 20), max_length=(15, 50), min_gc=(0, 100),
               max_gc=(0, 100), min_tm=(0, 100), max_tm=(0, 100), min_gap=(0, 10000),
               max_selected=(1, 10), poly_n=(2, 20), kmer_size=(6, 10),
@@ -76,6 +77,10 @@ def parse_parameters(values):
     if mode not in TARGET_MODES:
         raise InputError('请选择有效的目标判定模式。', 'target_mode')
     result['target_mode'] = mode
+    candidate_mode = str(values.get('candidate_mode', DEFAULTS['candidate_mode']) or '').strip()
+    if candidate_mode not in ('first_valid', 'exhaustive'):
+        raise InputError('请选择有效的候选生成方式。', 'candidate_mode')
+    result['candidate_mode'] = candidate_mode
     for low, high in [('min_length', 'max_length'), ('min_gc', 'max_gc'), ('min_tm', 'max_tm')]:
         if result[low] > result[high]:
             raise InputError(f'{LABELS[low]}不能大于{LABELS[high]}。', low)
@@ -280,6 +285,7 @@ class SplitWorkflow:
                 'species_counts': dict(Counter(infer_species(key) or '其他/未知' for key in references)),
                 'sha256': digest.hexdigest()}
         if mode == 'existing' and self.reference_library:
+            self.reference_library.touch(path.name)
             metadata = next((entry for entry in self.reference_library.list() if entry['filename'] == path.name), None)
             if metadata:
                 info['display_name'] = metadata['display_name']
@@ -304,13 +310,22 @@ class SplitWorkflow:
         return str(path), references, dict(info, fingerprint=fingerprint), annotation
 
     @staticmethod
-    def _lookup(identifier, sequences, aliases):
-        index = {}
-        for key in sequences:
-            folded = key.casefold()
-            if folded in index:
-                raise InputError('参考库含仅大小写不同的重复编号，请先消除歧义。')
-            index[folded] = key
+    def _lookup(identifier, sequences, aliases, indexes=None):
+        """Resolve an identifier case-insensitively.
+
+        ``indexes`` lets one prepare() call reuse the folded-ID index of each
+        sequence collection; a batch otherwise rebuilds it for every row.
+        """
+        index = None if indexes is None else indexes.get(id(sequences))
+        if index is None:
+            index = {}
+            for key in sequences:
+                folded = key.casefold()
+                if folded in index:
+                    raise InputError('参考库含仅大小写不同的重复编号，请先消除歧义。')
+                index[folded] = key
+            if indexes is not None:
+                indexes[id(sequences)] = index
         identifier = aliases.get(identifier.upper(), identifier)
         found = index.get(identifier.casefold())
         if not found:
@@ -364,6 +379,7 @@ class SplitWorkflow:
                     raise InputError('请上传或粘贴至少一行批量任务。', 'batch_file')
                 source = 'reference' if references else 'cdna'
             tasks, errors, names = [], [], set()
+            indexes = {}  # folded-ID index per sequence collection, shared by every row below
             for line, name, bridge, gene, count, allowed in rows:
                 try:
                     name = task_name(name)
@@ -381,15 +397,15 @@ class SplitWorkflow:
                     if source == 'reference':
                         if not references:
                             raise InputError('从参考库提取序列时必须选择参考库。', 'existing_ref_genome')
-                        gene, sequence = self._lookup(gene, references, self.aliases)
+                        gene, sequence = self._lookup(gene, references, self.aliases, indexes)
                     elif source == 'custom':
                         sequence = sequence_text(form.get('seq', ''))
                         if references:
-                            gene, _ = self._lookup(gene, references, self.aliases)
+                            gene, _ = self._lookup(gene, references, self.aliases, indexes)
                     else:
-                        gene, sequence = self._lookup(gene, self.cdna if source == 'cdna' else self.cds, self.aliases)
+                        gene, sequence = self._lookup(gene, self.cdna if source == 'cdna' else self.cds, self.aliases, indexes)
                         if references:
-                            gene, _ = self._lookup(gene, references, self.aliases)
+                            gene, _ = self._lookup(gene, references, self.aliases, indexes)
                     sequence = sequence_text(sequence)
                     if len(sequence) < 30:
                         raise InputError('目标序列至少需要 30 nt。', 'seq')
@@ -397,7 +413,7 @@ class SplitWorkflow:
                     allowed_ids = []
                     for transcript in split_ids(allowed):
                         if references:
-                            transcript, _ = self._lookup(transcript, references, self.aliases)
+                            transcript, _ = self._lookup(transcript, references, self.aliases, indexes)
                         if transcript.casefold() == gene.casefold():
                             raise InputError('允许共同检测的转录本不需要包含目标本身。', 'allowed_ids')
                         if transcript.casefold() not in {i.casefold() for i in allowed_ids}:
@@ -462,7 +478,9 @@ class SplitWorkflow:
         if manifest.get('process_multiple_sets'):
             parameters['target_mode'] = 'subgenome'
         if manifest['status'] == 'completed':
-            if self.result(identifier)['parameters'] != parameters:
+            previous = dict(self.result(identifier)['parameters'])
+            previous.setdefault('candidate_mode', 'first_valid')
+            if previous != parameters:
                 raise InputError('这个任务已完成；修改参数后请重新检查输入以创建新任务。', status=409)
             return False
         if manifest['status'] in ('queued', 'running') or (directory / 'running.lock').exists():
@@ -474,6 +492,9 @@ class SplitWorkflow:
                 raise InputError('参考库已被清理，请返回第一步重新选择参考库。')
             if {'mtime_ns': stat.st_mtime_ns, 'size': stat.st_size} != manifest['reference']['fingerprint']:
                 raise InputError('参考库在输入检查后发生变化，请返回第一步重新检查。')
+            shared = Path(manifest['reference_path'])
+            if self.reference_library and shared.parent == self.upload_root:
+                self.reference_library.touch(shared.name)
         if parameters['target_mode'] == 'subgenome':
             if not manifest.get('subgenome_map'):
                 raise InputError('亚基因组模式需要归属信息：请在第一步勾选使用多倍体参考库中已配置的归属，'
@@ -525,6 +546,7 @@ class SplitWorkflow:
                              bridge_probe=task['bridge_sequence'], bridge_probe_id=task['bridge_id'],
                              output_dir=str(task_dir), max_selected=count,
                              gc_junction_penalty=parameters['gc_junction_penalty'],
+                             candidate_mode=parameters.get('candidate_mode', 'first_valid'),
                              target_policy=task_policy(task, parameters, manifest), progress=report)
                 save_sequence(task['gene_id'] or task['name'], task['sequence'], str(task_dir / 'target.fasta'))
                 data = json.loads((task_dir / (task['name'] + '_filtered.json')).read_text())
@@ -545,8 +567,10 @@ class SplitWorkflow:
                                     excluded=sum(p.get('reason_code', '').endswith('_pair') and p.get('reason_code') != 'no_exact_on_target_pair' for p in probes),
                                     unassessed=sum(p.get('specificity', {}).get('status') != 'completed' for p in probes),
                                     target_policy=data.get('target_policy') or task_policy(task, parameters, manifest),
+                                    candidate_generation=data.get('candidate_generation'),
                                     search={k: v for k, v in search.items() if k not in ('reference', 'executable')},
                                     probe_sets=compact))
+                write_json(task_dir / 'task_result.json', results[-1])
             self._progress(directory, 'packaging', total, total)
             exhaustive = bool(manifest['reference_path']) and all(
                 t['search'].get('status') == 'completed' and t['unassessed'] == 0 for t in results)
@@ -566,6 +590,8 @@ class SplitWorkflow:
                             relative = Path(*relative.parts[1:])
                         archive.write(path, str(relative))
             write_json(directory / 'result.json', result)
+            index = dict(result, lazy_tasks=True, tasks=[{k: v for k, v in t.items() if k != 'probe_sets'} for t in results])
+            write_json(directory / 'result_index.json', index)
             manifest.update(status='completed', completed_at=result['completed_at'], summary=summarize(results))
             write_json(directory / 'request.json', manifest)
             self._progress(directory, 'completed', total, total)
@@ -654,6 +680,23 @@ class SplitWorkflow:
                     if probe['id'] in synthesis:
                         probe['synthesis'] = synthesis[probe['id']]
         return result
+
+    def result_index(self, identifier):
+        """Small browser summary; old jobs retain their existing result behavior."""
+        path = self.job_dir(identifier) / 'result_index.json'
+        return json.loads(path.read_text()) if path.is_file() else self.result(identifier)
+
+    def task_result(self, identifier, index):
+        summary = self.result_index(identifier)
+        if not 0 <= index < len(summary['tasks']):
+            raise InputError('请选择有效的任务编号。', status=404)
+        if not summary.get('lazy_tasks'):
+            return summary['tasks'][index]
+        task = summary['tasks'][index]
+        path = self.job_dir(identifier) / 'output' / task['name'] / 'task_result.json'
+        if not path.is_file():
+            raise InputError('该任务尚未生成完整结果。', status=409)
+        return json.loads(path.read_text())
 
     def homolog_alignment(self, identifier, task_index):
         """Review only: use the job's reference and membership snapshot, never current library settings."""

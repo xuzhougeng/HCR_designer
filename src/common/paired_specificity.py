@@ -7,6 +7,7 @@ results are kept only as ranking evidence; they do not decide exclusions.
 All public coordinates are 1-based inclusive in the sense transcript direction.
 """
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 import os
@@ -217,6 +218,27 @@ def parse_seed_hits(output, queries, reference, max_substitutions=MAX_SUBSTITUTI
 
 def analyze_probe_sequences(probe_sequences, reference_path, num_threads=4):
     """Batch BLAST all distinct targeting arms for single-arm ranking evidence; errors propagate."""
+    sequences = list(dict.fromkeys(probe_sequences))
+    try:
+        workers = int(os.environ.get('HCR_BLAST_WORKERS', '1'))
+    except ValueError as error:
+        raise ValueError('HCR_BLAST_WORKERS must be an integer between 1 and 32') from error
+    if not 1 <= workers <= 32:
+        raise ValueError('HCR_BLAST_WORKERS must be an integer between 1 and 32')
+    if workers == 1 or len(sequences) < 2:
+        return _analyze_probe_sequences_serial(sequences, reference_path, num_threads)
+    # Load the shared reference once before worker threads access the cache.
+    # Each arm still searches the full database with identical BLAST options.
+    load_reference(reference_path)
+    workers = min(workers, len(sequences))
+    chunks = [sequences[i::workers] for i in range(workers)]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(lambda chunk: _analyze_probe_sequences_serial(chunk, reference_path, 1), chunks))
+    merged = {sequence: result for part in results for sequence, result in part.items()}
+    return {sequence: merged[sequence] for sequence in sequences}
+
+
+def _analyze_probe_sequences_serial(probe_sequences, reference_path, num_threads):
     sequences = list(dict.fromkeys(probe_sequences))
     if any(len(s) < 7 or set(s) - set('ACGT') for s in sequences):
         raise ValueError('Targeting probes must contain A/C/G/T only and be at least 7 nt')

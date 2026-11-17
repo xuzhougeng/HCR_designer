@@ -118,7 +118,10 @@
   const byRisk = (a, b) => risk(a)[0] - risk(b)[0] || risk(a)[1] - risk(b)[1];
 
   function showResults(result) {
+    result.tasks.forEach(t => { if (!t.probe_sets) t.probe_sets = []; });
     let task = result.tasks[0], selected = null, range = null;
+    let taskGeneration = 0, tablePage = 0, tableKey = '';
+    const loadedTasks = new Set(result.lazy_tasks ? [] : result.tasks.map((t, i) => i));
     const polyploidAvailable = result.process_multiple_sets || result.parameters.target_mode === 'subgenome';
     let polyploid = Boolean(polyploidAvailable), alignment = null, alignmentColumns = [], windowStart = 1;
     let alignmentRequest = null, alignmentGeneration = 0;
@@ -147,13 +150,17 @@
       const sha = el('div'); sha.append(HCR.t("参考 SHA256："), el('code', result.reference.sha256)); settings.append(sha);
     }
     line(HCR.t("臂长 ") + p.min_length + '–' + p.max_length + ' nt · Tm ' + p.min_tm + '–' + p.max_tm + ' °C · GC ' + p.min_gc + '–' + p.max_gc + '%');
+    line(HCR.t("候选生成方式") + '：' + (p.candidate_mode === 'exhaustive' ? HCR.t("完整臂长枚举") : HCR.t("每个起点首个合格长度（原方式）")));
     line(HCR.t("默认最多 ") + p.max_selected + HCR.t(" 对/基因 · 组合间距 ") + p.min_gap + HCR.t(" nt · 臂内间隔 0 nt · 连续同碱基阈值 ") + p.poly_n);
     line(HCR.t("目标判定 ") + (MODES[p.target_mode] || p.target_mode) + HCR.t(" · 非允许配对排除阈值 每臂 ≤ ") + p.exclusion_max_mismatches + HCR.t(" 错配"));
     line(HCR.t("提交 ") + new Date(result.created_at).toLocaleString(HCR.locale) + HCR.t(" · 完成 ") + new Date(result.completed_at).toLocaleString(HCR.locale));
 
     const picker = byId('result-task');
     result.tasks.forEach((t, i) => { const o = el('option', t.name + ' · ' + t.gene_id + ' · ' + t.bridge_id); o.value = i; picker.append(o); });
-    picker.addEventListener('change', () => { task = result.tasks[Number(picker.value)]; selected = null; range = null; alignment = null; alignmentColumns = []; windowStart = 1; byId('evidence').hidden = true; render(); loadAlignment(); });
+    picker.addEventListener('change', () => activateTask(Number(picker.value)));
+    byId('task-retry').addEventListener('click', () => activateTask(Number(picker.value)));
+    byId('candidate-back').addEventListener('click', () => { tablePage = Math.max(0, tablePage - 1); renderTable(); });
+    byId('candidate-next').addEventListener('click', () => { tablePage++; renderTable(); });
     byId('result-filter').addEventListener('change', renderTable);
     byId('result-sort').addEventListener('change', renderTable);
     byId('close-evidence').addEventListener('click', () => { selected = null; byId('evidence').hidden = true; renderTrack(); renderTable(); });
@@ -177,6 +184,31 @@
     });
 
     function orderKey(probe) { return status.id + ':' + task.name + ':' + probe.id; }
+
+    async function activateTask(index) {
+      const generation = ++taskGeneration;
+      task = result.tasks[index]; selected = null; range = null; alignment = null;
+      alignmentColumns = []; windowStart = 1; tablePage = 0;
+      alignmentRequest?.abort(); ++alignmentGeneration;
+      byId('evidence').hidden = true;
+      byId('task-retry').hidden = true;
+      const notice = byId('task-load-status');
+      render();
+      if (!loadedTasks.has(index)) {
+        notice.hidden = false; notice.textContent = HCR.t("正在加载该基因的候选与证据……");
+        try {
+          const response = await fetch(result.task_url_prefix + index, {headers: {Accept: 'application/json'}});
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || HCR.t("候选加载失败，请重试。"));
+          Object.assign(result.tasks[index], data); loadedTasks.add(index);
+        } catch (error) {
+          if (generation === taskGeneration) { notice.textContent = error.message; byId('task-retry').hidden = false; }
+          return;
+        }
+      }
+      if (generation !== taskGeneration) return;
+      notice.hidden = true; render(); loadAlignment();
+    }
     function orderItem(probe) {
       const [state, label] = stateOf(probe);
       const near = closest(probe);
@@ -368,20 +400,30 @@
       let rows = task.probe_sets.filter(q => filter === 'all' || (filter === 'keep' && q.keep) ||
         (filter === 'cross' && crossExact(q)) || (filter === 'excluded' && policyExcluded(q)) || (filter === 'unassessed' && !assessed(q)));
       if (range) rows = rows.filter(q => { const [a, b] = span(q); const mid = (a + b) / 2; return mid >= range[0] && mid <= range[1]; });
-      if (byId('result-sort').value === 'risk') {
+      const order = byId('result-sort').value;
+      if (order === 'risk') {
         rows = rows.slice().sort((a, b) => {
           const ca = closest(a), cb = closest(b);
           if (!ca || !cb) return (ca ? 0 : 1) - (cb ? 0 : 1);
           return byRisk(ca, cb);
         });
+      } else if (order === 'rank') {
+        const penalty = result.parameters.gc_junction_penalty;
+        rows = rows.slice().sort((a, b) => HCRResults.rankScore(a, penalty) - HCRResults.rankScore(b, penalty) || a.id - b.id);
       } else rows = rows.slice().sort((a, b) => span(a)[0] - span(b)[0]);
       return rows;
     }
 
     function renderTable() {
       const rows = visible(), body = byId('candidate-rows');
+      const key = [task.name, byId('result-filter').value, byId('result-sort').value, String(range)].join('|');
+      if (key !== tableKey) { tablePage = 0; tableKey = key; }
+      tablePage = Math.min(tablePage, Math.max(0, Math.ceil(rows.length / 200) - 1));
+      const first = tablePage * 200, displayed = rows.slice(first, first + 200);
+      byId('candidate-back').disabled = tablePage === 0;
+      byId('candidate-next').disabled = first + displayed.length >= rows.length;
       body.replaceChildren();
-      const count = byId('visible-count'); count.replaceChildren(HCR.t("显示 ") + rows.length + ' / ' + task.probe_sets.length + HCR.t(" 对"));
+      const count = byId('visible-count'); count.replaceChildren(HCR.t("显示 ") + (rows.length ? first + 1 : 0) + '–' + (first + displayed.length) + ' / ' + rows.length + HCR.t(" 对"));
       if (range) {
         const chip = el('span', undefined, 'chip info range-chip');
         chip.append(HCR.t("位置 ") + range[0] + '–' + range[1]);
@@ -392,7 +434,7 @@
       const empty = byId('empty-results');
       empty.hidden = rows.length > 0;
       empty.textContent = task.probe_sets.length ? HCR.t("这个范围内没有候选。可切换显示范围或清除位置筛选。") : HCR.t("当前参数未生成候选。可调整臂长、Tm 或 GC 范围后重新设计。");
-      rows.forEach(q => {
+      displayed.forEach(q => {
         const row = el('tr'); if (selected === q) row.className = 'is-selected';
         const id = el('td'); id.append(el('code', task.name + '-' + q.id));
         const [state, label] = stateOf(q);
@@ -510,11 +552,11 @@
       if (!others && assessed(probe)) view.append(el('p', HCR.t("当前检索范围内没有非目标配对。"), 'hint'));
     }
 
-    render(); loadAlignment();
+    activateTask(0);
   }
 
   if (status.status !== 'completed') { followProgress(); return; }
-  fetch(status.result_url, {headers: {Accept: 'application/json'}})
+  fetch(status.result_url + '?summary=1', {headers: {Accept: 'application/json'}})
     .then(response => response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status)))
     .then(showResults)
     .catch(error => {

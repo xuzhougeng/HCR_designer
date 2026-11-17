@@ -4,17 +4,17 @@ from src.common.sequence_utils import (
     check_poly_n,
     is_complementary,
     has_hairpin,
-    check_complementarity,
     has_dimer_issues
 )
 
 
 class TestSequenceUtils(unittest.TestCase):
     def test_calculate_gc_content(self):
-        self.assertEqual(calculate_gc_content("ATGC"), 0.5)
-        self.assertEqual(calculate_gc_content("GGCC"), 1.0)
+        # Percentages, matching the 0–100 thresholds used by every caller.
+        self.assertEqual(calculate_gc_content("ATGC"), 50.0)
+        self.assertEqual(calculate_gc_content("GGCC"), 100.0)
         self.assertEqual(calculate_gc_content("AATT"), 0.0)
-        self.assertEqual(calculate_gc_content("GCTA"), 0.5)
+        self.assertEqual(calculate_gc_content("GCTA"), 50.0)
 
     def test_check_poly_n(self):
         self.assertTrue(check_poly_n("ATGC"))
@@ -22,8 +22,8 @@ class TestSequenceUtils(unittest.TestCase):
         self.assertTrue(check_poly_n("ATAAAG"))
         self.assertFalse(check_poly_n("ATGGGG"))
         # Test with different n values
-        self.assertFalse(check_poly_n("AAA", n=3))
-        self.assertTrue(check_poly_n("AAA", n=4))
+        self.assertFalse(check_poly_n("AAA", poly_n=3))
+        self.assertTrue(check_poly_n("AAA", poly_n=4))
 
     def test_is_complementary(self):
         self.assertTrue(is_complementary("AT", "TA"))

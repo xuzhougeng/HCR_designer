@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -66,6 +67,13 @@ class SeedVerificationTests(unittest.TestCase):
                  patch('src.common.paired_specificity.subprocess.run', side_effect=subprocess.CalledProcessError(1, ['blastn'])):
                 with self.assertRaises(subprocess.CalledProcessError):
                     analyze_probe_sequences([reverse_complement(LEFT)], fasta)
+                with patch.dict(os.environ, {'HCR_BLAST_WORKERS': '4'}):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        analyze_probe_sequences([reverse_complement(LEFT), reverse_complement(RIGHT)], fasta)
+            for workers in ('0', '33', 'invalid'):
+                with patch.dict(os.environ, {'HCR_BLAST_WORKERS': workers}):
+                    with self.assertRaises(ValueError):
+                        analyze_probe_sequences([reverse_complement(LEFT)], fasta)
 
 
 class PairedAssessmentTests(unittest.TestCase):
@@ -260,6 +268,20 @@ class PipelineEvidenceTests(unittest.TestCase):
             self.assertEqual(filtered['target_policy']['mode'], 'species')
             self.assertFalse(selected['keep'])
             self.assertEqual(len((Path(directory) / 'sample_filtered_dual.csv').read_text().splitlines()), 1)
+
+    def test_filtered_bed_is_zero_based_half_open_like_the_unfiltered_bed(self):
+        left, right = reverse_complement(LEFT), reverse_complement(RIGHT)
+        probe = ProbeSet((left, 0, 15, 50., 50.), (right, 15, 30, 50., 50.), False)
+        with tempfile.TemporaryDirectory() as directory:
+            config = DualProbeConfig(output_dir=directory, blast_db=None, min_gap=2)
+            with patch('scripts.create_split_probe.DualProbeDesigner.design_probes', return_value=[probe]):
+                generate_dual_probe(LEFT + RIGHT, 'sample', 'BP_0001', 'A' * 19, config, target_gene_id='BjuTarget')
+            kept = json.loads((Path(directory) / 'sample_filtered.json').read_text())['probe_sets'][0]
+            self.assertTrue(kept['keep'])
+            self.assertEqual(kept['left_probe']['position'], {'start': 1, 'end': 15})  # JSON stays 1-based inclusive
+            intervals = lambda name: [line.split('\t')[1:4] for line in (Path(directory) / name).read_text().splitlines()]
+            self.assertEqual(intervals('dual_probe.bed'), [['0', '15', 'L-1'], ['15', '30', 'R-1']])
+            self.assertEqual(intervals('sample_filtered.bed'), intervals('dual_probe.bed'))
 
     def test_scan_failure_aborts_the_design_instead_of_keeping_candidates(self):
         left, right = reverse_complement(LEFT), reverse_complement(RIGHT)

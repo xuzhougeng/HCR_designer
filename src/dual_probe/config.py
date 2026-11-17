@@ -30,6 +30,7 @@ class DualProbeConfig:
     # 筛选参数
     max_selected: int = 5  # 要选择的探针组合数量
     gc_junction_penalty: float = 20.0  # Left探针G/C连接处的惩罚分数（分数越高越不利，默认20优先选择A/T）
+    candidate_mode: str = 'first_valid'  # 保留旧行为；exhaustive 枚举全部合格臂长组合
 
     blast_db: str = None
     # 目标策略：允许共同检测的转录本集合及非允许配对的排除阈值，见 TargetPolicy
@@ -46,6 +47,8 @@ class DualProbeConfig:
     
     def validate(self):
         """验证参数有效性"""
+        if self.candidate_mode not in ('first_valid', 'exhaustive'):
+            raise ValueError('candidate_mode must be first_valid or exhaustive')
         if self.min_length > self.max_length:
             raise ValueError(f"最小长度({self.min_length})不能大于最大长度({self.max_length})")
             
@@ -71,6 +74,8 @@ class DualProbeConfig:
             "min_kmer_count": self.min_kmer_count,
             "max_selected": self.max_selected,
             "gc_junction_penalty": self.gc_junction_penalty,
+            "candidate_mode": self.candidate_mode,
+            "min_complementary_length": self.min_complementary_length,
             "target_policy": self.target_policy,
             "output_dir": str(self.output_dir)
         }

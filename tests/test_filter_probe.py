@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Test cases for filter_probe.py
+Test cases for src/bridge_probe/probe_filter.py
 """
 
 import unittest
 import tempfile
 import os
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scripts.filter_probe import generate_kmers, process_probes, read_genome_kmers, get_cache_path, get_kmer_info
+from src.bridge_probe.probe_filter import process_probes, read_genome_kmers, get_cache_path, get_kmer_info
 
 class TestFilterProbe(unittest.TestCase):
     def setUp(self):

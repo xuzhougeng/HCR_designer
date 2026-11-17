@@ -282,6 +282,28 @@ class GuidedWorkflowTests(unittest.TestCase):
                 parse_parameters(overrides)
 
     @patch('scripts.split_workflow.design_split', side_effect=fake_design)
+    def test_full_enumeration_mode_reaches_engine_and_saved_result(self, design):
+        self.assertEqual(parse_parameters({})['candidate_mode'], 'first_valid')
+        with self.assertRaises(InputError): parse_parameters({'candidate_mode': 'unknown'})
+        self.assertIn('name="candidate_mode"', self.client.get('/split/batch').text)
+        prepared = self.prepare()
+        response, result = self.run_job(prepared, dict(DEFAULTS, candidate_mode='exhaustive'))
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(design.call_args.kwargs['candidate_mode'], 'exhaustive')
+        self.assertEqual(result['parameters']['candidate_mode'], 'exhaustive')
+        summary = self.client.get(result['result_url'] + '?summary=1', headers={'Accept': 'application/json'}).json
+        self.assertTrue(summary['lazy_tasks'])
+        self.assertNotIn('probe_sets', summary['tasks'][0])
+        task = self.client.get(summary['task_url_prefix'] + '0')
+        self.assertEqual(task.status_code, 200)
+        self.assertEqual(task.json, result['tasks'][0])
+        self.assertEqual(self.client.get(summary['task_url_prefix'] + '13').status_code, 404)
+        archive = self.client.get(result['download_url'])
+        with ZipFile(io.BytesIO(archive.data)) as z:
+            self.assertEqual(json.loads(z.read('run_summary.json'))['parameters']['candidate_mode'], 'exhaustive')
+        archive.close()
+
+    @patch('scripts.split_workflow.design_split', side_effect=fake_design)
     def test_saved_results_download_and_duplicate_run_are_consistent(self, design):
         prepared = self.prepare()
         response, result = self.run_job(prepared, DEFAULTS)
@@ -303,6 +325,12 @@ class GuidedWorkflowTests(unittest.TestCase):
             self.assertIn('blast_results', full['probe_sets'][0]['left_probe'])
         archive.close()
         self.assertEqual(self.client.post(prepared['run_url'], json=DEFAULTS).status_code, 200)  # already done
+        # Completed jobs made before candidate_mode existed keep their original behavior.
+        result_path = self.root / 'split_results' / prepared['id'] / 'result.json'
+        old_result = json.loads(result_path.read_text())
+        old_result['parameters'].pop('candidate_mode')
+        result_path.write_text(json.dumps(old_result))
+        self.assertEqual(self.client.post(prepared['run_url'], json=DEFAULTS).status_code, 200)
         self.assertEqual(design.call_count, 1)
         self.assertEqual(self.client.post(prepared['run_url'], json=dict(DEFAULTS, min_gap=3)).status_code, 409)
 

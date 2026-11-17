@@ -1,7 +1,8 @@
 """Inventory and retention for user uploads. Never follows symbolic links."""
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -12,6 +13,10 @@ STORAGE_LOCK = threading.RLock()
 ACTIVE_STATES = {'queued', 'running'}
 RESULT_FOLDERS = {'split_results': '双探针结果', 'triplet_results': '三探针结果'}
 BLAST_SUFFIX = re.compile(r'(?:\.\d+)?\.n(?:db|hr|in|og|os|ot|sq|tf|to|al|js|sd|si|nd|ni)$')
+REFERENCE_KIND = '参考基因组'
+# A shared reference that nobody uploaded or selected for this many days is rarely used and is removed.
+REFERENCE_RETENTION_DAYS = 7
+REFERENCE_RETENTION_ENV = 'HCR_REFERENCE_RETENTION_DAYS'
 
 
 def utcnow():
@@ -24,6 +29,14 @@ def three_months_ago(now):
     year, month = divmod(month, 12)
     month += 1
     return now.replace(year=year, month=month, day=min(now.day, calendar.monthrange(year, month)[1]))
+
+
+def reference_retention_days():
+    """REFERENCE_RETENTION_DAYS, unless the environment sets another positive whole number of days."""
+    value = os.environ.get(REFERENCE_RETENTION_ENV, '').strip()
+    if value.isdigit() and int(value) > 0:
+        return int(value)
+    return REFERENCE_RETENTION_DAYS
 
 
 def read_manifest(path):
@@ -58,10 +71,13 @@ def tree_info(path):
 
 
 class StorageMaintenance:
-    def __init__(self, upload_root):
+    def __init__(self, upload_root, reference_library=None, retention_days=None):
         self.root = Path(upload_root).resolve()
         self.legacy_active = 0
         self.last_cleanup = None
+        # Supplies durable last-use times; without it shared references never expire automatically.
+        self.reference_library = reference_library
+        self.reference_retention = timedelta(days=retention_days or reference_retention_days())
 
     def _active_references(self):
         references = set()
@@ -86,6 +102,15 @@ class StorageMaintenance:
                     uncertain = True
         return references, uncertain
 
+    def _reference_usage(self, filenames, now):
+        """Last-use times by FASTA name; empty (nothing expires) when the catalog cannot be read."""
+        if self.reference_library is None or not filenames:
+            return {}
+        try:
+            return self.reference_library.usage(filenames, now)
+        except (OSError, ValueError):
+            return {}
+
     def inventory(self, now=None):
         with STORAGE_LOCK:
             return self._inventory(now or utcnow())
@@ -97,7 +122,7 @@ class StorageMaintenance:
         children = sorted(self.root.iterdir())
         references, uncertain = self._active_references()
 
-        def add(key, label, kind, paths, auto=False, manifest=None, blocked=None):
+        def add(key, label, kind, paths, auto=False, manifest=None, blocked=None, last_used=None):
             size, latest, safe = 0, 0, True
             for path in paths:
                 amount, modified, path_safe = tree_info(path)
@@ -123,23 +148,35 @@ class StorageMaintenance:
                 blocked = '任务状态记录无效，请检查后再清理'
             if status in ACTIVE_STATES or any(p.is_dir() and (p / 'running.lock').exists() for p in paths):
                 blocked = '任务正在排队或运行'
-            expired = auto and modified < three_months_ago(now)
+            expires_at = None
+            if last_used is not None:
+                # References count from their last recorded use, never from file times.
+                modified, expires_at = last_used, last_used + self.reference_retention
+                expired = now >= expires_at
+            else:
+                expired = auto and modified < three_months_ago(now)
             entries.append(dict(key=key, name=label, kind=kind, size=size, modified_at=modified.isoformat(),
+                                expires_at=expires_at.isoformat() if expires_at else None,
                                 status=status, expired=expired, blocked=blocked,
-                                file_count=len(paths), _paths=paths))
+                                file_count=len(paths), _paths=paths, _reference=kind == REFERENCE_KIND))
 
         # A FASTA, its annotation, compressed source and BLAST volumes are one deletion unit.
+        groups = []
         for path in children:
             base = path.name[:-3] if path.name.lower().endswith('.gz') else path.name
             if Path(base).suffix.lower() not in ('.fa', '.fasta', '.fna') or path.name in consumed:
                 continue
-            paths = [p for p in children if p.name in (base, base + '.subgenomes.tsv') or
+            paths = [p for p in children if p.name in (base, base + '.subgenomes.tsv', base + '.blastdb.json') or
                      (p.name.lower().endswith('.gz') and p.name[:-3] == base) or
                      (p.name.startswith(base) and BLAST_SUFFIX.fullmatch(p.name[len(base):]))]
             consumed.update(p.name for p in paths)
+            groups.append((base, paths))
+        usage = self._reference_usage([base for base, paths in groups
+                                       if (self.root / base).is_file() and not (self.root / base).is_symlink()], now)
+        for base, paths in groups:
             blocked = '参考库正在被任务使用' if self.legacy_active or uncertain or any(
                 p.resolve() in references for p in paths) else None
-            add(base, base, '参考基因组', paths, blocked=blocked)
+            add(base, base, REFERENCE_KIND, paths, blocked=blocked, last_used=usage.get(base))
 
         for path in children:
             if path.name in consumed:
@@ -209,6 +246,8 @@ class StorageMaintenance:
                                 raise ValueError('Storage entry changed during deletion')
                             shutil.rmtree(path) if path.is_dir() else path.unlink()
                             report['bytes'] += amount
+                        if entry['_reference'] and self.reference_library is not None:
+                            self.reference_library.forget(entry['key'])
                     else:
                         report['bytes'] += entry['size']
                     report['deleted'].append(entry['key'])

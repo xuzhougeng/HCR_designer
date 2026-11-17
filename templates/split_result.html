@@ -50,6 +50,7 @@
     <span class="hint">{{ _("使用本次任务的亚基因组归属，跨物种证据优先；此开关仅切换展示") }}</span>
   </div>
   <div class="track-scroll"><svg id="track" role="img" aria-label="{{ _("候选探针在目标转录本上的位置") }}"></svg></div>
+  <p id="task-load-status" class="hint" role="status" hidden></p><button type="button" class="btn small" id="task-retry" hidden>{{ _("重新加载候选") }}</button>
   <div class="legend">
     <span><i class="sw keep"></i>{{ _("保留待复核") }}</span><span><i class="sw excluded"></i>{{ _("按目标策略排除") }}</span>
     <span><i class="sw other"></i>{{ _("其他未保留") }}</span><span><i class="sw unknown"></i>{{ _("特异性未评估") }}</span>
@@ -80,6 +81,7 @@
     </select></label>
     <label class="field">{{ _("排序") }}<select id="result-sort"><option value="position">{{ _("按位置") }}</option><option value="risk">{{ _("最接近的非目标配对优先") }}</option><option value="rank">{{ _("按评分") }}</option></select></label>
     <span class="count" id="visible-count"></span>
+    <button type="button" class="btn small" id="candidate-back">{{ _("上一页") }}</button><button type="button" class="btn small" id="candidate-next">{{ _("下一页") }}</button>
   </div>
   <div class="table-wrap tall"><table class="table candidate-table">
     <thead><tr><th>{{ _("探针对") }}</th><th>{{ _("位置") }}</th><th>{{ _("状态") }}</th><th>{{ _("最近非目标配对") }}</th><th>{{ _("原因") }}</th><th></th></tr></thead>

@@ -15,7 +15,7 @@ HCR_HOST=0.0.0.0 bash scripts/run_web.sh
 
 共享参考管理入口为 `/references`，所有用户可上传、配置倍性和去重，删除仅限管理员。参考配置及 SHA-256 缓存保存在 `instance/references.json`，迁移时与 `admin.json` 一起单独保存；归属文件位于 `uploads/<参考文件名>.subgenomes.tsv`，也需随参考库迁移。多倍体归属在参考库管理页上传，双探针分析页只勾选是否使用，任务保留独立归属快照。旧 `uploads/` FASTA 自动列出，不需要搬动或重建索引；第一次上传去重会读取旧参考计算哈希，大库可能需要较长时间，后续按文件状态复用缓存。相同解压内容会复用已有参考；同名不同内容会另存。`/subgenomes` 提供按多个 FASTA 或编号数字特征生成亚基因组归属 CSV 的工具。
 
-`scripts/run_web.sh` 默认设置 `HCR_CLEANUP_ENABLED=1`：服务首次收到请求时启动后台清理，此后每 24 小时删除超过 3 个自然月的双/三探针分析结果及探针推荐 CSV。共享基因组和一般上传文件由管理员手动清理；排队/运行任务、在用参考和异常目录受到保护。可在更新前执行 `python -m flask --app app cleanup-results --dry-run` 预览清单；初始化与维护 CLI 不会触发自动删除。清理日志写入应用日志，最近清理情况显示在管理页。需要暂时停止定期清理时以 `HCR_CLEANUP_ENABLED=0` 启动。仍使用当前单进程服务；多进程部署前需将队列、清理调度与锁协调迁至独立服务。
+`scripts/run_web.sh` 默认设置 `HCR_CLEANUP_ENABLED=1`：服务首次收到请求时启动后台清理，此后每 24 小时删除超过 3 个自然月的双/三探针分析结果及探针推荐 CSV，以及连续 7 天未被上传或选用的共享参考基因组（连同 `.gz`、BLAST 索引、`.subgenomes.tsv` 和 `instance/references.json` 中的记录；期限可用 `HCR_REFERENCE_RETENTION_DAYS` 调整）。使用时间记录在 `instance/references.json`，迁移时需一起保留；升级后已有参考从首次清理检查起有 7 天宽限期，部署前应提醒用户需要长期保留的参考需在期限内使用或另行备份。一般上传文件由管理员手动清理；排队/运行任务、在用参考和异常目录受到保护。可在更新前执行 `python -m flask --app app cleanup-results --dry-run` 预览清单；初始化与维护 CLI 不会触发自动删除。清理日志写入应用日志，最近清理情况显示在管理页。需要暂时停止定期清理时以 `HCR_CLEANUP_ENABLED=0` 启动。仍使用当前单进程服务；多进程部署前需将队列、清理调度与锁协调迁至独立服务。
 
 2026-10-15 的部署（`5bdc4b7`）用 `git bundle` 把发布提交带到服务器，在 `HCR_designer_deployments/20261014-subgenome/staging` 的独立克隆里，用服务器的 Python 3.10、BLAST 2.14.1 和真实参考完成测试、历史回归和 HTTP 验证，再对运行目录做 `merge --ff-only`；扫描器在切换时预先编译，首个用户请求不承担编译耗时。该目录的 `before.bundle` 与 `before-code.tar.gz` 保存了部署前状态，回滚时 `git reset --keep f716f4a` 后按下面的命令重启即可，参考索引未变动，无需恢复。服务器上单次设计约 2 分钟，其中配对扫描约 32 s，仍是同步请求。
 
