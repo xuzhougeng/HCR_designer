@@ -909,5 +909,13 @@
   "候选加载失败，请重试。": "Could not load candidates. Please try again.",
   "共享参考基因组连续 {days} 天未被上传或选用即过期，会连同压缩源文件、BLAST 索引、亚基因组归属及参考库记录一起清理。": "Shared reference genomes expire after {days} days without an upload or selection, and are removed together with their compressed source, BLAST index, subgenome assignments and library record.",
   "未使用到期：": "Expires if unused: ",
-  "共享参考连续 {days} 天未被上传或在设计中选用即过期，存储清理时会连同归属文件和 BLAST 索引一起删除；需要时可重新上传。": "Shared references expire after {days} days without being uploaded or selected for a design, and storage cleanup then deletes them with their assignments and BLAST index; upload them again when needed."
+  "共享参考连续 {days} 天未被上传或在设计中选用即过期，存储清理时会连同归属文件和 BLAST 索引一起删除；需要时可重新上传。": "Shared references expire after {days} days without being uploaded or selected for a design, and storage cleanup then deletes them with their assignments and BLAST index; upload them again when needed.",
+  "⚠ 已过期，下次清理时删除": "⚠ expired; deleted at the next cleanup",
+  "⚠ 1 天内过期": "⚠ expires within a day",
+  "{days} 天后过期": "expires in {days} days",
+  "在设计中选用参考会重新开始 {days} 天计时；{days} 天未用的参考会被自动删除。": "Selecting a reference for a design restarts its {days}-day clock; references unused for {days} days are deleted automatically.",
+  "最近使用：": "Last used: ",
+  "尚无记录": "not recorded yet",
+  "过期时间：": "Expires: ",
+  "使用记录不可读，暂不显示过期时间": "Usage record unreadable; expiry not shown"
 }

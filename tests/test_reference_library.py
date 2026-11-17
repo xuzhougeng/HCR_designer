@@ -57,7 +57,11 @@ class ReferenceLibraryTests(unittest.TestCase):
                            ('compressed-again.fna.GZ', gzip.compress(FASTA, mtime=99))]:
             duplicate = self.library.upload(uploaded(name, data), 'Duplicate name', False)
             self.assertTrue(duplicate['duplicate'])
-            self.assertEqual(duplicate['reference'], first)
+            # A duplicate upload counts as a use, so only the expiry fields move.
+            usage = ('last_used_at', 'expires_at', 'days_left', 'expiring_soon')
+            self.assertEqual({k: v for k, v in duplicate['reference'].items() if k not in usage},
+                             {k: v for k, v in first.items() if k not in usage})
+            self.assertGreaterEqual(duplicate['reference']['last_used_at'], first['last_used_at'])
         self.assertEqual(len(list(self.uploads.iterdir())), 1)
 
     def test_same_filename_different_content_never_overwrites_existing_or_indexes(self):
@@ -380,3 +384,125 @@ class ReferenceRetentionTests(unittest.TestCase):
         self.assertNotIn(filename, self.library._read())
         self.assertIn(kept, self.library._read())
         self.assertEqual([e['filename'] for e in self.library.list()], [kept])
+
+
+class ReferenceExpiryListingTests(unittest.TestCase):
+    """Pages show when the retention job may delete each reference, without writing to the catalog."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name).resolve()
+        self.uploads = self.root / 'uploads'
+        self.uploads.mkdir()
+        self.library = ReferenceLibrary(self.uploads, self.root / 'instance' / 'references.json')
+        with patch('scripts.reference_library.utcnow', return_value=T0):
+            self.filename = self.library.upload(uploaded(), 'Bju', True)['reference']['filename']
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def entry(self, now):
+        return next(e for e in self.library.list(now=now) if e['filename'] == self.filename)
+
+    def test_listing_fields_and_boundary_match_the_cleanup_job(self):
+        storage = StorageMaintenance(self.uploads, reference_library=self.library)
+        entry = self.entry(T0 + timedelta(days=4, hours=12))
+        self.assertEqual(entry['last_used_at'], T0.isoformat())
+        self.assertEqual(entry['expires_at'], (T0 + timedelta(days=7)).isoformat())
+        self.assertEqual((entry['days_left'], entry['expiring_soon']), (3, False))
+        self.assertEqual(self.entry(T0 + timedelta(days=6))['expiring_soon'], True)
+        self.assertEqual(self.entry(T0 + timedelta(days=6))['days_left'], 1)
+        # Exactly the retention period: the job deletes it, and the listing says so.
+        boundary = T0 + timedelta(days=REFERENCE_RETENTION_DAYS)
+        self.assertEqual((self.entry(boundary)['days_left'], self.entry(boundary)['expiring_soon']), (0, True))
+        self.assertTrue(next(e for e in storage.inventory(boundary) if e['key'] == self.filename)['expired'])
+        self.assertEqual(self.entry(boundary - timedelta(seconds=1))['days_left'], 1)
+
+    def test_listing_follows_the_retention_setting_and_never_writes(self):
+        catalog = self.library.catalog_path
+        records = json.loads(catalog.read_text())
+        del records[self.filename]['last_used_at']
+        catalog.write_text(json.dumps(records))
+        before = catalog.read_bytes()
+        with patch.dict(os.environ, {'HCR_REFERENCE_RETENTION_DAYS': '3'}):
+            entry = self.entry(T0)
+        # No usage record yet: the job starts the clock on its next run, so the full period remains.
+        self.assertEqual((entry['last_used_at'], entry['days_left']), (None, 3))
+        self.assertEqual(entry['expires_at'], (T0 + timedelta(days=3)).isoformat())
+        self.assertEqual(catalog.read_bytes(), before)
+        self.library.retention = timedelta(days=10)
+        self.assertEqual(self.entry(T0)['days_left'], 10)
+
+    def test_damaged_entries_and_catalog_show_no_expiry(self):
+        catalog = self.library.catalog_path
+        records = json.loads(catalog.read_text())
+        for damaged in ('not a date', 12, 'damaged entry'):
+            if damaged == 'damaged entry':
+                records[self.filename] = ['not', 'a', 'mapping']
+            else:
+                records[self.filename]['last_used_at'] = damaged
+            catalog.write_text(json.dumps(records))
+            with self.subTest(damaged=damaged):
+                entry = self.entry(T0)
+                self.assertEqual((entry['expires_at'], entry['days_left'], entry['last_used_at']), (None, None, None))
+        catalog.write_text('[broken')
+        entry = self.entry(T0)
+        self.assertEqual((entry['filename'], entry['days_left'], entry['subgenome_ready']), (self.filename, None, False))
+
+
+class ReferenceExpiryPageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import app as web
+        cls.web = web
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / 'uploads').mkdir()
+        self.library = ReferenceLibrary(self.root / 'uploads', self.root / 'references.json')
+        with patch.dict(os.environ, {'HCR_REFERENCE_RETENTION_DAYS': '5'}):
+            self.library.retention = StorageMaintenance(self.root / 'uploads').reference_retention
+        patcher = patch.dict(self.web.app.extensions, reference_library=self.library)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        now = datetime.now(timezone.utc)
+        with patch('scripts.reference_library.utcnow', return_value=now - timedelta(days=2, hours=1)):
+            self.library.upload(uploaded('fresh.fa'), 'Fresh', False)
+        with patch('scripts.reference_library.utcnow', return_value=now - timedelta(days=4, hours=12)):
+            self.library.upload(uploaded('old.fa', FASTA.replace(b'G1', b'G2')), 'Old', None)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def render(self, template, language):
+        if template != 'references.html':
+            return self.web.app.test_client().get({'split_wizard.html': '/split', 'triplet.html': '/triplet'}[template]
+                                                  + '?lang=' + language).text
+        from flask import render_template
+        with self.web.app.test_request_context('/references?lang=' + language):
+            return render_template(template, references=self.library.list(), can_edit=False, can_delete=False)
+
+    def test_pickers_show_days_left_and_the_configured_period_in_both_languages(self):
+        self.assertEqual(self.library.retention, timedelta(days=5))
+        for template in ('split_wizard.html', 'triplet.html'):
+            zh, en = self.render(template, 'zh'), self.render(template, 'en')
+            with self.subTest(template=template):
+                self.assertIn('Fresh · 3 天后过期</option>', zh)
+                self.assertIn('class="reference-expiring" data-expiring="true"', zh)
+                self.assertIn('Old · ⚠ 1 天内过期</option>', zh)
+                self.assertIn('Fresh · expires in 3 days</option>', en)
+                self.assertIn('Old · ⚠ expires within a day</option>', en)
+        self.assertIn('重新开始 5 天计时；5 天未用的参考会被自动删除', self.render('split_wizard.html', 'zh'))
+        self.assertIn("restarts its 5-day clock; references unused for 5 days", self.render('split_wizard.html', 'en'))
+
+    def test_reference_page_rows_show_last_use_and_expiry(self):
+        zh, en = self.render('references.html', 'zh'), self.render('references.html', 'en')
+        self.assertEqual(zh.count('data-local-time'), 4)
+        self.assertIn('最近使用：', zh)
+        self.assertIn('过期时间：', zh)
+        self.assertIn('reference-expiry is-expiring', zh)
+        self.assertIn('Last used: ', en)
+        self.assertIn('expires in 3 days', en)
+        self.library.catalog_path.write_text('{"fresh.fa": "broken"}')
+        self.assertIn('Usage record unreadable; expiry not shown', self.render('references.html', 'en'))

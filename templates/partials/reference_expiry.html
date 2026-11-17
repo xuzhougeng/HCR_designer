@@ -1,0 +1,17 @@
+{#- Expiry of a shared reference; nothing when the catalog cannot vouch for a date. -#}
+{% macro days_text(genome) -%}
+{%- if genome.days_left is number -%}
+{%- if genome.days_left == 0 %}{{ _("⚠ 已过期，下次清理时删除") }}
+{%- elif genome.expiring_soon %}{{ _("⚠ 1 天内过期") }}
+{%- else %}{{ _("{days} 天后过期", days=genome.days_left) }}{% endif -%}
+{%- endif -%}
+{%- endmacro %}
+{% macro option_suffix(genome) -%}
+{%- if genome.days_left is number %} · {{ days_text(genome) }}{% endif -%}
+{%- endmacro %}
+{% macro option_attributes(genome) -%}
+{%- if genome.days_left is number and genome.expiring_soon %} class="reference-expiring" data-expiring="true"{% endif -%}
+{%- endmacro %}
+{% macro timestamp(value) -%}
+<time datetime="{{ value }}" data-local-time>{{ value[:16]|replace('T', ' ') }} UTC</time>
+{%- endmacro %}

@@ -48,3 +48,4 @@
   .reference-page-buttons { gap: 8px; }
   .reference-page-numbers { gap: 4px; }
 }
+.reference-expiry.is-expiring { color: var(--warn); font-weight: 600; }

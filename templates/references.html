@@ -6,6 +6,7 @@
 {% block head_actions %}{% if not can_delete %}<a class="btn" href="{{ url_for('admin_login', next='references') }}">{{ _("管理员登录 · 删除参考") }}</a>{% endif %}<a class="btn" href="{{ url_for('subgenomes') }}">{{ _("生成亚基因组编号") }}</a>{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/references.css') }}">{% endblock %}
 {% block content %}
+{% import "partials/reference_expiry.html" as expiry %}
 {% macro pagination(position) %}
 <nav class="reference-pagination" aria-label="{{ _('参考库分页（{position}）', position=position) }}" hidden>
   <p class="hint" data-page-summary{% if position == _("顶部") %} role="status" aria-live="polite"{% endif %}></p>
@@ -36,6 +37,7 @@
   <article class="reference-entry stack" data-filename="{{ reference.filename }}" data-display="{{ reference.display_name }}">
     <div class="reference-title"><strong>{{ reference.display_name }}</strong><span class="chip">{{ _("多倍体") if reference.polyploid is sameas true else _("非多倍体") if reference.polyploid is sameas false else _("倍性未配置") }}</span></div>
     <p class="hint mono">{{ reference.filename }} · <span data-bytes="{{ reference.size }}"></span>{% if reference.sequence_count is not none %} · {{ '{:,}'.format(reference.sequence_count) }} {{ _("条序列") }}{% endif %}</p>
+    <p class="hint reference-expiry{% if reference.days_left is number and reference.expiring_soon %} is-expiring{% endif %}">{% if reference.days_left is number %}{{ _("最近使用：") }}{% if reference.last_used_at %}{{ expiry.timestamp(reference.last_used_at) }}{% else %}{{ _("尚无记录") }}{% endif %} · {{ _("过期时间：") }}{{ expiry.timestamp(reference.expires_at) }} · {{ expiry.days_text(reference) }}{% else %}{{ _("使用记录不可读，暂不显示过期时间") }}{% endif %}</p>
     <details><summary>SHA-256{% if not reference.sha256 %} {{ _("· 待计算") }}{% endif %}</summary><p class="reference-hash mono">{{ reference.sha256 or _("尚无当前文件的哈希记录") }}</p></details>
     <p class="hint">{{ _("亚基因组归属：") }}{% if reference.subgenome_ready %}{{ reference.subgenome.source }} {{ _("· 已标注") }} {{ reference.subgenome.annotated }} {{ _("条，未标注") }} {{ reference.subgenome.unannotated }} {{ _("条") }}{% for label, count in reference.subgenome.subgenome_counts.items() %} · {{ label }} {{ count }}{% endfor %}{% elif reference.subgenome %}{{ _("文件缺失或参考已变化，请重新上传") }}{% else %}{{ _("尚未上传") }}{% endif %}</p>
     {% if can_edit %}

@@ -8,6 +8,10 @@
     while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
     el.textContent = value.toLocaleString(HCR.locale, {maximumFractionDigits:2}) + ' ' + units[i];
   });
+  document.querySelectorAll('time[data-local-time]').forEach(el => {
+    const date = new Date(el.getAttribute('datetime'));
+    if (!Number.isNaN(date.getTime())) el.textContent = date.toLocaleString(HCR.locale, {dateStyle: 'medium', timeStyle: 'short'});
+  });
   const saved = sessionStorage.getItem('reference-library-message');
   if (saved) { HCR.setAlert(message, saved); sessionStorage.removeItem('reference-library-message'); }
   const entries = [...document.querySelectorAll('.reference-entry')];
