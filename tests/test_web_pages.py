@@ -29,6 +29,7 @@ PAGES = {
     '/filter': 'AI 筛选',
     '/help': '帮助',
     '/jobs': '任务记录',
+    '/split/selector': '按 TPM 挑选',
     '/orders': '下单清单',
 }
 

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}{{ _("按 TPM 挑选 · Probe Designer") }}{% endblock %}
+{% block eyebrow %}{{ _("设计 · 双探针") }}{% endblock %}
+{% block heading %}{{ _("按 TPM 挑选探针") }}{% endblock %}
+{% block lede %}{{ _("按表达量决定每个基因的探针对数，从双探针的全部候选中沿转录本均匀挑选，并修正 L 探针 5′ 端碱基，导出下单用 Excel。") }}{% endblock %}
+{% block head_actions %}<a class="btn" href="{{ url_for('jobs') }}">{{ _("任务记录") }}</a>{% endblock %}
+
+{% block content %}
+<div class="split">
+  <form id="selector-form" class="panel" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="source" id="source" value="job">
+    <div class="panel-head"><div><h2>{{ _("1. 探针候选") }}</h2><p>{{ _("每个基因一个结果文件夹，文件夹名即任务名称。") }}</p></div></div>
+    <div class="seg" role="group" aria-label="{{ _("候选来源") }}" style="margin-bottom:16px">
+      <button type="button" data-source="job" aria-pressed="true">{{ _("已完成的任务") }}</button>
+      <button type="button" data-source="zip" aria-pressed="false">{{ _("上传结果 ZIP") }}</button>
+    </div>
+    <div data-pane="job">
+      <label class="field">{{ _("双探针任务") }}
+        <select name="job_id" id="job-select"></select>
+        <small id="job-hint"></small>
+      </label>
+    </div>
+    <div data-pane="zip" hidden>
+      <label class="dropzone" data-dropzone tabindex="0" style="margin-bottom:16px">
+        <svg aria-hidden="true"><use href="#i-upload"/></svg>
+        <strong>{{ _("双探针结果 ZIP") }}</strong>
+        <span class="hint" data-file-label>{{ _("任务记录下载的 ZIP，或自行打包的多个基因结果文件夹") }}</span>
+        <input type="file" name="results_zip" id="results-zip" accept=".zip">
+      </label>
+    </div>
+
+    <div class="panel-head"><div><h2>{{ _("2. 基因表") }}</h2><p>{{ _("必需列 Name, GeneID, BP_ID, TPM；Name 需与结果文件夹名一致。") }}</p></div>
+      <button type="button" class="btn small" id="fill-from-job">{{ _("从所选任务填入") }}</button></div>
+    <div class="grid-2">
+      <label class="field">{{ _("粘贴 CSV") }}
+        <textarea name="gene_text" id="gene-text" rows="8" spellcheck="false" placeholder="Name,GeneID,BP_ID,TPM"></textarea>
+        <small>{{ _("填入后补上每行的 TPM。TPM 不是数字时按 0 处理（10 对）。") }}</small>
+      </label>
+      <label class="dropzone" data-dropzone tabindex="0" style="margin-bottom:16px">
+        <svg aria-hidden="true"><use href="#i-upload"/></svg>
+        <strong>{{ _("或上传 CSV") }}</strong>
+        <span class="hint" data-file-label>{{ _("UTF-8 编码，.csv") }}</span>
+        <input type="file" name="gene_file" id="gene-file" accept=".csv,.txt">
+      </label>
+    </div>
+    <details class="disclosure">
+      <summary>{{ _("基因表示例") }}</summary>
+      <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">Name,GeneID,BP_ID,TPM
+ABCG13,BjuVA06G01970,BP_0079,12.5
+RLK359,AT1G01010,BP_0102,0.8</pre>
+    </details>
+    <div class="actions"><span>{{ _("结果下载为") }} <span class="mono">{{ config.filename }}</span></span><div><button type="submit" class="btn primary" id="submit-button">{{ _("挑选并下载 Excel") }}</button></div></div>
+  </form>
+
+  <aside class="panel" aria-labelledby="rules-title">
+    <div class="panel-head"><div><h2 id="rules-title">{{ _("挑选规则") }}</h2><p>{{ _("与探针数量推荐使用同一 TPM 分段") }}</p></div></div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>TPM</th><th>{{ _("探针对数") }}</th></tr></thead>
+        <tbody>
+          {% for label, pairs in rules %}<tr><td class="num">{{ label }}</td><td class="num">{{ pairs }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <ul class="note-list">
+      <li>{{ _("候选少于目标对数时全部保留；否则把候选覆盖范围等分为与对数相同的区间，每个区间取打分最低（最好）的一对。") }}</li>
+      <li>{{ _("已选探针对之间至少相隔 18 nt；区间内不足时按打分补足。") }}</li>
+      <li>{{ _("L 探针 5′ 端为 C/G 时，与 R 探针 3′ 端互换 1–2 个碱基使其以 A/T 开头；调整后 Tm 差超过 3 °C 或 5′ 端连续 3 个以上 C/G 时跳过，见 Correction 列。") }}</li>
+      <li>{{ _("从全部候选中挑选，不使用任务的配对特异性筛选结果；下单前请在任务结果页复核。") }}</li>
+    </ul>
+  </aside>
+</div>
+
+<div id="selector-status" class="alert" role="status" aria-live="polite" hidden></div>
+
+<section class="panel" id="selector-result" hidden aria-labelledby="selector-title">
+  <div class="panel-head">
+    <div><h2 id="selector-title">{{ _("挑选结果") }}</h2><p id="selector-summary"></p></div>
+    <button type="button" class="btn" id="download-again"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("再次下载 Excel") }}</button>
+  </div>
+  <div class="stats" id="selector-stats" style="margin-bottom:16px"></div>
+  <div id="selector-warnings" class="alert notice" hidden style="margin-bottom:16px"></div>
+  <div class="table-wrap tall">
+    <table class="table"><thead><tr><th>Name</th><th>GeneID</th><th>TPM</th><th>{{ _("目标对数") }}</th><th>{{ _("已选对数") }}</th><th>{{ _("已修正") }}</th></tr></thead><tbody id="selector-rows"></tbody></table>
+  </div>
+</section>
+<script type="application/json" id="selector-config">{{ config|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const config = JSON.parse(document.getElementById('selector-config').textContent);
+  const form = document.getElementById('selector-form');
+  const source = document.getElementById('source');
+  const select = document.getElementById('job-select');
+  const text = document.getElementById('gene-text');
+  const status = document.getElementById('selector-status');
+  const submit = document.getElementById('submit-button');
+  const fill = document.getElementById('fill-from-job');
+  let last = null;
+  const el = (tag, value, cls) => { const n = document.createElement(tag); if (value != null) n.textContent = value; if (cls) n.className = cls; return n; };
+
+  function jobLabel(job) {
+    const first = job.tasks[0] ? job.tasks[0].name : job.id.slice(0, 8);
+    const more = job.tasks.length > 1 ? HCR.t(" 等 ") + job.tasks.length + HCR.t(" 个") : '';
+    const when = job.submitted_at ? ' · ' + new Date(job.submitted_at).toLocaleString(HCR.locale) : '';  // same time as Job history
+    return first + more + when;
+  }
+  if (config.jobs.length) {
+    select.replaceChildren(...config.jobs.map(job => { const option = el('option', jobLabel(job)); option.value = job.id; return option; }));
+    if (config.jobs.some(job => job.id === config.selected)) select.value = config.selected;
+  } else {
+    const option = el('option', HCR.t("暂无已完成的双探针任务")); option.value = ''; select.append(option); select.disabled = true;
+  }
+  const currentJob = () => config.jobs.find(job => job.id === select.value);
+  function describeJob() {
+    const job = currentJob();
+    document.getElementById('job-hint').textContent = job
+      ? (job.mode === 'batch' ? HCR.t("批量") : HCR.t("单条")) + ' · ' + (job.reference || HCR.t("无参考库")) + ' · ' + job.tasks.slice(0, 6).map(t => t.name).join('、') + (job.tasks.length > 6 ? ' …' : '')
+      : HCR.t("可先在双探针设计中提交任务，或改为上传结果 ZIP。");
+  }
+
+  function setSource(value) {
+    source.value = value;
+    document.querySelectorAll('[data-source]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.source === value)));
+    document.querySelectorAll('[data-pane]').forEach(pane => { pane.hidden = pane.dataset.pane !== value; });
+    fill.disabled = value !== 'job' || !currentJob();
+  }
+  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => setSource(button.dataset.source)));
+  select.addEventListener('change', () => { describeJob(); setSource(source.value); });
+  describeJob();
+  setSource(config.jobs.length ? 'job' : 'zip');
+
+  fill.addEventListener('click', () => {
+    const job = currentJob();
+    if (!job) return;
+    if (text.value.trim() && !window.confirm(HCR.t("用所选任务的任务名称覆盖已填写的基因表？"))) return;
+    text.value = 'Name,GeneID,BP_ID,TPM\n' + job.tasks.map(t => [t.name, t.gene_id || '', t.bridge_id || '', ''].join(',')).join('\n') + '\n';
+    text.focus();
+    HCR.setAlert(status, HCR.t("已填入 {v0} 个任务，请在每行末尾补上 TPM。", {v0: job.tasks.length}), 'notice');
+  });
+
+  function render(summary) {
+    const stats = document.getElementById('selector-stats');
+    stats.replaceChildren(...[[HCR.t("基因"), summary.genes], [HCR.t("探针对"), summary.pairs], [HCR.t("探针条数"), summary.probes],
+      [HCR.t("已修正 5′ 端"), summary.corrected]].map(([label, value]) => {
+        const tile = el('div', null, 'stat'); tile.append(el('span', label), el('strong', Number(value).toLocaleString(HCR.locale))); return tile; }));
+    document.getElementById('selector-summary').textContent = HCR.t("{v0} 个基因 · {v1} 对 · 已下载 {v2}", {v0: summary.genes, v1: summary.pairs, v2: last.filename});
+    const box = document.getElementById('selector-warnings');
+    box.hidden = !summary.warning_count;
+    if (summary.warning_count) {
+      const lines = summary.warnings.slice();
+      if (summary.warning_count > lines.length) lines.push(HCR.t("……另有 {v0} 条提示未显示", {v0: summary.warning_count - lines.length}));
+      box.textContent = HCR.t("提示（{v0}）：", {v0: summary.warning_count}) + '\n' + lines.join('\n');
+    }
+    const body = document.getElementById('selector-rows');
+    body.replaceChildren(...summary.rows.map(([name, gene, tpm, target, selected, corrected]) => {
+      const row = el('tr');
+      row.append(el('td', name, 'seq'), el('td', gene || '—', 'seq'), el('td', tpm, 'num'), el('td', target, 'num'),
+                 el('td', selected < target ? selected + ' ⚠' : selected, 'num'), el('td', corrected, 'num'));
+      return row;
+    }));
+    document.getElementById('selector-result').hidden = false;
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (source.value === 'job' && !select.value) { HCR.setAlert(status, HCR.t("请选择一个已完成的双探针任务。"), 'error'); return; }
+    if (source.value === 'zip' && !document.getElementById('results-zip').files.length) { HCR.setAlert(status, HCR.t("请上传双探针结果 ZIP。"), 'error'); return; }
+    if (!text.value.trim() && !document.getElementById('gene-file').files.length) { HCR.setAlert(status, HCR.t("请上传或粘贴基因表。"), 'error'); return; }
+    const body = new FormData(form);
+    if (source.value === 'job') body.delete('results_zip'); else body.delete('job_id');
+    submit.disabled = true;
+    HCR.setAlert(status, HCR.t("正在挑选……"), 'busy');
+    try {
+      last = await HCR.postForFile(config.submit_url, body, config.filename);
+      HCR.saveBlob(last.blob, last.filename);
+      const summary = JSON.parse(last.response.headers.get('X-Selection-Summary') || 'null');
+      if (summary) render(summary);
+      HCR.setAlert(status, '');
+    } catch (error) {
+      HCR.setAlert(status, error.message, 'error');
+    } finally { submit.disabled = false; }
+  });
+  document.getElementById('download-again').addEventListener('click', () => { if (last) HCR.saveBlob(last.blob, last.filename); });
+})();
+</script>
+{% endblock %}

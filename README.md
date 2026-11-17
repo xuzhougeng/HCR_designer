@@ -120,6 +120,17 @@ export HCR_SCAN_BIN=/path/to/paired_scan
 
 **插入缺失仍未复核。** 完整检出只覆盖替换错配，不等于覆盖所有实验结合机制。
 
+### 按 TPM 挑选（ProbeSelector）
+
+移植自 `ProbeSelector_Share/probe_filter.py`，核心在 `src/dual_probe/probe_selector.py`。`get_target_pairs()`、`select_probes()`、`correct_probe_sequence()` 等函数与原脚本逐行一致，Excel 版式（`Selected Probes` 表，列 `GeneInfo, ProbeName, ProbeID, Sequence, Length, Score, Correction`）也不变；唯一的算法外改动是任务名含下划线时 `dual_probe.csv` 的 `Set_ID` 解析（原脚本会报错）。
+
+- **输入**：基因表 CSV（必需列 `Name, GeneID, BP_ID, TPM`）加每个基因一个结果文件夹，文件夹名 = `Name`（即任务名称），内含 `dual_probe.bed`、`dual_probe_dual.csv`，可选 `dual_probe.csv`、`dual_probe_detailed.txt`。
+- **规则**：TPM ≥100 → 4 对，≥50 → 5，≥30 → 6，≥10 → 7，≥5 → 8，≥1 → 9，其余 10。候选覆盖范围按对数等分，每段取打分最低的一对，已选对之间至少 18 nt，不足时按打分补足。L 探针 5′ 端为 C/G 时与 R 探针 3′ 端互换 1–2 个碱基；按原脚本，Tm 差（≤3 °C）用完整合成序列（含接头）和简化公式计算。
+- **候选池**：与原脚本相同，从 `dual_probe.bed` 的全部候选中挑选，**不使用**任务的配对特异性排除结果，下单前请在任务结果页复核。
+- **网页** `/split/selector`（导航“按 TPM 挑选”，任务结果页也有入口）：选择任务记录中已完成的任务，或上传结果 ZIP（任务记录下载的 ZIP、或自行打包的多个基因文件夹）；“从所选任务填入”会生成带 Name/GeneID/BP_ID 的基因表，补上 TPM 即可。下载 `selected_probes_v3.xlsx`，页面同时列出每个基因的目标/已选对数及提示（找不到文件夹、TPM 不是数字按 0 处理、R 探针找不到时提示核对 BP_ID 等，原脚本对这些情况静默跳过）。
+- **命令行**：`python -m scripts.probe_selector --genes 基因表.csv --input-dir 结果目录 [-o 输出.xlsx]`；辅助脚本 `python -m scripts.analyze_duplicates [基因表.csv]`（重复 GeneID）和 `python -m scripts.filter_uncompleted --all 全量表.csv --synthesized 已合成表.csv --output 待做表.csv`，默认文件名与原脚本相同。
+- “探针数量推荐”页面与之使用同一 TPM 分段。依赖 `openpyxl`（已加入 `requirements.txt`）。
+
 ### 双探针分步网页
 
 打开 `/split`（单条）或 `/split/batch`（批量），两个入口共用同一套参数及计算流程：

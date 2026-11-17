@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HAN = re.compile(r'[\u3400-\u9fff]')
 PAGES = ['/', '/split', '/split/batch', '/triplet', '/triplet/batch', '/bridge', '/bridge/list',
          '/bridge/query', '/bridge/sequence', '/bridge/analyze', '/bridge/validate', '/formatting',
-         '/probe_recommend', '/references', '/subgenomes', '/help', '/jobs', '/orders']
+         '/probe_recommend', '/references', '/subgenomes', '/help', '/jobs', '/orders', '/split/selector']
 
 
 class VisibleText(HTMLParser):

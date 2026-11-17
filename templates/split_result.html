@@ -9,6 +9,7 @@
 {% block head_actions %}
 <a class="btn" href="{{ jobs_url }}">{{ _("任务记录") }}</a>
 <a class="btn" href="{{ url_for('split') }}">{{ _("新建设计") }}</a>
+{% if result %}<a class="btn" href="{{ url_for('probe_selector', job=status.id) }}"><svg aria-hidden="true"><use href="#i-select"/></svg>{{ _("按 TPM 挑选") }}</a>{% endif %}
 {% if result %}<a class="btn primary" href="{{ status.download_url }}"><svg aria-hidden="true"><use href="#i-download"/></svg>{{ _("下载完整 ZIP") }}</a>{% endif %}
 {% endblock %}
 

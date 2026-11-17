@@ -18,6 +18,7 @@ from scripts.bp_suggestion import query_conflicting_probes
 from scripts.bp_suggestion import BridgeProbeSystem
 from scripts.bp_suggestion import analyze_input_conflicts
 from src.common.sequence_utils import calculate_tm, calculate_gc_content, check_poly_n
+from src.dual_probe.probe_selector import get_target_pairs, tpm_rule_rows
 
 
 
@@ -218,6 +219,10 @@ register_subgenome_routes(app)
 from scripts.reference_web import register_reference_routes
 
 register_reference_routes(app)
+
+from scripts.probe_selector_web import register_probe_selector_routes
+
+register_probe_selector_routes(app)
 
 
 def triplet_reference():
@@ -944,28 +949,11 @@ def calculate_tpm(cds_file, counts_file):
     return tpm_dict
 
 def get_recommended_probe_number(tpm):
-    """根据TPM值推荐探针数量
-    
-    TPM范围对应的探针数量：
-    0-1: 10个探针
-    1-10: 8个探针
-    10-30: 5个探针
-    30-50: 5个探针
-    50-150: 4个探针
-    >150: 3个探针
+    """根据TPM值推荐探针对数，与 ProbeSelector 的 get_target_pairs() 使用同一规则：
+
+    TPM <1: 10, 1–5: 9, 5–10: 8, 10–30: 7, 30–50: 6, 50–100: 5, ≥100: 4
     """
-    if tpm < 1:
-        return 10
-    elif tpm < 10:
-        return 8
-    elif tpm < 30:
-        return 5
-    elif tpm < 50:
-        return 5
-    elif tpm < 150:
-        return 4
-    else:
-        return 3
+    return get_target_pairs(tpm)
 
 def deduplicate_gene_variants(sequences_dict, stats):
     """
@@ -1302,7 +1290,7 @@ def probe_recommend():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    return render_template('probe_recommend.html')
+    return render_template('probe_recommend.html', rules=tpm_rule_rows())
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port="6789", debug=True)

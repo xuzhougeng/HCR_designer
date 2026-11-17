@@ -58,7 +58,7 @@ class GuidedWorkflowTests(unittest.TestCase):
         self.app.config.update(TESTING=True, UPLOAD_FOLDER=str(self.root), SPLIT_JOBS_INLINE=True)
         for endpoint in ['index', 'triplet', 'triplet_batch', 'bridge', 'bridge_list', 'bridge_query',
                          'bridge_sequence', 'bridge_analyze', 'bridge_validate', 'formatting', 'subgenomes',
-                         'probe_recommend', 'filter', 'help', 'orders', 'references']:
+                         'probe_recommend', 'probe_selector', 'filter', 'help', 'orders', 'references']:
             self.app.add_url_rule('/' + endpoint, endpoint, lambda: 'placeholder')
         register_split_routes(self.app, {'BP_0079': 'A' * 19}, {'BjuTarget': 'T' * 80}, {}, {},
                               lambda: [{'filename': self.reference.name, 'display_name': 'Bo/Bju'}])
