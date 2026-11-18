@@ -19,10 +19,11 @@ from scripts.i18n import register_i18n, translate
 from scripts.split_workflow import InputError, SplitWorkflow
 from scripts.storage_maintenance import STORAGE_LOCK
 from src.dual_probe.probe_selector import (DEFAULT_OUTPUT_NAME, ProbeSelectorError, build_workbook,
-                                           collect_gene_results, discover_gene_dirs, format_warning,
-                                           parse_tpm_table, tpm_rule_rows, warning, workbook_bytes)
+                                           discover_gene_dirs, format_warning, select_from_gene_dirs,
+                                           tpm_rule_rows, warning, workbook_bytes)
 
-SELECTOR_FILES = ('dual_probe.bed', 'dual_probe_dual.csv', 'dual_probe.csv', 'dual_probe_detailed.txt')
+# target.fasta carries the GeneID used to match the probe-number recommendation TPM table.
+SELECTOR_FILES = ('dual_probe.bed', 'dual_probe_dual.csv', 'dual_probe.csv', 'dual_probe_detailed.txt', 'target.fasta')
 MAX_EXTRACTED_BYTES = 1 << 30   # only the selector's own files count; detailed reports can be large
 MAX_ZIP_MEMBERS = 200_000
 MAX_SUMMARY_ROWS = 500
@@ -154,7 +155,7 @@ def register_probe_selector_routes(app):
                           submit_url=url_for('probe_selector'), filename=DEFAULT_OUTPUT_NAME)
             return render_template('probe_selector.html', config=config, rules=tpm_rule_rows())
 
-        tpm_data, warnings = parse_tpm_table(_gene_table_text(request.form, request.files))
+        table_text = _gene_table_text(request.form, request.files)
         source = request.form.get('source', 'job')
         workdir = Path(tempfile.mkdtemp(prefix='probe-selector-'))
         try:
@@ -169,22 +170,23 @@ def register_probe_selector_routes(app):
                         raise InputError('该任务尚未完成，完成后才能挑选。', 'job_id', status=409)
                     output = directory / 'output'
                     gene_dirs = discover_gene_dirs(str(output)) if output.is_dir() else {}
-                    gene_results, more = collect_gene_results(gene_dirs, tpm_data)
+                    gene_results, warnings = select_from_gene_dirs(table_text, gene_dirs)
             elif source == 'zip':
                 upload = request.files.get('results_zip')
                 if not upload or not upload.filename:
                     raise InputError('请上传双探针结果 ZIP。', 'results_zip')
                 gene_dirs, archive_warnings = _extract_results(upload, workdir)
-                gene_results, more = collect_gene_results(gene_dirs, tpm_data)
-                more = archive_warnings + more
+                gene_results, warnings = select_from_gene_dirs(table_text, gene_dirs)
+                warnings = archive_warnings + warnings
             else:
                 raise InputError('请选择探针候选的来源。', 'source')
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
 
-        warnings = [_format(item) for item in warnings + more]
+        warnings = [_format(item) for item in warnings]
         if not gene_results:
-            raise InputError('\n'.join(['没有可输出的基因：基因表的 Name 需与结果文件夹名（任务名称）一致。'] + warnings[:20]),
+            raise InputError('\n'.join(['没有可输出的基因：基因表的 Name 需与结果文件夹名（任务名称）一致，'
+                                         'TPM 表的 gene_id 需与任务的目标编号一致。'] + warnings[:20]),
                              'gene_file')
         summary = dict(genes=len(gene_results), pairs=sum(g['SelectedPairs'] for g in gene_results),
                        probes=sum(len(g['Probes']) for g in gene_results),

@@ -248,7 +248,6 @@
   "结果文件夹 {name} 不在基因表中，已跳过。": "Results folder {name} is not in the gene table; skipped.",
   "ZIP 根目录的结果文件无法确定基因名（缺少唯一的 *_filtered.json），已跳过。": "Results files at the ZIP root have no gene name (no single *_filtered.json); skipped.",
   "ZIP 中有多个名为 {name} 的结果文件夹，只使用 {path}。": "The ZIP has several results folders named {name}; only {path} is used.",
-  "基因表缺少必需列：{columns}（需要 Name, GeneID, BP_ID, TPM）。": "The gene table is missing required columns: {columns} (Name, GeneID, BP_ID, TPM are required).",
   "基因表中没有基因（Name 列为空）。": "The gene table has no genes (the Name column is empty).",
   "结果文件需为 ZIP 压缩包。": "The results file must be a ZIP archive.",
   "ZIP 中文件过多，请只打包需要挑选的基因结果文件夹。": "The ZIP has too many files. Pack only the gene results folders to select from.",
@@ -259,6 +258,11 @@
   "该任务尚未完成，完成后才能挑选。": "This job has not completed yet; selection is available once it finishes.",
   "请上传双探针结果 ZIP。": "Upload a split-probe results ZIP.",
   "请选择探针候选的来源。": "Choose where the probe candidates come from.",
-  "没有可输出的基因：基因表的 Name 需与结果文件夹名（任务名称）一致。": "No genes to output: the gene table's Name must match the results folder name (task name).",
-  "挑选未完成。请检查基因表和结果文件后重试。": "Selection did not finish. Check the gene table and results files, then try again."
+  "挑选未完成。请检查基因表和结果文件后重试。": "Selection did not finish. Check the gene table and results files, then try again.",
+  "基因表缺少必需列：{columns}（需要 Name, GeneID, BP_ID, TPM；也可直接用探针数量推荐页导出的 gene_id, tpm 表）。": "The gene table is missing required columns: {columns} (Name, GeneID, BP_ID, TPM are required; the gene_id, tpm table from Probe number recommendation also works).",
+  "{name}：结果文件夹中没有 target.fasta，无法按 GeneID 匹配 TPM，已跳过。": "{name}: the results folder has no target.fasta, so its TPM cannot be matched by GeneID; skipped.",
+  "{name}：TPM 表中没有 {gene_id}，已跳过。": "{name}: {gene_id} is not in the TPM table; skipped.",
+  "TPM 表中 {gene_id} 出现 {count} 次，使用最后一行。": "{gene_id} appears {count} times in the TPM table; the last row is used.",
+  "TPM 表中没有基因（gene_id 列为空）。": "The TPM table has no genes (the gene_id column is empty).",
+  "没有可输出的基因：基因表的 Name 需与结果文件夹名（任务名称）一致，TPM 表的 gene_id 需与任务的目标编号一致。": "No genes to output: the gene table's Name must match the results folder name (task name), and a TPM table's gene_id must match the job's target ID."
 }

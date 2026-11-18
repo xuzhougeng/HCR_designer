@@ -29,7 +29,7 @@
       </label>
     </div>
 
-    <div class="panel-head"><div><h2>{{ _("2. 基因表") }}</h2><p>{{ _("必需列 Name, GeneID, BP_ID, TPM；Name 需与结果文件夹名一致。") }}</p></div>
+    <div class="panel-head"><div><h2>{{ _("2. 基因表") }}</h2><p>{{ _("两种格式任选：Name, GeneID, BP_ID, TPM 四列（Name 与结果文件夹名一致）；或探针数量推荐页导出的 TPM 表，按 gene_id 与任务目标编号匹配。") }}</p></div>
       <button type="button" class="btn small" id="fill-from-job">{{ _("从所选任务填入") }}</button></div>
     <div class="grid-2">
       <label class="field">{{ _("粘贴 CSV") }}
@@ -45,15 +45,22 @@
     </div>
     <details class="disclosure">
       <summary>{{ _("基因表示例") }}</summary>
-      <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">Name,GeneID,BP_ID,TPM
+      <div class="grid-2">
+        <div><p class="hint">{{ _("四列基因表") }}</p>
+        <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">Name,GeneID,BP_ID,TPM
 ABCG13,BjuVA06G01970,BP_0079,12.5
-RLK359,AT1G01010,BP_0102,0.8</pre>
+RLK359,AT1G01010,BP_0102,0.8</pre></div>
+        <div><p class="hint">{{ _("探针数量推荐页导出的 TPM 表（probe_number 列不使用）") }}</p>
+        <pre class="seq" style="margin:0;padding:10px 12px;background:var(--sunk);border-radius:5px;overflow:auto">gene_id,tpm,probe_number
+BjuVA06G01970,12.5,5
+AT1G01010,0.8,10</pre></div>
+      </div>
     </details>
     <div class="actions"><span>{{ _("结果下载为") }} <span class="mono">{{ config.filename }}</span></span><div><button type="submit" class="btn primary" id="submit-button">{{ _("挑选并下载 Excel") }}</button></div></div>
   </form>
 
   <aside class="panel" aria-labelledby="rules-title">
-    <div class="panel-head"><div><h2 id="rules-title">{{ _("挑选规则") }}</h2><p>{{ _("与探针数量推荐使用同一 TPM 分段") }}</p></div></div>
+    <div class="panel-head"><div><h2 id="rules-title">{{ _("挑选规则") }}</h2><p>{{ _("按 TPM 分段") }}</p></div></div>
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>TPM</th><th>{{ _("探针对数") }}</th></tr></thead>
@@ -66,7 +73,9 @@ RLK359,AT1G01010,BP_0102,0.8</pre>
     <ul class="note-list">
       <li>{{ _("候选少于目标对数时全部保留；否则把候选覆盖范围等分为与对数相同的区间，每个区间取打分最低（最好）的一对。") }}</li>
       <li>{{ _("已选探针对之间至少相隔 18 nt；区间内不足时按打分补足。") }}</li>
-      <li>{{ _("L 探针 5′ 端为 C/G 时，与 R 探针 3′ 端互换 1–2 个碱基使其以 A/T 开头；调整后 Tm 差超过 3 °C 或 5′ 端连续 3 个以上 C/G 时跳过，见 Correction 列。") }}</li>
+      <li>{{ _("L 5′ 端连续 3 个以上 C/G 且 R 3′ 端为 C/G 的探针对，只在其他探针对不够时使用。") }}</li>
+      <li>{{ _("L 探针 5′ 端为 C/G 时，与 R 探针 3′ 端互换 1–2 个碱基使其以 A/T 开头；Tm 只按靶标序列（不含接头）计算，调整后 L/R 相差超过 3 °C 时跳过，见 Correction 列。") }}</li>
+      <li>{{ _("探针对数只按上表决定；探针数量推荐页的 probe_number 列不使用。") }}</li>
       <li>{{ _("从全部候选中挑选，不使用任务的配对特异性筛选结果；下单前请在任务结果页复核。") }}</li>
     </ul>
   </aside>

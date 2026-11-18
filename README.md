@@ -122,14 +122,25 @@ export HCR_SCAN_BIN=/path/to/paired_scan
 
 ### 按 TPM 挑选（ProbeSelector）
 
-移植自 `ProbeSelector_Share/probe_filter.py`，核心在 `src/dual_probe/probe_selector.py`。`get_target_pairs()`、`select_probes()`、`correct_probe_sequence()` 等函数与原脚本逐行一致，Excel 版式（`Selected Probes` 表，列 `GeneInfo, ProbeName, ProbeID, Sequence, Length, Score, Correction`）也不变；唯一的算法外改动是任务名含下划线时 `dual_probe.csv` 的 `Set_ID` 解析（原脚本会报错）。
+TPM 相关功能分两步，彼此独立：
 
-- **输入**：基因表 CSV（必需列 `Name, GeneID, BP_ID, TPM`）加每个基因一个结果文件夹，文件夹名 = `Name`（即任务名称），内含 `dual_probe.bed`、`dual_probe_dual.csv`，可选 `dual_probe.csv`、`dual_probe_detailed.txt`。
-- **规则**：TPM ≥100 → 4 对，≥50 → 5，≥30 → 6，≥10 → 7，≥5 → 8，≥1 → 9，其余 10。候选覆盖范围按对数等分，每段取打分最低的一对，已选对之间至少 18 nt，不足时按打分补足。L 探针 5′ 端为 C/G 时与 R 探针 3′ 端互换 1–2 个碱基；按原脚本，Tm 差（≤3 °C）用完整合成序列（含接头）和简化公式计算。
-- **候选池**：与原脚本相同，从 `dual_probe.bed` 的全部候选中挑选，**不使用**任务的配对特异性排除结果，下单前请在任务结果页复核。
-- **网页** `/split/selector`（导航“按 TPM 挑选”，任务结果页也有入口）：选择任务记录中已完成的任务，或上传结果 ZIP（任务记录下载的 ZIP、或自行打包的多个基因文件夹）；“从所选任务填入”会生成带 Name/GeneID/BP_ID 的基因表，补上 TPM 即可。下载 `selected_probes_v3.xlsx`，页面同时列出每个基因的目标/已选对数及提示（找不到文件夹、TPM 不是数字按 0 处理、R 探针找不到时提示核对 BP_ID 等，原脚本对这些情况静默跳过）。
-- **命令行**：`python -m scripts.probe_selector --genes 基因表.csv --input-dir 结果目录 [-o 输出.xlsx]`；辅助脚本 `python -m scripts.analyze_duplicates [基因表.csv]`（重复 GeneID）和 `python -m scripts.filter_uncompleted --all 全量表.csv --synthesized 已合成表.csv --output 待做表.csv`，默认文件名与原脚本相同。
-- “探针数量推荐”页面与之使用同一 TPM 分段。依赖 `openpyxl`（已加入 `requirements.txt`）。
+1. **计算 TPM**：“探针数量推荐”页由 CDS 与 read counts 计算 TPM，导出 `gene_id,tpm,probe_number`。该页面规则保持不变。
+2. **筛选探针**：“按 TPM 挑选”页（`/split/selector`）上传或选择双探针分析结果，再按 TPM 从候选中挑选探针对，导出下单用的 `selected_probes_v3.xlsx`。
+
+第 2 步移植自 `ProbeSelector_Share/probe_filter.py`，核心在 `src/dual_probe/probe_selector.py`，Excel 版式（`Selected Probes` 表，列 `GeneInfo, ProbeName, ProbeID, Sequence, Length, Score, Correction`）不变。
+
+- **规则**：TPM ≥100 → 4 对，≥50 → 5，≥30 → 6，≥10 → 7，≥5 → 8，≥1 → 9，其余 10（与第 1 步的推荐数无关，`probe_number` 列不使用）。候选覆盖范围按对数等分，每段按打分（编号越小越好）取一对，已选对之间至少 18 bp。L 探针 5′ 端优先 A/T，其次单个 C/G 或多个 C/G 但 R 3′ 端为 A/T，再次两个 C/G 且 R 3′ 端为 C/G。
+- **按提示词修正的两处**（原脚本与生成它的提示词不一致）：
+  - 修正 L 5′ 端时，调整后 L/R 的 Tm 差（≤3 °C）只按**靶标序列**计算（不含接头和桥探针），用与设计工具相同的最近邻 Tm；接头长度由 `dual_probe.csv` 中的原始靶标序列推出。原脚本用完整合成序列和简化公式，几乎不会拦下修正。
+  - L 5′ 端 ≥3 个 C/G 且 R 3′ 端为 C/G 的探针对**只在其他探针对不够时**使用（提示词第 9 步）；原脚本按打分优先，会在有更好选择时也选中它们。
+  - 在现有任务结果上（16 个基因次），选中探针对中需修正 5′ 端的 92 个，原脚本修正 79 个，现为 43 个，其余标 `跳过(TM>3)`；原脚本选中的 10 个第 9 步探针对现在都被更好的探针对替代。
+- **候选来源**：任务记录中已完成的任务，或上传结果 ZIP（任务记录下载的 ZIP，或自行打包的多个基因结果文件夹）。每个基因一个文件夹，文件夹名即任务名称。从全部候选中挑选，**不使用**任务的配对特异性排除结果，下单前请在任务结果页复核。
+- **基因表**，两种格式任选：
+  - `Name, GeneID, BP_ID, TPM` 四列，`Name` 与结果文件夹名一致；“从所选任务填入”可生成前三列。
+  - 第 1 步导出的 TPM 表（`gene_id, tpm[, probe_number]`），按 `gene_id` 与结果文件夹中 `target.fasta` 的标题（任务的目标编号，不区分大小写）匹配，`BP_ID` 取自 `dual_probe_dual.csv`。
+- **提示**：找不到文件夹、TPM 不是数字（按 0 处理）、TPM 表中没有该基因、R 探针找不到（请核对 BP_ID）、候选不足等情况会列在页面上，原脚本对这些情况静默跳过。另修正了任务名含下划线时原脚本解析 `dual_probe.csv` 报错的问题。
+- **命令行**：`python -m scripts.probe_selector --genes 基因表.csv --input-dir 结果目录 [-o 输出.xlsx]`（两种基因表均可）；辅助脚本 `python -m scripts.analyze_duplicates [基因表.csv]` 和 `python -m scripts.filter_uncompleted --all 全量表.csv --synthesized 已合成表.csv --output 待做表.csv`，默认文件名与原脚本相同。
+- 依赖 `openpyxl`（已加入 `requirements.txt`）。
 
 ### 双探针分步网页
 
