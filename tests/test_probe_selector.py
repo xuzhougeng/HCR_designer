@@ -16,7 +16,7 @@ L_ADAPTER = 'TCTCGTTTTCTGAACTTAGCCGGTATCAAG'
 R_ADAPTER = 'CTGTTTAAGATTAGACTCTCGATCAGCCCA'
 
 
-def write_gene(folder, name, bp_id='BP_0079', pairs=12, seed=7, scores=True):
+def write_gene(folder, name, bp_id='BP_0079', pairs=12, seed=7, scores=True, gene_id=None):
     """A results folder shaped like the dual-probe pipeline output (BED 0-based, CSV 1-based)."""
     rng = random.Random(seed)
     folder = Path(folder)
@@ -42,6 +42,8 @@ def write_gene(folder, name, bp_id='BP_0079', pairs=12, seed=7, scores=True):
     if scores:
         (folder / 'dual_probe_detailed.txt').write_text('\n'.join(detailed) + '\n', encoding='utf-8')
     (folder / f'{name}_filtered.json').write_text('{"probe_sets": []}')
+    if gene_id:
+        (folder / 'target.fasta').write_text(f'>{gene_id}\nACGT\n')
 
 
 def sheet_rows(data):
@@ -49,10 +51,12 @@ def sheet_rows(data):
     return sheet.title, [tuple(row) for row in sheet.iter_rows(values_only=True)]
 
 
-# Produced by the original ProbeSelector_Share/probe_filter.py (with only the Set_ID underscore
-# fix) for write_gene(<dir>/'ABC_1', 'ABC_1') and TPM 12 → 7 pairs. Any change here is a change
-# in the algorithm, which must stay identical to the reference script.
-GOLDEN_ABC_1_TPM_12 = [
+# Expected rows for write_gene(<dir>/'ABC_1', 'ABC_1') at TPM 12 → 7 pairs. They equal the output of the
+# original ProbeSelector_Share/probe_filter.py (with the Set_ID underscore fix) except pair 10: the
+# original moves R's 3' T to L (R->L T) because it compares Tm of full oligos incl. adapters; the
+# prompt (rule 10.7) compares the target sequences, whose Tm then differ by more than 3 °C, so it is
+# skipped. This fixture has no step-9 pairs; see test_last_resort_pairs_only_fill_a_shortfall.
+EXPECTED_ABC_1_TPM_12 = [
     (None, None, 'ABC_1-1-L', 'TAAAGACAATTACATAACTCTCGTTTTCTGAACTTAGCCGGTATCAAG', 48, 35, None),
     (None, None, 'ABC_1-1-R-BP_0079', 'CTGTTTAAGATTAGACTCTCGATCAGCCCATACACGTCAGCACGAAA', 47, 35, None),
     (None, None, 'ABC_1-3-L', 'ACGCCTTTACTTGCTGTGTCTCTCGTTTTCTGAACTTAGCCGGTATCAAG', 50, 60, None),
@@ -63,8 +67,8 @@ GOLDEN_ABC_1_TPM_12 = [
     (12, None, 'ABC_1-6-R-BP_0079', 'CTGTTTAAGATTAGACTCTCGATCAGCCCAACTCTGCCAAACTCCAGC', 48, 35, None),
     (None, None, 'ABC_1-8-L', 'TACGACGCGCTCATTCTCTCGTTTTCTGAACTTAGCCGGTATCAAG', 46, 5, 'L->R C'),
     (None, None, 'ABC_1-8-R-BP_0079', 'CTGTTTAAGATTAGACTCTCGATCAGCCCACTTGTCGGAGAGTTATGGC', 49, 5, None),
-    (None, None, 'ABC_1-10-L', 'TCGGCGTCGGAGAAACTCTTCTCGTTTTCTGAACTTAGCCGGTATCAAG', 49, 15, 'R->L T'),
-    (None, None, 'ABC_1-10-R-BP_0079', 'CTGTTTAAGATTAGACTCTCGATCAGCCCATTTGCCGCCTGACAAG', 46, 15, None),
+    (None, None, 'ABC_1-10-L', 'CGGCGTCGGAGAAACTCTTCTCGTTTTCTGAACTTAGCCGGTATCAAG', 48, 15, '跳过(TM>3)'),
+    (None, None, 'ABC_1-10-R-BP_0079', 'CTGTTTAAGATTAGACTCTCGATCAGCCCATTTGCCGCCTGACAAGT', 47, 15, None),
     (None, None, 'ABC_1-12-L', 'TGTCGCATCACAAACGATTCTCGTTTTCTGAACTTAGCCGGTATCAAG', 48, 10, None),
     (None, None, 'ABC_1-12-R-BP_0079', 'CTGTTTAAGATTAGACTCTCGATCAGCCCAAACTGATAAATGAGCCCTTT', 50, 10, None),
 ]
@@ -78,17 +82,41 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(selector.tpm_rule_rows()[0], ('< 1', 10))
         self.assertEqual(selector.tpm_rule_rows()[-1], ('≥ 100', 4))
 
-    def test_corrections_follow_the_reference_rules(self):
-        # Full synthesis oligos, as the reference script passes them.
+    def test_corrections_compare_target_sequence_tm(self):
+        # Prompt rule 10.7: Tm of the target parts only. Here moving R's 3' A to L passes when the
+        # adapters are included (as the original script did) but not on the target sequences, so
+        # the other option (L's 5' C to R) is used.
         l_arm, r_arm = 'CATGCATTAGCATGCA', 'TTGACTAGCATGCATA'
-        new_l, new_r, note = selector.correct_probe_sequence(l_arm + L_ADAPTER, R_ADAPTER + r_arm)
-        self.assertEqual(note, 'R->L A')
-        self.assertEqual(new_l, 'A' + l_arm + L_ADAPTER)
-        self.assertEqual(new_r, R_ADAPTER + r_arm[:-1])
+        full = (l_arm + L_ADAPTER, R_ADAPTER + r_arm)
+        self.assertEqual(selector.correct_probe_sequence(*full)[2], 'R->L A')
+        new_l, new_r, note = selector.correct_probe_sequence(*full, l_flank=30, r_flank=30)
+        self.assertEqual(note, 'L->R C')
+        self.assertEqual(new_l, l_arm[1:] + L_ADAPTER)
+        self.assertEqual(new_r, R_ADAPTER + r_arm + 'C')
+        self.assertEqual(selector.target_flanks(*full, {'L': {'sequence': l_arm}, 'R': {'sequence': r_arm}}), (30, 30))
+        self.assertEqual(selector.target_flanks(*full, None), (30, 30))
+        self.assertEqual(selector.correct_probe_sequence('GCATTACGATTAGCAT', 'ATTGCATTAGCAAGCAT'),
+                         ('TGCATTACGATTAGCAT', 'ATTGCATTAGCAAGCA', 'R->L T'))
         self.assertEqual(selector.correct_probe_sequence('ATGC', 'GGCC'), ('ATGC', 'GGCC', ''))
         self.assertEqual(selector.correct_probe_sequence('GCGATT', 'ATTGCG')[2], '跳过(L探针5端3个以上C/G且R端CG)')
         self.assertEqual(selector.correct_probe_sequence('GCGATTACGATTAGCA', 'ATTGCATTAGCAAGCT')[2], '跳过(TM>3)')
         self.assertEqual(selector.correct_probe_sequence('GCNATTACGATTAGCA', 'ATTGCATTAGCAAGCA')[2], '跳过(非A/T)')
+
+    def test_last_resort_pairs_only_fill_a_shortfall(self):
+        # Prompt step 9: L 5' >=3 C/G with R 3' C/G (priority 8) only when the other pairs are not enough.
+        good_l, good_r, bad_l, bad_r = 'ATTCAGGTCA', 'ACGTTGACCA', 'GGGATTCAGT', 'ACGTTGACCG'
+        layout = {1: (0, bad_l, bad_r, 0.0), 2: (50, good_l, good_r, 10.0), 3: (200, good_l, good_r, 10.0),
+                  4: (270, bad_l, bad_r, 0.0)}
+        dual, scores = {}, {}
+        for number, (start, left, right, score) in layout.items():
+            dual[f'G-{number}-L'], dual[f'G-{number}-R-BP_1'], scores[number] = left, right, score
+
+        def pick(count):
+            pairs = [dict(num=n, gene='G', L_start=s, L_end=s + 20, R_start=s + 20, R_end=s + 40)
+                     for n, (s, *_rest) in layout.items()]
+            return [p['num'] for p in selector.select_probes(pairs, dual, scores, 'G', 'BP_1', count)]
+        self.assertEqual(pick(2), [2, 3])     # the reference script picked the better-scored 1 and 4
+        self.assertEqual(pick(3), [2, 3, 4])  # 1 would sit 10 nt from pair 2, below the 18 nt gap
 
     def test_set_ids_with_underscores(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -97,7 +125,7 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(sorted(parsed), [1, 2, 3])
         self.assertTrue(parsed[2]['L']['tm'] and parsed[2]['R']['sequence'])
 
-    def test_workbook_matches_reference_output(self):
+    def test_workbook_matches_expected_output(self):
         with tempfile.TemporaryDirectory() as folder:
             write_gene(Path(folder) / 'ABC_1', 'ABC_1')
             table = Path(folder) / 'genes.csv'
@@ -106,7 +134,7 @@ class AlgorithmTests(unittest.TestCase):
             title, rows = sheet_rows(str(Path(folder) / 'out.xlsx'))
         self.assertEqual(title, 'Selected Probes')
         self.assertEqual(rows[0], ('GeneInfo', 'ProbeName', 'ProbeID', 'Sequence', 'Length', 'Score', 'Correction'))
-        self.assertEqual(rows[1:], GOLDEN_ABC_1_TPM_12)
+        self.assertEqual(rows[1:], EXPECTED_ABC_1_TPM_12)
         self.assertEqual((results[0]['TargetCount'], results[0]['SelectedPairs']), (7, 7))
         self.assertEqual(warnings, [])
 
@@ -131,6 +159,27 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual([p['ProbeID'] for p in results[0]['Probes']], ['A-1-L', 'A-2-L'])
 
 
+class RecommendTableTests(unittest.TestCase):
+    def test_tpm_table_is_matched_to_folders_by_gene_id(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write_gene(Path(folder) / 'ABC_1', 'ABC_1', gene_id='GENE1')
+            write_gene(Path(folder) / 'XYZ', 'XYZ', pairs=3, seed=3, gene_id='GENE2')
+            write_gene(Path(folder) / 'NOFASTA', 'NOFASTA', pairs=3, seed=5)
+            table = Path(folder) / 'tpm.csv'
+            table.write_text('gene_id,tpm,probe_number\ngene1,9,8\nGENE1,12,5\nOTHER,1,10\n')
+            self.assertTrue(selector.is_recommend_table(table.read_text()))
+            self.assertEqual(selector.describe_gene_dir(str(Path(folder) / 'ABC_1'), 'ABC_1'), ('GENE1', 'BP_0079'))
+            results, warnings = selector.run(str(table), folder, str(Path(folder) / 'out.xlsx'))
+            _, rows = sheet_rows(str(Path(folder) / 'out.xlsx'))
+        self.assertEqual(rows[1:], EXPECTED_ABC_1_TPM_12)  # TPM 12 and BP_0079 recovered from the folder
+        self.assertEqual([(r['GeneName'], r['GeneID'], r['BP_ID'], r['TPM']) for r in results],
+                         [('ABC_1', 'GENE1', 'BP_0079', 12.0)])
+        self.assertEqual([selector.format_warning(w) for w in warnings], [  # in folder order
+            'TPM 表中 GENE1 出现 2 次，使用最后一行。',
+            'NOFASTA：结果文件夹中没有 target.fasta，无法按 GeneID 匹配 TPM，已跳过。',
+            'XYZ：TPM 表中没有 GENE2，已跳过。'])
+
+
 class WebTests(unittest.TestCase):
     def setUp(self):
         import app as web
@@ -142,8 +191,8 @@ class WebTests(unittest.TestCase):
         self.client = web.app.test_client()
         self.job = 'a' * 32
         job = self.uploads / 'split_results' / self.job
-        write_gene(job / 'output' / 'ABC_1', 'ABC_1')
-        write_gene(job / 'output' / 'XYZ', 'XYZ', pairs=3, seed=3, scores=False)
+        write_gene(job / 'output' / 'ABC_1', 'ABC_1', gene_id='GENE1')
+        write_gene(job / 'output' / 'XYZ', 'XYZ', pairs=3, seed=3, scores=False, gene_id='GENE2')
         tasks = [dict(name='ABC_1', gene_id='GENE1', bridge_id='BP_0079', sequence_length=900),
                  dict(name='XYZ', gene_id='GENE2', bridge_id='BP_0079', sequence_length=300)]
         (job / 'request.json').write_text(json.dumps(dict(
@@ -171,7 +220,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('selected_probes_v3.xlsx', response.headers['Content-Disposition'])
         title, rows = sheet_rows(response.data)
-        self.assertEqual(rows[1:15], GOLDEN_ABC_1_TPM_12)
+        self.assertEqual(rows[1:15], EXPECTED_ABC_1_TPM_12)
         self.assertEqual([r[2] for r in rows[15:]], ['XYZ-1-L', 'XYZ-1-R-BP_0079', 'XYZ-2-L', 'XYZ-2-R-BP_0079',
                                                      'XYZ-3-L', 'XYZ-3-R-BP_0079'])
         self.assertEqual({r[5] for r in rows[15:]}, {'N/A'})   # no dual_probe_detailed.txt
@@ -179,6 +228,15 @@ class WebTests(unittest.TestCase):
         self.assertEqual((summary['genes'], summary['pairs']), (2, 10))
         self.assertEqual(summary['rows'][1][:5], ['XYZ', 'GENE2', 200.0, 4, 3])
         self.assertEqual(summary['warnings'], ['XYZ：目标 4 对，只有 3 对可选。'])
+
+    def test_job_source_accepts_the_recommendation_tpm_table(self):
+        tpm = 'gene_id,tpm,probe_number\nGENE1,12,5\nGENE2,200,3\nAT1G01010,4,8\n'
+        response = self.post(source='job', job_id=self.job, gene_file=(io.BytesIO(tpm.encode('utf-8-sig')), 'tpm.csv'))
+        self.assertEqual(response.status_code, 200, response.data[:300])
+        rows = sheet_rows(response.data)[1]
+        self.assertEqual(rows[1:15], EXPECTED_ABC_1_TPM_12)
+        summary = json.loads(response.headers['X-Selection-Summary'])
+        self.assertEqual([r[:5] for r in summary['rows']], [['ABC_1', 'GENE1', 12.0, 7, 7], ['XYZ', 'GENE2', 200.0, 4, 3]])
 
     def test_zip_source_accepts_nested_and_single_target_layouts(self):
         archive = io.BytesIO()
@@ -193,7 +251,7 @@ class WebTests(unittest.TestCase):
         response = self.post(source='zip', results_zip=(archive, 'results.zip'),
                              gene_text='Name,GeneID,BP_ID,TPM\nABC_1,GENE1,BP_0079,12\n')
         self.assertEqual(response.status_code, 200, response.data[:300])
-        self.assertEqual(sheet_rows(response.data)[1][1:], GOLDEN_ABC_1_TPM_12)
+        self.assertEqual(sheet_rows(response.data)[1][1:], EXPECTED_ABC_1_TPM_12)
         summary = json.loads(response.headers['X-Selection-Summary'])
         self.assertEqual(summary['warnings'], ['ZIP 中有多个名为 ABC_1 的结果文件夹，只使用 /。'])
         self.assertFalse((Path(self.tmp.name) / 'escape').exists())
@@ -206,7 +264,7 @@ class WebTests(unittest.TestCase):
                                                                         gene_text='Name,GeneID,BP_ID,TPM\nNope,,BP_1,1\n'))
         self.assertEqual(english.status_code, 400)
         self.assertEqual(english.json['error'].splitlines()[:2], [
-            "No genes to output: the gene table's Name must match the results folder name (task name).",
+            "No genes to output: the gene table's Name must match the results folder name (task name), and a TPM table's gene_id must match the job's target ID.",
             'Results folder ABC_1 is not in the gene table; skipped.'])
         self.assertEqual(self.post(source='job', job_id='b' * 32, gene_text=self.table).status_code, 404)
         self.assertEqual(self.post(source='zip', results_zip=(io.BytesIO(b'not a zip'), 'r.zip'),
@@ -215,12 +273,12 @@ class WebTests(unittest.TestCase):
         notes = json.loads(english.headers['X-Selection-Summary'])['warnings']
         self.assertIn('Q: TPM "x" is not a number and counts as 0 (10 pairs).', notes)
 
-    def test_probe_number_recommendation_uses_the_same_rule(self):
+    def test_probe_number_recommendation_keeps_its_own_rule(self):
+        # The TPM calculation page is a separate step and keeps its original recommendation.
         self.assertEqual([self.web.get_recommended_probe_number(t) for t in (0.5, 3, 7, 20, 40, 70, 150)],
-                         [10, 9, 8, 7, 6, 5, 4])
+                         [10, 8, 8, 5, 5, 4, 3])
         page = self.client.get('/probe_recommend').text
-        self.assertIn('≥ 100', page)
-        self.assertNotIn('≥ 150', page)
+        self.assertIn('≥ 150', page)
 
 
 if __name__ == '__main__':

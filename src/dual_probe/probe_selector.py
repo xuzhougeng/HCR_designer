@@ -1,15 +1,21 @@
 """ProbeSelector：按 TPM 从双探针候选中挑选探针对，修正 L 探针 5' 端碱基，输出 Excel。
 
-移植自 ProbeSelector_Share/probe_filter.py。get_target_pairs() 至 select_probes() 的算法与原脚本
-逐行一致（仅修正 dual_probe.csv 中任务名含下划线时 Set_ID 解析失败）；原 main() 拆成可传路径、
-可返回内存流的函数，基因名与文件夹名的匹配规则不变。
+移植自 ProbeSelector_Share/probe_filter.py，并按生成它的提示词修正两处：
+- 修正后 L/R 的 Tm 差（<=3 ℃）只按靶标序列计算（提示词 10.7），用与设计工具相同的最近邻 Tm；
+  原脚本用含接头的完整探针和简化公式，几乎不会拦下修正。
+- L 5' 端 >=3 个 C/G 且 R 3' 端为 C/G 的探针对只在其他探针对不够时使用（提示词第 9 步）；
+  原脚本按打分优先，会在有更好选择时也选中它们。
+其余（TPM 分档、区间等分、18 bp 间距、碱基优先级、修正方案）与原脚本一致；另修正任务名含下划线时
+dual_probe.csv 的 Set_ID 解析失败。原 main() 拆成可传路径、可返回内存流的函数，基因名与文件夹名的
+匹配规则不变。
 
 输入（每个基因一个文件夹，文件夹名 = 基因表 Name 列）：
     dual_probe.bed            探针位置（制表符分隔，6 列以上）
     dual_probe_dual.csv       探针序列（列：Probe ID, Sequence）
     dual_probe.csv            可选，含 Set_ID / Primer_Type / Sequence / Tm / Length
     dual_probe_detailed.txt   可选，探针打分
-基因信息表 CSV 必需列：Name, GeneID, BP_ID, TPM。
+    target.fasta              可选，基因序列；按 GeneID 匹配 TPM 表时用其标题
+基因信息表 CSV 必需列：Name, GeneID, BP_ID, TPM；也可用探针数量推荐页导出的 gene_id, tpm 表。
 """
 import os
 import csv
@@ -17,6 +23,8 @@ import io
 import re
 from collections import Counter
 from typing import Dict, List, Tuple, Any, Optional, Union
+
+from src.common.sequence_utils import calculate_tm as target_tm  # 最近邻 Tm，与设计工具一致
 
 def get_target_pairs(tpm):
     if tpm >= 100:
@@ -183,6 +191,10 @@ def parse_dual_probe_detailed(filepath: str) -> Dict[int, float]:
     
     return probe_scores
 
+# get_nucleotide_priority() 的最低档（8）：L 5' 端 >=3 个 C/G 且 R 3' 端为 C/G，提示词第 9 步只作兜底
+LAST_RESORT_PRIORITY = 8
+
+
 def check_gap_requirement(candidate: Dict[str, Union[int, str]], selected: List[Dict[str, Union[int, str]]]) -> bool:
     for sp in selected:
         gap_before = candidate['L_start'] - sp['R_end']
@@ -191,7 +203,8 @@ def check_gap_requirement(candidate: Dict[str, Union[int, str]], selected: List[
             return False
     return True
 
-def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None, r_tm: Optional[float] = None) -> Tuple[str, str, str]:
+def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None, r_tm: Optional[float] = None,
+                           l_flank: int = 0, r_flank: int = 0) -> Tuple[str, str, str]:
     """
     修正探针序列，使L探针5'端以A或T开头，提高探针连接效率
     
@@ -199,14 +212,24 @@ def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None,
     1. L探针5'端单个C/G开头：将C/G转移至R探针3'端，或从R探针3'端转移A/T至L探针5'端
     2. L探针5'端两个C/G开头：将两个C/G转移至R探针3'端（需第3个碱基为A/T），或从R探针3'端转移A/T
     3. L探针5'端3个或更多C/G：放弃调整
-    4. 调整后L/R探针TM值差异不能超过3℃
+    4. 调整后L/R靶标序列的TM值差异不能超过3℃（提示词 10.7：只算靶标序列，不含接头/桥探针；
+       与设计工具相同的最近邻 Tm）
     
     参数：
-    - l_seq, r_seq: L/R探针序列
+    - l_seq, r_seq: L/R探针序列（完整合成序列；L 的 5' 端、R 的 3' 端为靶标序列，两者相接）
     - l_tm, r_tm: 原始TM值（可选，如果提供则用于验证调整后的TM差异）
+    - l_flank, r_flank: L 探针 3' 端、R 探针 5' 端非靶标部分的长度，计算 Tm 前去掉
     
     返回：(修正后的L序列, 修正后的R序列, 修正说明)
     """
+    def target_tm_diff(new_l, new_r):
+        l_target = new_l[:len(new_l) - l_flank] if l_flank else new_l
+        r_target = new_r[r_flank:]
+        try:
+            return abs(target_tm(l_target) - target_tm(r_target))
+        except ValueError:  # 无法计算（如含非 ACGT 碱基）时不调整
+            return float('inf')
+
     if len(l_seq) == 0 or len(r_seq) == 0:
         return l_seq, r_seq, ''
     
@@ -228,9 +251,7 @@ def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None,
         if r_seq[-1] in ['A', 'T']:
             new_l = r_seq[-1] + l_seq
             new_r = r_seq[:-1]
-            new_l_tm = calculate_tm(new_l)
-            new_r_tm = calculate_tm(new_r)
-            tm_diff = abs(new_l_tm - new_r_tm)
+            tm_diff = target_tm_diff(new_l, new_r)
             
             if tm_diff <= 3.0:
                 return new_l, new_r, f"R->L {r_seq[-1]}"
@@ -259,9 +280,7 @@ def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None,
         if r_seq[-1] in ['A', 'T']:
             new_l = r_seq[-1] + l_seq
             new_r = r_seq[:-1]
-            new_l_tm = calculate_tm(new_l)
-            new_r_tm = calculate_tm(new_r)
-            tm_diff = abs(new_l_tm - new_r_tm)
+            tm_diff = target_tm_diff(new_l, new_r)
             correction_options.append({
                 'new_l': new_l,
                 'new_r': new_r,
@@ -273,9 +292,7 @@ def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None,
         # 方案2：将L探针5'端的C/G转移至R探针3'端
         new_l = l_seq[1:]
         new_r = r_seq + l_first
-        new_l_tm = calculate_tm(new_l)
-        new_r_tm = calculate_tm(new_r)
-        tm_diff = abs(new_l_tm - new_r_tm)
+        tm_diff = target_tm_diff(new_l, new_r)
         correction_options.append({
             'new_l': new_l,
             'new_r': new_r,
@@ -311,9 +328,7 @@ def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None,
             if r_seq[-1] in ['A', 'T']:
                 new_l = r_seq[-1] + l_seq
                 new_r = r_seq[:-1]
-                new_l_tm = calculate_tm(new_l)
-                new_r_tm = calculate_tm(new_r)
-                tm_diff = abs(new_l_tm - new_r_tm)
+                tm_diff = target_tm_diff(new_l, new_r)
                 correction_options.append({
                     'new_l': new_l,
                     'new_r': new_r,
@@ -325,9 +340,7 @@ def correct_probe_sequence(l_seq: str, r_seq: str, l_tm: Optional[float] = None,
             # 方案2：将L探针5'端两个C/G转移至R探针3'端
             new_l = l_seq[2:]
             new_r = r_seq + l_first_two
-            new_l_tm = calculate_tm(new_l)
-            new_r_tm = calculate_tm(new_r)
-            tm_diff = abs(new_l_tm - new_r_tm)
+            tm_diff = target_tm_diff(new_l, new_r)
             correction_options.append({
                 'new_l': new_l,
                 'new_r': new_r,
@@ -409,7 +422,7 @@ def select_probes(probe_pairs: List[Dict[str, Union[int, str]]],
         
         candidates_in_bin = []
         for p in probe_pairs_by_num:
-            if p['num'] in used_nums:
+            if p['num'] in used_nums or p['priority'] >= LAST_RESORT_PRIORITY:
                 continue
             
             probe_center = (p['L_start'] + p['R_end']) / 2
@@ -418,7 +431,7 @@ def select_probes(probe_pairs: List[Dict[str, Union[int, str]]],
         
         if not candidates_in_bin:
             for p in probe_pairs_by_num:
-                if p['num'] in used_nums:
+                if p['num'] in used_nums or p['priority'] >= LAST_RESORT_PRIORITY:
                     continue
                 candidates_in_bin.append(p)
         
@@ -437,13 +450,23 @@ def select_probes(probe_pairs: List[Dict[str, Union[int, str]]],
     remaining = target_count - len(selected)
     remaining_probes = []
     for p in probe_pairs:
-        if p['num'] in used_nums:
+        if p['num'] in used_nums or p['priority'] >= LAST_RESORT_PRIORITY:
             continue
         remaining_probes.append(p)
     
     remaining_probes.sort(key=lambda x: (x['score'], x['priority'], x['num']))
     
     for p in remaining_probes:
+        if len(selected) >= target_count:
+            break
+        if check_gap_requirement(p, selected):
+            selected.append(p)
+            used_nums.add(p['num'])
+    
+    # 提示词第 9 步：前面仍选不够时，才使用 L 5' 端 >=3 个 C/G 且 R 3' 端为 C/G 的探针对（同样遵守间距）
+    last_resort = sorted((p for p in probe_pairs if p['num'] not in used_nums and p['priority'] >= LAST_RESORT_PRIORITY),
+                         key=lambda x: (x['score'], x['num']))
+    for p in last_resort:
         if len(selected) >= target_count:
             break
         if check_gap_requirement(p, selected):
@@ -491,7 +514,19 @@ WARNINGS = {
     'fewer_pairs': '{name}：目标 {target} 对，只有 {selected} 对可选。',
     'missing_sequences': '{name}：{count} 条探针在 dual_probe_dual.csv 中找不到（请核对 BP_ID {bp_id}）。',
     'folder_not_in_table': '结果文件夹 {name} 不在基因表中，已跳过。',
+    'gene_id_unknown': '{name}：结果文件夹中没有 target.fasta，无法按 GeneID 匹配 TPM，已跳过。',
+    'no_tpm_for_gene': '{name}：TPM 表中没有 {gene_id}，已跳过。',
+    'duplicate_tpm_gene': 'TPM 表中 {gene_id} 出现 {count} 次，使用最后一行。',
 }
+
+# 第二种基因表：探针数量推荐页导出的 CSV（gene_id,tpm,probe_number），按 GeneID 匹配结果文件夹；
+# probe_number 不使用，探针对数仍由 get_target_pairs() 决定。
+RECOMMEND_COLUMNS = ('gene_id', 'tpm')
+
+# 本流程合成序列的非靶标部分长度（scripts/create_split_probe.py）：
+# L = 靶标 + TCTCGTTTTCTGAACTTAGC + CGGTATCAAG；R = CTGTTTAAGA + 随机碱基 + 桥探针改写（19 nt）+ 靶标
+DEFAULT_L_FLANK = 30
+DEFAULT_R_FLANK = 30
 
 
 # 页面展示的 TPM 分档：每档取下限代入 get_target_pairs()，展示与算法始终一致
@@ -524,7 +559,8 @@ def parse_tpm_table(text: str) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str
     columns = [(c or '').strip() for c in (reader.fieldnames or [])]
     missing = [c for c in REQUIRED_COLUMNS if c not in columns]
     if missing:
-        raise ProbeSelectorError('基因表缺少必需列：' + ', '.join(missing) + '（需要 Name, GeneID, BP_ID, TPM）。')
+        raise ProbeSelectorError('基因表缺少必需列：' + ', '.join(missing)
+                                 + '（需要 Name, GeneID, BP_ID, TPM；也可直接用探针数量推荐页导出的 gene_id, tpm 表）。')
     reader.fieldnames = columns
 
     tpm_data = {}
@@ -562,6 +598,90 @@ def parse_tpm_table(text: str) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str
 def load_tpm_table(filepath: str):
     with open(filepath, 'r', encoding='utf-8-sig') as f:
         return parse_tpm_table(f.read())
+
+
+def is_recommend_table(text: str) -> bool:
+    """表头含 gene_id 与 tpm（不区分大小写）且没有 Name 列时，视为探针数量推荐页导出的表。"""
+    header = next(csv.reader(io.StringIO(text.lstrip('\ufeff'))), [])
+    columns = {(c or '').strip().lower() for c in header}
+    return set(RECOMMEND_COLUMNS) <= columns and 'name' not in columns
+
+
+def describe_gene_dir(folder_path: str, name: str) -> Tuple[Optional[str], Optional[str]]:
+    """结果文件夹的 (GeneID, BP_ID)：GeneID 取 target.fasta 标题，BP_ID 取 dual_probe_dual.csv 中 R 探针编号后缀。"""
+    gene_id = bp_id = None
+    fasta = os.path.join(folder_path, 'target.fasta')
+    if os.path.exists(fasta):
+        with open(fasta, 'r', encoding='utf-8') as f:
+            first = f.readline().strip()
+        if first.startswith('>') and first[1:].split():
+            gene_id = first[1:].split()[0]
+    dual = os.path.join(folder_path, 'dual_probe_dual.csv')
+    if os.path.exists(dual):
+        pattern = re.compile(re.escape(name) + r'-\d+-R-(.+)')
+        for probe_id in parse_dual_probe_dual_csv(dual):
+            match = pattern.fullmatch(probe_id)
+            if match:
+                bp_id = match.group(1)
+                break
+    return gene_id, bp_id
+
+
+def tpm_by_gene_id(text: str, gene_dirs: Dict[str, str]):
+    """把推荐页的 TPM 表（每个基因一行，可能覆盖整个转录组）对应到结果文件夹。返回 (tpm_data, warnings)。"""
+    reader = csv.DictReader(io.StringIO(text.lstrip('\ufeff')))
+    columns = {(c or '').strip().lower(): c for c in (reader.fieldnames or [])}
+    rows, counts = {}, Counter()
+    for row in reader:
+        gene_id = (row[columns['gene_id']] or '').strip()
+        if gene_id:
+            rows[gene_id.casefold()] = (row[columns['tpm']] or '').strip()
+            counts[gene_id.casefold()] += 1
+    if not rows:
+        raise ProbeSelectorError('TPM 表中没有基因（gene_id 列为空）。')
+
+    tpm_data, warnings = {}, []
+    for name, folder_path in gene_dirs.items():
+        gene_id, bp_id = describe_gene_dir(folder_path, name)
+        if not gene_id:
+            warnings.append(warning('gene_id_unknown', name=name))
+            continue
+        key = gene_id.casefold()
+        if key not in rows:
+            warnings.append(warning('no_tpm_for_gene', name=name, gene_id=gene_id))
+            continue
+        if counts[key] > 1:  # 只提示用到的基因，整张转录组表的其他行不逐条报告
+            warnings.append(warning('duplicate_tpm_gene', gene_id=gene_id, count=counts[key]))
+        try:
+            tpm_val = float(rows[key])
+        except ValueError:
+            warnings.append(warning('tpm_not_number', name=name, value=rows[key], pairs=get_target_pairs(0.0)))
+            tpm_val = 0.0
+        tpm_data[name] = {'TPM': tpm_val, 'GeneID': gene_id, 'BP_ID': bp_id or ''}
+    return tpm_data, warnings
+
+
+def select_from_gene_dirs(table_text: str, gene_dirs: Dict[str, str]):
+    """读取任一格式的基因表并对 gene_dirs 中的基因挑选。返回 (gene_results, warnings)。"""
+    if is_recommend_table(table_text):
+        tpm_data, warnings = tpm_by_gene_id(table_text, gene_dirs)
+        gene_dirs = {name: path for name, path in gene_dirs.items() if name in tpm_data}
+    else:
+        tpm_data, warnings = parse_tpm_table(table_text)
+    gene_results, more = collect_gene_results(gene_dirs, tpm_data)
+    return gene_results, warnings + more
+
+
+def target_flanks(l_seq: str, r_seq: str, arms) -> Tuple[int, int]:
+    """L 探针 3' 端、R 探针 5' 端的非靶标长度：优先按 dual_probe.csv 中的原始靶标序列推出。"""
+    l_flank = DEFAULT_L_FLANK if len(l_seq) > DEFAULT_L_FLANK else 0
+    r_flank = DEFAULT_R_FLANK if len(r_seq) > DEFAULT_R_FLANK else 0
+    if arms:
+        if arms['L'] and arms['L']['sequence'] and l_seq.startswith(arms['L']['sequence']):
+            l_flank = len(l_seq) - len(arms['L']['sequence'])
+        if arms['R'] and arms['R']['sequence'] and r_seq.endswith(arms['R']['sequence']):
+            r_flank = len(r_seq) - len(arms['R']['sequence'])
+    return l_flank, r_flank
 
 
 def discover_gene_dirs(base_dir: str) -> Dict[str, str]:
@@ -638,8 +758,10 @@ def collect_gene_results(gene_dirs: Dict[str, str], tpm_data: Dict[str, Dict[str
                 if probe_tm_data[probe_num]['R']:
                     r_tm = probe_tm_data[probe_num]['R']['tm']
 
-            # 修正探针序列（考虑TM值）
-            corrected_l, corrected_r, correction_note = correct_probe_sequence(l_seq, r_seq, l_tm, r_tm)
+            # 修正探针序列（考虑TM值；只比较靶标序列的 Tm）
+            l_flank, r_flank = target_flanks(l_seq, r_seq, probe_tm_data.get(probe_num))
+            corrected_l, corrected_r, correction_note = correct_probe_sequence(l_seq, r_seq, l_tm, r_tm,
+                                                                               l_flank, r_flank)
 
             if l_probe_id in dual_probe_data:
                 probes_for_gene.append({
@@ -761,8 +883,9 @@ def workbook_bytes(wb) -> bytes:
 
 
 def run(tpm_file: str, base_dir: str, output_file: str):
-    """命令行流程：等同原 main()，路径由参数给出。"""
-    tpm_data, warnings = load_tpm_table(tpm_file)
-    gene_results, more = collect_gene_results(discover_gene_dirs(base_dir), tpm_data)
+    """命令行流程：等同原 main()，路径由参数给出；基因表可为四列表或推荐页导出的 TPM 表。"""
+    with open(tpm_file, 'r', encoding='utf-8-sig') as f:
+        table_text = f.read()
+    gene_results, warnings = select_from_gene_dirs(table_text, discover_gene_dirs(base_dir))
     build_workbook(gene_results).save(output_file)
-    return gene_results, warnings + more
+    return gene_results, warnings
